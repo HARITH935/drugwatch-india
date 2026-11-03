@@ -1,0 +1,46 @@
+# ---- Secrets (never commit) ----
+# Real credentials live only in .env; .env.example (no real values) IS committed.
+.env
+.env.*
+!.env.example
+
+# ---- OS / editors ----
+.DS_Store
+.idea/
+*.swp
+
+# ---- Python (pipelines, Spark, ML, LLM, FastAPI) ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# ---- Java / Spring Boot (Maven build output) ----
+target/
+*.class
+
+# ---- Node / Next.js ----
+node_modules/
+.next/
+out/
+
+# ---- dbt (generated files, rebuilt on every run) ----
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+
+# ---- Airflow / MLflow local run output ----
+logs/
+mlruns/
+mlartifacts/
+
+# ---- Data and model weights ----
+# Real data lives in MinIO, never in git. Small test fixtures go under */tests/fixtures/.
+data/
+*.parquet
+*.onnx
+*.safetensors
+!**/tests/fixtures/**
