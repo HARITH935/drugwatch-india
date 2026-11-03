@@ -1,0 +1,74 @@
+# Local development services for DrugWatch India.
+#   Start: docker compose up -d        Stop: docker compose down
+#   Status: docker compose ps          Logs: docker compose logs -f <service>
+# ${VARS} are read from the .env file in this folder (template: .env.example).
+# ${VAR:?msg} means "refuse to start if VAR is missing", so no service ever runs with a default password.
+# Production config lives separately in infra/ (Phase 12).
+
+name: drugwatch # prefix for container, network and volume names (keeps them apart from OpsPilot)
+
+services:
+  # --- PostgreSQL: gold layer (dbt marts) + app tables ---
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-drugwatch}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-drugwatch}
+    ports:
+      # host:container. Host 5433 because OpsPilot's Postgres already uses 5432.
+      # 127.0.0.1 = reachable only from this Mac, not from other devices on your Wi-Fi.
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data # named volume: data survives container restarts/recreation
+    healthcheck:
+      # $$ passes a literal $ so the container's shell (not Compose) fills in the variable
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # --- RustFS: S3-compatible storage for raw/ bronze/ silver/ (replaces MinIO, see ADR 0002) ---
+  rustfs:
+    image: rustfs/rustfs:1.0.4
+    environment:
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:?Set RUSTFS_ACCESS_KEY in .env} # S3 "username"
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:?Set RUSTFS_SECRET_KEY in .env} # S3 "password"
+      RUSTFS_CONSOLE_ENABLE: "true" # turn on the web console (port 9001)
+    ports:
+      - "127.0.0.1:9000:9000" # S3 API: what our code talks to
+      - "127.0.0.1:9001:9001" # web console: http://localhost:9001/rustfs/console/ (the bare root URL returns 403)
+    volumes:
+      - rustfs-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:9000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # --- Redis: cache for batch lookups (used by Spring Boot in Phase 9) ---
+  redis:
+    image: redis:8.8
+    # No password: dev only and bound to localhost. Production Redis is never exposed (plan §15).
+    ports:
+      - "127.0.0.1:6380:6379" # host 6380 because OpsPilot's Redis already uses 6379
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # --- Mailpit: fake SMTP server + web inbox; catches every email in dev ---
+  mailpit:
+    image: axllent/mailpit:v1.33 # has its own built-in health check
+    environment:
+      # Accept any login, so apps use the same SMTP settings (host, port, user, password) as Brevo in production
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true" # allow that login without TLS (fine on localhost only)
+    ports:
+      - "127.0.0.1:1025:1025" # SMTP: apps send mail here
+      - "127.0.0.1:8025:8025" # web inbox: http://localhost:8025
+
+volumes:
+  postgres-data:
+  rustfs-data:
