@@ -2,7 +2,7 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 0 — Setup. **In progress.** Next: step 5 (GitHub Actions lint workflow).
+**Current phase:** Phase 0 — Setup. **In progress.** Next: step 6 (RustFS buckets).
 
 ---
 
@@ -37,7 +37,8 @@ Legend: ⬜ Not started · 🟨 In progress · ✅ Done
       with throwaway credentials, then removed (`down -v`). Host ports 5433 and 6380 avoid OpsPilot.
 - [x] 4. `.env.example` (no real secrets), including SMTP settings for Mailpit — blanks for secrets
       (compose refuses to start until filled); verified tracked by git, `.env` ignored.
-- [ ] 5. GitHub Actions lint workflow (Python + Java + TypeScript as each appears)
+- [x] 5. GitHub Actions lint workflow (Python + Java + TypeScript as each appears) — repo hygiene checks
+      for now (`.github/scripts/repo-checks.sh`); first run green. Repo: https://github.com/HARITH935/drugwatch-india
 - [ ] 6. RustFS buckets: `raw`, `bronze`, `silver`
 
 **Done when:** `docker compose up` starts all four services; RustFS buckets exist; the Mailpit inbox is
@@ -62,3 +63,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-03 | Teaching mode added to `CLAUDE.md` §2 | CLAUDE.md |
 | 2026-11-03 | RustFS replaces MinIO (MinIO community edition discontinued) | ADR 0002 |
 | 2026-11-03 | Dev host ports: Postgres 5433, Redis 6380 (OpsPilot uses 5432 and 6379) | `docker-compose.yml` |
+| 2026-11-03 | GitHub repo is public: HARITH935/drugwatch-india | — |
+| 2026-11-03 | Language linters added when each language appears (Python: Phase 1, Java: 9, TS: 11); tool choice needs approval then | `lint.yml` |
