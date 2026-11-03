@@ -1,0 +1,22 @@
+# CI lint workflow: runs on every push to main and on every pull request.
+# Phase 0 checks repo hygiene only. A linter for each language is added when that language first appears:
+#   Python → Phase 1, Java → Phase 9, TypeScript → Phase 11.
+name: lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read # least privilege: this workflow only needs to read the code
+
+jobs:
+  repo-checks:
+    runs-on: ubuntu-latest # fresh GitHub-hosted Linux VM; Docker + Compose are preinstalled
+    timeout-minutes: 5 # kill the job if it hangs, so it can't burn minutes
+    steps:
+      - uses: actions/checkout@v7 # download this repo onto the runner
+
+      - name: Repo hygiene checks
+        run: bash .github/scripts/repo-checks.sh
