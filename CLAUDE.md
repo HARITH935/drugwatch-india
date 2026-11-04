@@ -139,6 +139,14 @@ docker compose ps               # status + health
 docker compose logs -f rustfs   # follow one service's logs
 docker compose down             # stop (data kept in named volumes)
 docker compose down -v          # stop AND delete all local data
+
+# Python (ingestion/ now; later Python folders work the same way; ADR 0005)
+cd ingestion
+uv sync                         # create .venv and install the exact versions in uv.lock
+uv run pytest                   # tests
+uv run ruff check .             # lint (rules in the repo-root ruff.toml)
+uv run ruff format .            # auto-format (CI only checks: --check)
+uv add <pkg>                    # add a dependency: approved libraries only (§4)
 ```
 
 **Local service ports** (all bound to 127.0.0.1; Postgres and Redis are shifted so they don't clash with OpsPilot):

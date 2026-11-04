@@ -38,7 +38,7 @@ mlruns/
 mlartifacts/
 
 # ---- Data and model weights ----
-# Real data lives in MinIO, never in git. Small test fixtures go under */tests/fixtures/.
+# Real data lives in RustFS, never in git. Small test fixtures go under */tests/fixtures/.
 data/
 *.parquet
 *.onnx

@@ -176,7 +176,7 @@ Every tool below **must** be used. No substitutions or removals without approval
 
 ### 6.1 Approved Additions
 
-Approved 2026-11-03. Rationale is recorded in `docs/adr/0001-stack-choice.md` and `docs/adr/0002-rustfs-replaces-minio.md`.
+Approved 2026-11-03 (Python tooling 2026-11-04). Rationale is recorded in `docs/adr/0001-stack-choice.md`, `docs/adr/0002-rustfs-replaces-minio.md` and `docs/adr/0005-python-tooling.md`.
 
 | Addition | Why | Phase |
 |---|---|---|
@@ -186,6 +186,8 @@ Approved 2026-11-03. Rationale is recorded in `docs/adr/0001-stack-choice.md` an
 | Brevo free SMTP | Production email delivery (watchlist + Airflow alerts) | 12 |
 | onnxmltools | Convert the LightGBM model to ONNX | 8 |
 | RustFS (replaces MinIO) | MinIO's community edition was discontinued (no Docker images, repo unmaintained); RustFS is an S3-compatible drop-in. See ADR 0002 | 0 |
+| requests, boto3 | HTTP client for downloads; S3 client for RustFS. See ADR 0005 | 1 |
+| uv, pytest, ruff | Python environments + lockfile; test runner; lint + format (in CI). See ADR 0005 | 1 |
 
 Email credentials (and every other secret) come only from environment variables.
 

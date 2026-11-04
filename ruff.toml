@@ -1,0 +1,17 @@
+# Shared lint + format rules for every Python folder in the repo (ADR 0005).
+# Ruff finds this file by walking up from each .py file, so ingestion/, extraction/, ml/ ... all use it.
+line-length = 100
+target-version = "py313" # allow modern syntax; flag old-style code that 3.13 can write better
+
+[lint]
+select = [
+    "E", "W", # pycodestyle: basic style errors and warnings
+    "F",      # pyflakes: unused imports/variables, undefined names
+    "I",      # isort: import order
+    "B",      # flake8-bugbear: likely bugs (mutable default args, etc.)
+    "UP",     # pyupgrade: use modern Python syntax
+    "S",      # flake8-bandit: security checks, e.g. S113 = HTTP request without a timeout
+]
+
+[lint.per-file-ignores]
+"**/tests/**" = ["S101"] # pytest uses plain `assert`, which bandit would otherwise flag

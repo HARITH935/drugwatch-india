@@ -1,6 +1,6 @@
 # CI lint workflow: runs on every push to main and on every pull request.
-# Phase 0 checks repo hygiene only. A linter for each language is added when that language first appears:
-#   Python → Phase 1, Java → Phase 9, TypeScript → Phase 11.
+# repo-checks: repo hygiene (Phase 0). python: lint + tests for each Python folder (Phase 1, ADR 0005).
+# Still to come: Java → Phase 9, TypeScript → Phase 11.
 name: lint
 
 on:
@@ -20,3 +20,32 @@ jobs:
 
       - name: Repo hygiene checks
         run: bash .github/scripts/repo-checks.sh
+
+  python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        project: [ingestion] # add extraction, spark, ml ... here as each Python folder appears
+    defaults:
+      run:
+        working-directory: ${{ matrix.project }} # every `run:` step below starts in this folder
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.13.6" # same uv as local dev, so lockfile handling matches
+          working-directory: ${{ matrix.project }} # where it looks for pyproject.toml / uv.lock (cache key)
+
+      - name: Install dependencies (exactly as locked)
+        run: uv sync --locked # fails if uv.lock is out of date with pyproject.toml
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format check
+        run: uv run ruff format --check . # fails (doesn't fix) if any file isn't formatted
+
+      - name: Tests
+        run: uv run pytest

@@ -1,0 +1,30 @@
+# Python project for the downloaders (Phase 1) and, later, the Airflow DAGs (Phase 5). Managed by uv (ADR 0005).
+[project]
+name = "drugwatch-ingestion"
+version = "0.1.0"
+description = "Polite downloaders for CDSCO, NPPA and Jan Aushadhi sources into RustFS raw/"
+authors = [
+    { name = "Harith", email = "181994424+HARITH935@users.noreply.github.com" }
+]
+requires-python = ">=3.13" # same as .python-version, so local and CI run one Python
+# Runtime libraries: uv writes the exact resolved versions to uv.lock; these are only lower bounds.
+dependencies = [
+    "boto3>=1.43.123", # S3 client for RustFS (path-style addressing, ADR 0002)
+    "requests>=2.34.2", # HTTP client; retries come from urllib3's Retry (installed with requests)
+]
+
+# Build backend: lets uv install src/drugwatch_ingestion into .venv so tests import the real package.
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14.0"]
+build-backend = "uv_build"
+
+# Dev-only tools: installed by `uv sync`, never needed by the downloader at runtime.
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.3", # lint + format rules live in the repo-root ruff.toml
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"] # only look for tests here
+addopts = "-ra --strict-markers" # -ra: summarise skips/failures at the end; typo'd markers are errors

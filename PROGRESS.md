@@ -64,6 +64,12 @@ reachable; CI passes.
       ADR 0004 (CDSCO portal JSON primary from 2019, PDFs kept). Email drafts in `docs/permissions.md`.
       ⏳ Harith to send the two permission emails (not blocking: needed before Phase 12 launch).
 - [ ] 4. Build a downloader: rate-limited, retries, skips files already in RustFS (hash check).
+  - [x] 4a. Python tooling approved (ADR 0005: requests, boto3, uv, pytest, ruff). `ingestion/` uv project
+        (src layout, `uv.lock`), repo-root `ruff.toml`, `python` CI job (ruff check, format check, pytest).
+  - [ ] 4b. Core: polite fetcher (≥3 s/host, retries with backoff, honest UA, timeouts) + RustFS store
+        (hash check, metadata), with unit tests.
+  - [ ] 4c. Source adapters: CDSCO portal JSON, CDSCO PDF list (two-hop), Jan Aushadhi API, NPPA PDFs,
+        manual drop (ADR 0003).
 - [ ] 5. Download the full historical archive into `raw/` with metadata (source, alert month, download time, file hash).
 - [ ] 6. Document everything in `docs/data-sources.md`: URLs, formats, layout changes over time, scanned vs text PDFs.
 
@@ -97,3 +103,4 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-04 | CDSCO NSQ portal (cdscoonline.gov.in JSON, 2019 →) is the primary source; PDFs kept for 2017–2018 and Phase 2 | ADR 0004 |
 | 2026-11-04 | Anonymous-visitor access rule; manual browser download where blocked (NPPA IPDMS); Pharma Sahi Daam not used | ADR 0003 |
 | 2026-11-04 | CDSCO and Jan Aushadhi data not published until permission recorded; requests drafted | ADR 0003, `docs/permissions.md` |
+| 2026-11-04 | Python tooling: requests, boto3, uv (one project per Python folder), pytest, ruff (repo-root config); Python 3.13 | ADR 0005 |
