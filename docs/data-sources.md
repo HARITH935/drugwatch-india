@@ -1,0 +1,284 @@
+# Data sources
+
+> Living document, filled in during Phase 1. Status: **steps 1–3 done** (sources located; robots.txt and terms read).
+> Layout / scanned-vs-text notes (step 6) are still to come.
+> All findings below were checked on **2026-11-04**.
+
+---
+
+## 1. CDSCO NSQ / spurious drug alerts
+
+CDSCO publishes these alerts in **two places**. In August 2025 it moved them from PDF files to an online portal:
+
+| | Legacy PDF list | NSQ portal |
+|---|---|---|
+| Host | `cdsco.gov.in` | `cdscoonline.gov.in` |
+| Format | PDF, one file per month per source | JSON, served from a search page |
+| Central (CDSCO labs) NSQ | 2017–2023 scattered, Apr 2024 – Jun 2025 (with a gap) | Jan 2019 – Sep 2026 |
+| State labs NSQ | May 2024 – Jun 2025 (with a gap) | Jan 2019 – Sep 2026 (same endpoint, `source=State`) |
+| Spurious | Apr 2024 – Jun 2025 (with gaps) | 2025 – 2026 |
+| Still updated? | No. Last entry 2025-08-28 announces the move to the "new link" | Yes |
+
+### 1a. Legacy PDF list (`cdsco.gov.in`)
+
+**Listing page:** https://cdsco.gov.in/opencms/opencms/en/Notifications/Alerts/
+(`/opencms/opencms/en/Alerts/` serves the same table.)
+
+- The page returns **all 300 rows in one HTML response** (Feb 2010 – Sep 2026, every type of alert, not only NSQ).
+  The "pages" a browser shows come from the DataTables JavaScript library, so a scraper doesn't need to handle pagination.
+- Columns: S.No · title · posted date (`YYYY-Mon-DD`) · download link · file size.
+- About 50 of the 300 rows are NSQ or spurious related. The rest are circulars, guidelines and similar.
+  Some NSQ-titled rows aren't monthly lists either (guidelines, single-product alerts), so filtering by keyword alone isn't enough.
+
+**Getting a file takes two hops:**
+
+1. Each row links to
+   `/opencms/opencms/system/modules/CDSCO.WEB/elements/download_file_division.jsp?num_id=<id>`
+   where `<id>` is a **numeric file ID in base64** (`MTI5Mjc=` → `12927`).
+2. That URL returns a ~150-byte HTML page with an `<iframe>` whose `src` is the real file, e.g.
+   `/opencms/resources/UploadCDSCOWeb/2018/UploadAlertsFiles/CDSCO NSQ june25.pdf`
+
+Quirks:
+- **File names are free text**, with spaces and no fixed pattern (`CDSCO NSQ june25.pdf`,
+  `NSQ Alert For The Month of March-2025.pdf`, `NSQ ALERT FOR THE MONTH OF October-2024 for website.pdf`).
+  Don't build file URLs from a pattern. Discover them from the listing.
+- **Titles are inconsistent** too (`NSQ ALERT FOR THE MONTH OF Feb-2025`, `NSQ May 2024 CDSCO Labs`,
+  `Not Of Standard of Quality (NSQ) ALERT FOR THE MONTH OF April-2025`). The alert month has to be parsed
+  from the title. The posted date is usually about a month later.
+- The `.jsp` hop's `Last-Modified` header is the **current time** on every request, so it can't be used to detect changes.
+  The real PDF *does* send a proper `ETag` and `Last-Modified` (June 2025 file: `Last-Modified: Fri, 18 Jul 2025`).
+- **The listing is incomplete.** No central NSQ PDF is listed for Aug–Dec 2024, but at least
+  `NSQ ALERT FOR THE MONTH OF October-2024 for website.pdf` exists on the server (found by web search).
+  We also checked Latest Alerts (newest 10 only), Archive (no NSQ entries), Consumer, and the sidebar
+  widget on every page. None of them list the missing months.
+- One bulk file may cover the history: **"Samples declared NSQ 2017-2023"** (file ID 11955, posted 2024-09-11). Not yet opened.
+- Every page has a scrolling "Alerts" sidebar widget with 225 links that duplicate the table. A scraper should ignore it.
+
+Monthly NSQ lists found on the listing page (central = CDSCO labs):
+
+| Type | Months |
+|---|---|
+| Central NSQ | Jul 2017, Sep 2017, Jan 2018, Feb 2018, Apr 2018, Sep 2018, Mar 2019, Apr 2019, Mar 2022, Jun 2022, Apr 2023, Apr–Jul 2024, Jan–Jun 2025 |
+| State NSQ | May–Jul 2024, Jan–Jun 2025 |
+| Combined NSQ/spurious lists | two in 2018 (posted Jun and Sep 2018), Jan 2025 "Revised" |
+| Spurious | Apr 2024, then lists posted Sep–Dec 2024 and Mar–Jul 2025 |
+
+### 1b. NSQ portal (`cdscoonline.gov.in`): the current source
+
+**Page:** https://cdsco.gov.in/opencms/opencms/en/Notifications/nsq-drugs/ embeds an iframe from
+https://cdscoonline.gov.in/CDSCO/viewPublicNSQDrug
+
+The portal publishes **no PDFs**. Its page calls JSON endpoints (all `GET`, no login):
+
+| Endpoint | Parameters | Returns |
+|---|---|---|
+| `/CDSCO/reportingYears` | `tab=nsq` or `tab=spurious` | list of years |
+| `/CDSCO/publicReportingMonths` | `year=YYYY`, `tab=` | list of month abbreviations (`"Jan"`, …) |
+| `/CDSCO/filteredNsqDrugTable` | `month=Mon-YYYY`, `source=All\|State\|CDL`, `tab=nsq` | `{iTotalRecords, iTotalDisplayRecords, aaData: [...]}` |
+| `/CDSCO/filteredSpuriousDrugTable` | same as above, `tab=spurious` | same shape |
+| `/CDSCO/publicNsqDrugTable` | none | default table (**not called yet**: size unknown) |
+| `/CDSCO/viewPublicSpuriousDrugData` | none | default spurious table (not called yet) |
+| `/CDSCO/statesPendingSubmission` | `month=Mon-YYYY` | states that have not yet submitted for that month |
+
+Coverage reported by the portal: **NSQ 2019 – 2026** (2026 up to Sep), **spurious 2025 – 2026**.
+Sampled months return real rows:
+
+| Month | Rows | By source |
+|---|---|---|
+| Jan-2019 | 45 | CDSCO lab 37, State lab 8 |
+| Jun-2022 | 28 | CDSCO lab 15, State lab 13 |
+| Mar-2025 | 131 | CDSCO lab 70, State lab 61 |
+| Sep-2026 | 330 | State lab 235, State Lab 53, CDSCO Labs 42 |
+
+**NSQ row fields:**
+
+| Field | Example | Notes |
+|---|---|---|
+| `str_product_name` | `Alprazolam Tablets IP 0.5 mg` | generic name |
+| `str_brand_name` | `Alzomac-0.5 Tablets` | |
+| `str_batch_no` | `60098` | no blanks in Sep-2026 sample |
+| `dt_manufacturing_date` | `Feb-2026` | month precision only |
+| `dt_expiry_date` | `Jan-2028` | month precision only |
+| `str_manufactured_by` | `Uniza Lifecare Pvt. Ltd.  , Sr. No. 919/7, …, Gujarat-382715, India.` | **name and full address in one string** |
+| `str_nsq_result` | `The sample does not conform to IP in respect of Dissolution` | free text |
+| `str_reporting_source` | `State lab` | see quirks |
+| `str_reported_by_lab_or_state` | `LUCKNOW, Uttar Pradesh` | |
+| `dt_reporting_month_year` | `SEP-2026` | upper case (request uses `Sep-2026`) |
+
+Spurious rows use different field names (from the page's JavaScript, not yet sampled):
+`product_name_from_dtl`, `str_brand_name`, `str_batch_no`, `dt_manufacturing_date`, `dt_expiry_date`,
+`str_spurious_manufacturer_name`, `str_spurious_manufactured_by`, `str_reporting_source`,
+`str_reported_by_lab_or_state`, `dt_reporting_month_year`, `str_nsq_remarks`, `str_firm_reply`.
+
+Quirks:
+- **Encoding:** responses aren't valid UTF-8 (byte `0xAE`, i.e. `®`). They decode as **Windows-1252 (cp1252)**.
+- **Source labels change over time:** `CDSCO lab` (2019–2025 samples) vs `CDSCO Labs` (Sep 2026); `State lab` vs `State Lab`.
+- `publicReportingMonths` returns Jan–Dec for every full year, so it doesn't prove a month has data. Check the row count.
+- No row has a link to an original document. Provenance for portal rows is the request URL plus the download time.
+
+---
+
+## 2. NPPA ceiling prices
+
+NPPA (National Pharmaceutical Pricing Authority) sets **ceiling prices**: the legal maximum price, before GST,
+for scheduled formulations under DPCO 2013. Scheduled formulations are the medicines on the National List
+of Essential Medicines (NLEM 2011 / 2015 / 2022).
+
+**Hosts:**
+- `nppa.gov.in` is the main site. The old `nppaindia.nic.in` no longer resolves in DNS.
+- `nppaipdms.gov.in` hosts NPPA's applications (IPDMS = Integrated Pharmaceutical Database Management System).
+
+NPPA's data is spread over five places, none of which is one clean, current, bulk source:
+
+| # | Source | Coverage | Format | Bulk-downloadable by script? |
+|---|---|---|---|---|
+| a | Compendium of Prices | 2016, 2022 (PDF); **2026 (dashboard)** | PDF; dashboard with CSV export | PDFs yes; 2026 CSV is browser-only (see below) |
+| b | Consolidated ceiling-price lists | as on 30.11.2014, 13.08.2018, 30.09.2020 | PDF | yes |
+| c | Therapeutic-category lists | 5 categories, undated | PDF | yes |
+| d | Circulars / Orders feed | 06-Jan-2026 – today only | one PDF per order | yes |
+| e | Pharma Sahi Daam search | current; also **branded MRPs** | JSON behind request signing | **no**: off-limits (see below) |
+
+**a. Compendium of Prices:** https://nppa.gov.in/en/compendiumofprice
+- `Compendium of Prices 2016` (175 KB PDF) and `Updated till 10.08.2022` (1 MB PDF), e.g.
+  `/storage/uploads/pdf/Compendium-Prices-2022pdf-464b22085495ff4e3f8700c0e00cf45d.pdf`
+- `Compendium of Prices 2026` links to an IPDMS **dashboard**
+  (`nppaipdms.gov.in/HISUtilities/dashboard/dashBoardACTION.cnt?...`). It shows "All Drugs Ceiling Prices",
+  can filter by NLEM version (2011 / 2015 / 2022 / All), and has **Download CSV** and **Download PDF** buttons.
+  This is the best current consolidated list. The dashboard loads `crypto-js` and runs on the same framework
+  as Pharma Sahi Daam, so scripted access probably meets the same request signing (not tested).
+  A person clicking "Download CSV" in a browser is the intended use.
+
+**b. Consolidated lists:** https://nppa.gov.in/en/dpco2013
+- `CEILING PRICES OF SCHEDULED FORMULATIONS UNDER DPCO, 2013` as on **30.09.2020** (934 KB), **13.08.2018** (131 KB),
+  30.11.2014 (sub-page), plus 2013/2014 notification lists and retail-price lists for new drugs.
+- `LIST OF REVISED MRP OF ANTI-CANCER MEDICINES UNDER TMR APPLICABLE FROM 8th MARCH, 2019`: 526 **brand** MRPs
+  (TMR = Trade Margin Rationalisation).
+
+**c. Therapeutic-category lists:** https://nppa.gov.in/en/therapeuticcategorywiseceilingpricelist
+- Undated PDFs: Anti-Cancer (131 formulations), Anti-Diabetes (11), Anti-HIV (29), Anti-TB (30), Cardio-Vascular (66).
+  The file names (`2845-fb-posts-...`) suggest they were made for social media.
+
+**d. Circulars / Orders feed:** https://nppa.gov.in/en/view_more?id=4
+- All rows come in one HTML response (DataTables, as on CDSCO). It holds **153 rows, all from 2026**
+  (06-Jan-2026 → 03-Nov-2026); older orders aren't listed here.
+- By title: 93 draft price worksheets, 23 ceiling-price orders, 16 retail-price orders for new drugs,
+  5 MRP lists, 5 exemptions, 11 other.
+- Files: `/storage/uploads/tender/<slug>-DD-MM-YYYY.pdf`, e.g. `review-04-11-2026.pdf`.
+  Useful for picking up *changes*, not as a full list.
+
+**e. Pharma Sahi Daam:** https://nppaipdms.gov.in/NPPA/PharmaSahiDaam/searchMedicine
+(linked from https://nppa.gov.in/en/pharma_sahi_daam)
+- Two modes: "Search Medicine Price" (by brand or formulation, giving **branded MRPs**) and
+  "Ceiling Prices of Essential Medicines".
+- REST endpoints under `/NPPA/rest/`. One list endpoint answers a plain `GET`:
+  `scheduledFormulationComboNew` returns **437 scheduled formulations** as `{schFormulationId, schFormulationName}`.
+- The data endpoints (`schFormDataTableNew`, `brandDataTableNew`, `formulationDataTableNew`, `ceilingPriceDtlsNew`, …)
+  return `404 "Something went wrong"` to direct calls. The page passes every data URL through
+  `createFHashAjaxQuery()`, commented in their code as a *"security feature added on 28/07/2017"*.
+- **Decision: we do not reverse-engineer this.** Getting around a deliberate access control breaks our
+  scraping etiquette (CLAUDE.md §7), whatever the data.
+- File names under `/storage/uploads/pdf/` end in a 32-hex-character hash, so they can't be predicted.
+  Discover them from the listing pages.
+
+## 3. Jan Aushadhi product list
+
+Jan Aushadhi (PMBJP) is the government's chain of low-cost generic medicine stores, run by PMBI
+(Pharmaceuticals & Medical Devices Bureau of India). A 2025 government document gives the range as about
+2,047 medicines and 300 surgical items.
+
+**Hosts:**
+- `janaushadhi.gov.in` is a **React single-page app (SPA)**. Every unknown path returns the homepage
+  HTML with HTTP 200, so always check `Content-Type` and never trust the status code alone.
+- `janaushadhi.gov.in:8443` is the site's JSON API.
+- `pmbi.co.in` holds old files only.
+
+**Public page:** https://janaushadhi.gov.in/product-portfolio/product-mrp-list ("Product & MRP List"; also `product-view-List`).
+
+**API behind it** (read from the page's JavaScript bundle `static/js/main.*.js` and chunk `7204.*.chunk.js`):
+
+| | |
+|---|---|
+| Endpoint | `POST https://janaushadhi.gov.in:8443/api/v1/website/getAllProductForWeb` |
+| Body | `{"pageIndex": 0, "pageSize": N, "searchText": "", "columnName": "drug_code", "orderBy": "asc"}` |
+| Response | `{responseCode, responseBody: {totalElement, newProductResponsesList: [...]}}`; the page shows rows with `status == 1` |
+| Whole list | The page's own export asks for `pageSize: 1000000`, i.e. everything in one request |
+| Auth | `Authorization: Bearer <guest token>`. For anonymous visitors the page first calls `GET :8443/auth/generateGuestToken`, keeps the token until its JWT `exp`, then fetches a new one |
+
+- Without the guest token the API returns a generic `HTTP 500` (tested with two requests).
+  **We haven't called `generateGuestToken`**: whether to use it is a policy question for step 3 (see §5).
+- `/api/v1/admin/...` endpoints (add/delete products, CSV upload, PDF export) also exist. They belong to the
+  admin panel and are **off-limits**.
+- Old static file `janaushadhi.gov.in/data/MRPList.pdf` is **gone** (returns the SPA fallback page).
+- Historical lists cited by search results: `pmbi.co.in/old-data/PriceListMay2014.pdf`, `PriceListDec2014.pdf` (not fetched).
+- Unofficial copies exist (sarkariyojana.com, Scribd). They're **not used**: not official, and no provenance.
+- Expected fields, from those copies (not yet verified): drug code, generic name, unit size, MRP, group name.
+
+---
+
+## 4. robots.txt and terms of use
+
+Checked 2026-11-04. Quotes are copied from each site's policy pages. *This is our reading, not legal advice.*
+
+### 4.1 robots.txt
+
+| Host | robots.txt |
+|---|---|
+| `cdsco.gov.in` | 404 (none published) |
+| `cdscoonline.gov.in` | 404 (none published) |
+| `nppa.gov.in` | **403 Forbidden** (unreadable; the homepage itself loads fine) |
+| `nppaipdms.gov.in` | 404 (none published) |
+| `janaushadhi.gov.in` | none (the SPA returns its homepage HTML for `/robots.txt`) |
+| `pmbi.co.in` | 404 (none published) |
+
+No `robots.txt` means no crawl rules are published. We still rate-limit every request (CLAUDE.md §7).
+An unreadable `robots.txt` (NPPA, 403) is treated cautiously: listing pages and published PDFs only.
+
+### 4.2 Terms of use
+
+| Owner (hosts) | Reproducing content | Linking to the site | Framing | Policy pages |
+|---|---|---|---|---|
+| **CDSCO** (`cdsco.gov.in`, `cdscoonline.gov.in`) | **Needs permission**: "may not be reproduced partially or fully, without due permission from Central Drugs Standard Control Organization"; source "must be appropriately acknowledged"; not "in any misleading or objectionable context" | **Contradictory**: Terms page says "no prior permission is required" (but asks to be informed); Disclaimer says "Prior permission is required before hyperlink are directed … to this site" | Not allowed | [Copyright](https://cdsco.gov.in/opencms/opencms//en/Copyright-Policy/), [Terms](https://cdsco.gov.in/opencms/opencms/en/terms_conditions/), [Disclaimer](https://cdsco.gov.in/opencms/opencms/en/disclaimer/) |
+| **NPPA** (`nppa.gov.in`, `nppaipdms.gov.in`) | **Free, no permission needed**: "may be reproduced free of charge in any format or media without requiring specific permission", if accurate, not derogatory or misleading, and "the source must be prominently acknowledged" | No permission needed (they ask to be informed) | Not allowed | [Copyright](https://nppa.gov.in/en/copyrightpolicy), [Hyperlink](https://nppa.gov.in/en/hyperlinkingpolicy), [Terms](https://nppa.gov.in/en/termsconditions) |
+| **PMBI / Jan Aushadhi** (`janaushadhi.gov.in`, `pmbi.co.in`) | **Needs permission**: "may be reproduced free of charge after taking proper permission by sending a mail to us"; accurate, source "prominently acknowledged" | **Prior permission required** | (not stated) | Copyright / Hyperlink / Disclaimer sections of the site (text is in the SPA bundle) |
+
+Other points:
+- **No site restricts automated access.** None of the policy pages mention bots, crawlers, scraping or bulk downloads.
+  The terms govern **republishing**, not **fetching**.
+- **All three say their content is not a statement of law.** NPPA: prices "should not be construed as a statement
+  of law or used for any legal purposes"; Jan Aushadhi says the same. Our price pages must say prices are for information only.
+- **No framing anywhere:** the site must link to source documents (opening in a new tab), never embed them in an iframe.
+  This affects Phase 11.
+
+### 4.3 What this means for the project
+
+| Activity | Allowed now? | Why |
+|---|---|---|
+| Downloading public pages and files for analysis (Phase 1 steps 4–5 and later) | Yes | Not restricted by any terms; we rate-limit and respect robots.txt |
+| Publishing NPPA prices on the live site | Yes, with prominent attribution | NPPA grants reproduction without permission |
+| Publishing CDSCO NSQ data on the live site | **Only after permission** | CDSCO copyright policy |
+| Publishing Jan Aushadhi prices on the live site | **Only after permission** | PMBI copyright policy ("sending a mail to us") |
+| Linking to original CDSCO / Jan Aushadhi documents | Ask in the same permission request | CDSCO's pages contradict each other; Jan Aushadhi requires permission |
+
+Permission is needed **before public launch (Phase 12)**, not before downloading. Government replies can be slow, so ask early.
+
+During discovery: ≥3 s between requests, User-Agent `DrugWatchIndia-research/0.1`, about 65 requests in total
+across all hosts (step 1: ~25, step 2: ~30, step 3: ~7).
+
+---
+
+## 5. Open questions
+
+1. ~~Which CDSCO source is primary?~~ **Decided (ADR 0004):** portal JSON from 2019; PDFs kept for 2017–2018 and Phase 2.
+2. **Do the PDF and the portal agree** for months covered by both (Apr 2024 – Jun 2025, plus several earlier ones)?
+   Compare row counts and batch numbers (step 6).
+3. Where are the unlisted Aug–Dec 2024 PDFs linked from, if anywhere?
+4. What does the bulk "Samples declared NSQ 2017-2023" file contain?
+5. Are the PDFs text-based or scanned images? (step 6)
+6. ~~Scraping policy for guest tokens / request signing?~~ **Decided (ADR 0003):** anonymous-visitor rule.
+   Jan Aushadhi guest token is allowed; NPPA request signing is not.
+7. **"Typical branded price" (plan §4.6) has no clean bulk source.** Pharma Sahi Daam has branded MRPs but is signed.
+   Partial public options: the TMR anti-cancer brand-MRP lists (2019; 2026 orders feed) and the new-drug retail-price orders.
+8. ~~NPPA current ceiling prices?~~ **Decided (ADR 0003):** manual browser "Download CSV" from the 2026 Compendium
+   dashboard, stored via the downloader's manual-drop path (file + who/when/where metadata).
+9. **NPPA ceiling-price history has gaps:** compendia 2016/2022 and lists 2014/2018/2020, then orders from 2026 only.
+   Orders from 2021–2025 aren't listed anywhere we found.

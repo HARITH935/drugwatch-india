@@ -132,12 +132,15 @@ Dashboards are built in Superset and embedded in the website with the Superset e
 
 | Source | Content | Format | Frequency |
 |---|---|---|---|
-| CDSCO NSQ / Spurious Drug Alerts (central labs) | Failed batches with product, batch, dates, manufacturer, failure reason | PDF | Monthly |
-| CDSCO State Drug Alerts (state labs) | Same structure, from state labs | PDF | Monthly |
-| NPPA ceiling price lists | Government price caps for scheduled medicines | PDF / Excel | Periodic |
-| Jan Aushadhi product list | Generic medicine names and MRPs | PDF / Excel | Periodic |
+| **CDSCO NSQ portal** (central + state labs) — **primary from 2019** (ADR 0004) | Failed batches with product, brand, batch, dates, manufacturer, result, lab, month | JSON | Monthly (Jan 2019 →) |
+| CDSCO NSQ / Spurious Drug Alerts (central labs) | Failed batches with product, batch, dates, manufacturer, failure reason | PDF | Monthly until Jun 2025 (patchy) |
+| CDSCO State Drug Alerts (state labs) | Same structure, from state labs | PDF | Monthly until Jun 2025 (patchy) |
+| NPPA ceiling price lists | Government price caps for scheduled medicines | PDF; CSV via manual download (ADR 0003) | Periodic |
+| Jan Aushadhi product list | Generic medicine names and MRPs | JSON (public API) | Periodic |
 
 > Exact URLs, formats, layout changes over time, and quirks are confirmed and documented in **Phase 1** (`docs/data-sources.md`).
+> Access and republishing rules: ADR 0003. CDSCO and Jan Aushadhi data needs written permission before it is
+> published on the live site (`docs/permissions.md`).
 
 **Expected data challenges:**
 - Table layouts change between months and between central/state lists

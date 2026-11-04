@@ -2,7 +2,7 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 0 — Setup ✅ **done** (2026-11-04). Next: Phase 1 — Source discovery, waiting for approval.
+**Current phase:** Phase 1 — Source discovery 🟨 **in progress** (approved 2026-11-04).
 
 ---
 
@@ -11,7 +11,7 @@ Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWA
 | Phase | Name | Status |
 |---|---|---|
 | 0 | Setup | ✅ Done |
-| 1 | Source discovery | ⬜ Not started |
+| 1 | Source discovery | 🟨 In progress |
 | 2 | PDF extraction ⚠️ checkpoint | ⬜ Not started |
 | 3 | Cleaning (bronze → silver) | ⬜ Not started |
 | 4 | Warehouse (gold) | ⬜ Not started |
@@ -45,6 +45,32 @@ Legend: ⬜ Not started · 🟨 In progress · ✅ Done
 **Done when:** `docker compose up` starts all four services; RustFS buckets exist; the Mailpit inbox is
 reachable; CI passes.
 
+---
+
+## Phase 1 — Source discovery
+
+- [x] 1. Locate CDSCO central and state alert pages; record URL patterns → `docs/data-sources.md` §1.
+      Found two sources: the legacy PDF list on `cdsco.gov.in` (stops Jun 2025, gaps, two-hop downloads)
+      and the NSQ portal on `cdscoonline.gov.in` (JSON endpoints, Jan 2019 – Sep 2026).
+      Decided: portal is primary from 2019, PDFs kept (ADR 0004).
+- [x] 2. Locate NPPA and Jan Aushadhi lists → `docs/data-sources.md` §2–3.
+      NPPA: PDFs (compendia 2016/2022, lists to 2020, 2026 orders feed) + a 2026 Compendium dashboard with a
+      browser-only CSV export; Pharma Sahi Daam's data endpoints use request signing → off-limits.
+      Jan Aushadhi: SPA; product list via a JSON API that needs an anonymous guest token (not used yet).
+      Policy decided in step 3 (ADR 0003). ⚠️ Still open: no bulk source for branded prices (§4.6), revisit in Phase 3/4.
+- [x] 3. Check `robots.txt` and terms for each source → `docs/data-sources.md` §4.
+      No site restricts automated access; CDSCO and Jan Aushadhi require permission to republish (NPPA doesn't).
+      Decided: ADR 0003 (anonymous-visitor access rule + permission-first republishing),
+      ADR 0004 (CDSCO portal JSON primary from 2019, PDFs kept). Email drafts in `docs/permissions.md`.
+      ⏳ Harith to send the two permission emails (not blocking: needed before Phase 12 launch).
+- [ ] 4. Build a downloader: rate-limited, retries, skips files already in RustFS (hash check).
+- [ ] 5. Download the full historical archive into `raw/` with metadata (source, alert month, download time, file hash).
+- [ ] 6. Document everything in `docs/data-sources.md`: URLs, formats, layout changes over time, scanned vs text PDFs.
+
+**Done when:** every available historical file is in RustFS with metadata, and sources are documented.
+
+---
+
 Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when each phase starts.
 
 ---
@@ -68,3 +94,6 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-03 | Language linters added when each language appears (Python: Phase 1, Java: 9, TS: 11); tool choice needs approval then | `lint.yml` |
 | 2026-11-04 | Buckets created by a one-shot `rustfs-init` job (compose profile `setup`) using curl's SigV4 signing: no new tool | `docker-compose.yml` |
 | 2026-11-04 | Local RustFS access key rotated after it was accidentally shown in terminal output; old key verified dead (403) | — |
+| 2026-11-04 | CDSCO NSQ portal (cdscoonline.gov.in JSON, 2019 →) is the primary source; PDFs kept for 2017–2018 and Phase 2 | ADR 0004 |
+| 2026-11-04 | Anonymous-visitor access rule; manual browser download where blocked (NPPA IPDMS); Pharma Sahi Daam not used | ADR 0003 |
+| 2026-11-04 | CDSCO and Jan Aushadhi data not published until permission recorded; requests drafted | ADR 0003, `docs/permissions.md` |

@@ -9,8 +9,9 @@
 
 ## 1. Project in one paragraph
 DrugWatch India is a public medicine quality and price intelligence platform built on CDSCO's monthly
-"Not of Standard Quality (NSQ) / Spurious" drug alert PDFs. A monthly Airflow pipeline downloads the
-PDFs and extracts rows with pdfplumber/Camelot, using a LoRA fine-tuned LLM as a fallback for hard rows.
+"Not of Standard Quality (NSQ) / Spurious" drug alerts: the CDSCO NSQ portal's JSON (primary from 2019,
+ADR 0004) plus the older alert PDFs. A monthly Airflow pipeline downloads both and extracts PDF rows with
+pdfplumber/Camelot, using a LoRA fine-tuned LLM as a fallback for hard rows.
 PySpark cleans the rows and resolves manufacturer names, Great Expectations validates them, and dbt
 builds a gold layer of marts in PostgreSQL. On top of that sit Superset dashboards (embedded in the site),
 a LightGBM manufacturer risk score with SHAP explanations (served with ONNX Runtime + FastAPI), a Spring
@@ -89,8 +90,12 @@ Boot API, and a Next.js website. Its main feature is the batch checker: *"Is my 
 ---
 
 ## 7. Scraping etiquette
-- Respect `robots.txt` and site terms. Rate-limit every request.
+- Respect `robots.txt` and site terms. Rate-limit every request (≥3 s per host).
 - Cache raw files in RustFS (hash check) so sources are never re-downloaded unnecessarily.
+- **Anonymous-visitor rule (ADR 0003):** automate only what a logged-out browser does on its own (public pages,
+  files, open JSON, guest tokens issued to every visitor). Never copy request-signing/anti-bot code, call admin
+  endpoints, or disguise the client to get past a block. Blocked sources use a manual browser download instead.
+- CDSCO and Jan Aushadhi data is not published on the live site until permission is recorded in `docs/permissions.md`.
 
 ---
 
