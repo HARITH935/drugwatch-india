@@ -2,8 +2,7 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 0 — Setup. **All steps done and verified locally.** Waiting for: final push +
-green CI, then approval to start Phase 1.
+**Current phase:** Phase 0 — Setup ✅ **done** (2026-11-04). Next: Phase 1 — Source discovery, waiting for approval.
 
 ---
 
@@ -11,7 +10,7 @@ green CI, then approval to start Phase 1.
 
 | Phase | Name | Status |
 |---|---|---|
-| 0 | Setup | 🟨 In progress |
+| 0 | Setup | ✅ Done |
 | 1 | Source discovery | ⬜ Not started |
 | 2 | PDF extraction ⚠️ checkpoint | ⬜ Not started |
 | 3 | Cleaning (bronze → silver) | ⬜ Not started |
