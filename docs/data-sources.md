@@ -1,6 +1,6 @@
 # Data sources
 
-> Living document, filled in during Phase 1. Status: **steps 1–3 done** (sources located; robots.txt and terms read).
+> Living document, filled in during Phase 1. Status: **steps 1–3 done** (sources located; robots.txt and terms read); raw storage layout in §6.
 > Layout / scanned-vs-text notes (step 6) are still to come.
 > All findings below were checked on **2026-11-04**.
 
@@ -282,3 +282,26 @@ across all hosts (step 1: ~25, step 2: ~30, step 3: ~7).
    dashboard, stored via the downloader's manual-drop path (file + who/when/where metadata).
 9. **NPPA ceiling-price history has gaps:** compendia 2016/2022 and lists 2014/2018/2020, then orders from 2026 only.
    Orders from 2021–2025 aren't listed anywhere we found.
+
+---
+
+## 6. How downloads are stored in `raw/`
+
+Built in Phase 1 step 4b (`ingestion/src/drugwatch_ingestion/store.py`). Every downloaded file is one
+**item version**:
+
+```
+raw/<item prefix>/<sha256>.<ext>             the bytes exactly as downloaded (never decoded or edited)
+raw/<item prefix>/<sha256>.<ext>.meta.json   metadata sidecar (JSON, UTF-8)
+```
+
+- **Item prefix:** one logical thing we download, e.g. `cdsco-portal/nsq/2026-09`. The exact prefix scheme
+  per source is set in step 4c.
+- **Named by content hash:** the same bytes always get the same name, so they're stored once. If a source
+  changes a file, the new version is stored next to the old one, never over it.
+- **Sidecar = "done" marker:** written after the file. An item counts as stored only when a sidecar exists.
+- **Sidecar fields:**
+  - always: `source`, `method` (`auto` / `manual`, ADR 0003), `key`, `sha256`, `size_bytes`, `stored_at`;
+  - plus what the source adapter adds: `alert_month`, and for automatic downloads the request details
+    (URL with parameters, final URL, HTTP status, content type, ETag, Last-Modified, fetch time, User-Agent).
+  - Request headers are never stored, because they can hold tokens.

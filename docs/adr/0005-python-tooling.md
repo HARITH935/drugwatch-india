@@ -18,7 +18,7 @@ until Python first appeared.
 
 | Need | Chosen | Alternative | Trade-off |
 |---|---|---|---|
-| HTTP client | **requests** | httpx | requests is the most common Python HTTP library, and urllib3's `Retry` (installed with it) gives retries with backoff, so no extra retry library is needed. httpx adds async and HTTP/2, which buy nothing at one request per 3 s per host (ADR 0003). |
+| HTTP client | **requests** | httpx | requests is the most common Python HTTP library. httpx adds async and HTTP/2, which buy nothing at one request per 3 s per host (ADR 0003). Retries are a short loop of our own (see Consequences), so no retry library is needed. |
 | S3 client | **boto3** | minio SDK | boto3 is the standard S3 SDK, and Airflow's AWS provider (Phase 5) is built on it. It's large and verbose. The minio SDK is smaller but tied to the vendor ADR 0002 moved away from. |
 | Environment + dependencies | **uv** | pip + venv | uv creates the virtualenv, installs packages and writes a lockfile (`uv.lock`), so local and CI install identical versions. pip has no lockfile by default. uv is newer and less familiar. |
 | Tests | **pytest** | unittest (stdlib) | pytest is the standard: plain `assert`, fixtures, clear failure output. unittest needs class boilerplate. |
@@ -43,6 +43,9 @@ Adopt all five, as chosen above.
 - Later Python folders (`extraction/`, `spark/`, `ml/`, `ml-serving/`, `llm/`) follow the same pattern and
   get added to the CI job when they appear.
 - boto3 must always be configured for path-style addressing with RustFS (ADR 0002).
+- **Retries are hand-written, not urllib3's `Retry`** (amended in step 4b). urllib3 retries the first failure
+  with no delay and bypasses our per-host limiter, so one server error would trigger an instant second
+  request and break the 3-second rule. Our loop (`fetcher.py`) sends every attempt through the limiter.
 - **Interview angle:** "I picked boring, standard tools where the problem was ordinary: requests for HTTP,
   boto3 for S3. I used a lockfile so CI and my laptop could never drift. Every library was approved and
   recorded before it entered the codebase."

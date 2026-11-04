@@ -2,6 +2,7 @@
 # Ruff finds this file by walking up from each .py file, so ingestion/, extraction/, ml/ ... all use it.
 line-length = 100
 target-version = "py313" # allow modern syntax; flag old-style code that 3.13 can write better
+src = ["*/src"] # where our own packages live (e.g. ingestion/src), so imports sort as first-party
 
 [lint]
 select = [

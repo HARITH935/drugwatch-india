@@ -10,7 +10,7 @@ requires-python = ">=3.13" # same as .python-version, so local and CI run one Py
 # Runtime libraries: uv writes the exact resolved versions to uv.lock; these are only lower bounds.
 dependencies = [
     "boto3>=1.43.123", # S3 client for RustFS (path-style addressing, ADR 0002)
-    "requests>=2.34.2", # HTTP client; retries come from urllib3's Retry (installed with requests)
+    "requests>=2.34.2", # HTTP client; retries are our own loop in fetcher.py (see its docstring)
 ]
 
 # Build backend: lets uv install src/drugwatch_ingestion into .venv so tests import the real package.
@@ -28,3 +28,6 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"] # only look for tests here
 addopts = "-ra --strict-markers" # -ra: summarise skips/failures at the end; typo'd markers are errors
+markers = [
+    "integration: needs the local RustFS from docker compose (skipped when its credentials aren't set)",
+]
