@@ -89,6 +89,7 @@ Needs Docker Desktop. Starts PostgreSQL, RustFS (S3-compatible storage), Redis a
 cp .env.example .env      # then fill in the blank values (e.g. with: openssl rand -hex 16)
 docker compose up -d --wait
 docker compose ps         # all four should say "healthy"
+docker compose run --rm rustfs-init   # create the raw/bronze/silver buckets (safe to re-run)
 ```
 
 | Service | Address |

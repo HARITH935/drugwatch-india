@@ -46,6 +46,27 @@ services:
       timeout: 3s
       retries: 10
 
+  # --- rustfs-init: one-shot setup job. Creates the raw/bronze/silver buckets, then exits. ---
+  # Run it yourself:  docker compose run --rm rustfs-init
+  # It's idempotent (existing buckets are left alone), so it's safe to re-run. Buckets live in the
+  # rustfs-data volume, so you only need to re-run it after `docker compose down -v`.
+  rustfs-init:
+    # The "setup" profile keeps this job out of `docker compose up`. Otherwise `up --wait` reports a
+    # failure whenever this job has already finished, even successfully (exit 0).
+    profiles: ["setup"]
+    image: rustfs/rustfs:1.0.4 # reuse the RustFS image: it already contains curl
+    depends_on:
+      rustfs:
+        condition: service_healthy # start only once the S3 API is answering
+    entrypoint: ["sh", "/scripts/create-buckets.sh"] # run our script instead of the RustFS server
+    environment:
+      S3_ENDPOINT: http://rustfs:9000 # inside the compose network, the service name works as a hostname
+      BUCKETS: raw bronze silver # gold lives in Postgres, not here
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:?Set RUSTFS_ACCESS_KEY in .env}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:?Set RUSTFS_SECRET_KEY in .env}
+    volumes:
+      - ./infra/rustfs/create-buckets.sh:/scripts/create-buckets.sh:ro # :ro = read-only inside the container
+
   # --- Redis: cache for batch lookups (used by Spring Boot in Phase 9) ---
   redis:
     image: redis:8.8

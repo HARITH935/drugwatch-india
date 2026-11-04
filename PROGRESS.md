@@ -2,7 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 0 — Setup. **In progress.** Next: step 6 (RustFS buckets).
+**Current phase:** Phase 0 — Setup. **All steps done and verified locally.** Waiting for: final push +
+green CI, then approval to start Phase 1.
 
 ---
 
@@ -39,7 +40,8 @@ Legend: ⬜ Not started · 🟨 In progress · ✅ Done
       (compose refuses to start until filled); verified tracked by git, `.env` ignored.
 - [x] 5. GitHub Actions lint workflow (Python + Java + TypeScript as each appears) — repo hygiene checks
       for now (`.github/scripts/repo-checks.sh`); first run green. Repo: https://github.com/HARITH935/drugwatch-india
-- [ ] 6. RustFS buckets: `raw`, `bronze`, `silver`
+- [x] 6. RustFS buckets: `raw`, `bronze`, `silver` — `docker compose run --rm rustfs-init` runs
+      `infra/rustfs/create-buckets.sh` (curl SigV4, idempotent). Verified from a full `down -v` wipe.
 
 **Done when:** `docker compose up` starts all four services; RustFS buckets exist; the Mailpit inbox is
 reachable; CI passes.
@@ -65,3 +67,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-03 | Dev host ports: Postgres 5433, Redis 6380 (OpsPilot uses 5432 and 6379) | `docker-compose.yml` |
 | 2026-11-03 | GitHub repo is public: HARITH935/drugwatch-india | — |
 | 2026-11-03 | Language linters added when each language appears (Python: Phase 1, Java: 9, TS: 11); tool choice needs approval then | `lint.yml` |
+| 2026-11-04 | Buckets created by a one-shot `rustfs-init` job (compose profile `setup`) using curl's SigV4 signing: no new tool | `docker-compose.yml` |
+| 2026-11-04 | Local RustFS access key rotated after it was accidentally shown in terminal output; old key verified dead (403) | — |

@@ -129,6 +129,7 @@ Every top-level folder exists from Phase 0 (an empty `.gitkeep` holds it in git)
 ```bash
 # Local services (needs .env; template: .env.example)
 docker compose up -d --wait     # start all four, wait until healthy
+docker compose run --rm rustfs-init   # create raw/bronze/silver buckets (idempotent; re-run after down -v)
 docker compose ps               # status + health
 docker compose logs -f rustfs   # follow one service's logs
 docker compose down             # stop (data kept in named volumes)
