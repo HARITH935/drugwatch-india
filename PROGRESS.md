@@ -63,7 +63,7 @@ reachable; CI passes.
       Decided: ADR 0003 (anonymous-visitor access rule + permission-first republishing),
       ADR 0004 (CDSCO portal JSON primary from 2019, PDFs kept). Email drafts in `docs/permissions.md`.
       ⏳ Harith to send the two permission emails (not blocking: needed before Phase 12 launch).
-- [ ] 4. Build a downloader: rate-limited, retries, skips files already in RustFS (hash check).
+- [x] 4. Build a downloader: rate-limited, retries, skips files already in RustFS (hash check).
   - [x] 4a. Python tooling approved (ADR 0005: requests, boto3, uv, pytest, ruff). `ingestion/` uv project
         (src layout, `uv.lock`), repo-root `ruff.toml`, `python` CI job (ruff check, format check, pytest).
   - [x] 4b. Core: polite fetcher (≥3 s/host, retries with backoff, honest UA, timeouts) + RustFS store
@@ -71,7 +71,7 @@ reachable; CI passes.
         `store.py` (RawStore: content-addressed keys + `.meta.json` sidecar, never overwrites).
         27 unit tests (local scripted HTTP server, fake clock, fake S3) + 1 integration test passed on real
         RustFS (throwaway bucket). Layout documented in `docs/data-sources.md` §6.
-  - [ ] 4c. Source adapters, one at a time:
+  - [x] 4c. Source adapters, one at a time:
     - [x] CDSCO portal JSON (`sources/cdsco_portal.py`): month list from the portal's menus, one month per
           request, shape check (fields, row count, month) before storing, skip if stored unless `--refresh`.
           16 tests (made-up rows only: real rows aren't committed, ADR 0003). Real run: NSQ Sep-2026 (330 rows)
@@ -90,7 +90,12 @@ reachable; CI passes.
           who / when (default: file modified time) / page URL, `method = manual`; strict input checks; no network.
           16 tests. Verified on real RustFS with a throwaway bucket (no made-up file put in `raw/`).
           ⏳ First real use: Harith downloads the NPPA 2026 Compendium CSV and drops it.
-    - [ ] NPPA PDFs (compendia, consolidated lists, category lists, 2026 orders feed)
+    - [x] NPPA (`sources/nppa.py`): 4 listing pages, two table shapes (shared reader `sources/html_tables.py`, now
+          also used by the CDSCO PDF adapter). 168 documents: 13 PDFs + 4 HTML data pages (2014 DPCO lists) + 154
+          orders. nppa.gov.in's incomplete certificate chain fixed by supplying the missing intermediate (ADR 0006);
+          certificate errors no longer retried. Tests: 12 NPPA + 3 table-reader + 4 fetcher. Real run: 2016
+          Compendium (44-page PDF) + 30.11.2014 list (HTML) stored. Requests to nppa.gov.in: 12 (8 to study the pages,
+          4 in the live run), plus 4 failed TLS attempts before the fix and 1 certificate download from Sectigo.
 - [ ] 5. Download the full historical archive into `raw/` with metadata (source, alert month, download time, file hash).
 - [ ] 6. Document everything in `docs/data-sources.md`: URLs, formats, layout changes over time, scanned vs text PDFs.
 
@@ -134,3 +139,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-05 | Jan Aushadhi stored as one snapshot per collection month (`jan-aushadhi/products/<YYYY-MM>`); guest token validated as a JWT before use and never stored or logged | `sources/jan_aushadhi.py` |
 | 2026-11-05 | Lint false positives are silenced per line with a reason (`# noqa: S105 (...)`), never by disabling a rule | `ruff.toml` |
 | 2026-11-05 | Manual drops stored under `<source>/<dataset>/<period>`; download time defaults to the file's modified time and the sidecar says which was used | `manual_drop.py` |
+| 2026-11-05 | nppa.gov.in's missing intermediate (Sectigo DV R36) supplied in `certs/` after verifying it against certifi; verification never turned off; certificate errors never retried | ADR 0006 |
+| 2026-11-05 | NPPA pages whose table is the data (2014 DPCO lists) stored as `.html` exactly as received (CSRF token and visitor counter included: raw is never edited) | `sources/nppa.py` |

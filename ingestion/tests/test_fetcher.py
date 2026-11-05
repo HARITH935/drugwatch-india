@@ -2,6 +2,7 @@
 
 import json
 import socket
+import ssl
 
 import pytest
 
@@ -11,6 +12,8 @@ from drugwatch_ingestion.fetcher import (
     FetchError,
     HostRateLimiter,
     PoliteFetcher,
+    _TrustAdapter,
+    trust_context,
 )
 
 
@@ -120,6 +123,16 @@ def test_retries_network_errors(fake_clock):
     assert fake_clock.sleeps == [5.0]
 
 
+def test_certificate_errors_are_not_retried(http_server, fake_clock):
+    # https:// against a plain-HTTP server makes the TLS handshake fail: a real SSLError.
+    https_url = http_server.base_url.replace("http://", "https://") + "/ok"
+
+    with pytest.raises(FetchError, match="TLS certificate check failed"):
+        make_fetcher(fake_clock).fetch(https_url)
+
+    assert fake_clock.sleeps == []  # no backoff: it failed at once, without retries
+
+
 def test_refuses_oversized_body(http_server, fake_clock):
     http_server.scripts["/big"] = [(200, b"x" * 100)]
 
@@ -152,3 +165,26 @@ def test_rate_limiter_gap_starts_when_a_slow_request_ends(fake_clock):
     limiter.wait("cdsco.gov.in")
 
     assert fake_clock.sleeps == [3.0]  # still a full 3 s after the slow request finished
+
+
+def test_trust_context_keeps_certificate_checks_on():
+    context = trust_context()
+
+    assert context.verify_mode == ssl.CERT_REQUIRED  # certificates must be valid
+    assert context.check_hostname  # and must belong to the host we asked for
+
+
+def test_trust_context_adds_the_extra_intermediate_to_certifi_roots():
+    names = [
+        dict(field[0] for field in cert["subject"]).get("commonName")
+        for cert in trust_context().get_ca_certs()
+    ]
+
+    assert "Sectigo Public Server Authentication CA DV R36" in names  # from certs/
+    assert len(names) > 100  # plus Python's usual roots (certifi), not instead of them
+
+
+def test_https_requests_go_through_the_trust_adapter(fake_clock):
+    fetcher = make_fetcher(fake_clock)
+
+    assert isinstance(fetcher._session.get_adapter("https://nppa.gov.in/"), _TrustAdapter)

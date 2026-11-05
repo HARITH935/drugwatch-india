@@ -2,7 +2,7 @@
 
 The alerts page is one HTML table of about 300 notices of every kind (docs/data-sources.md §1a).
 This adapter:
-1. reads the table (Python's built-in html.parser: no extra library needed for one table);
+1. reads the table (sources/html_tables.py, built on Python's html.parser);
 2. keeps the monthly NSQ / spurious lists and the bulk "Samples declared NSQ 2017-2023" file,
    and works out each list's alert month from its free-text title;
 3. downloads each PDF in two hops: download_file_division.jsp?num_id=<id> returns a tiny HTML
@@ -23,11 +23,11 @@ import html
 import re
 from dataclasses import dataclass
 from datetime import date
-from html.parser import HTMLParser
 from urllib.parse import parse_qs, urljoin, urlsplit
 
 from drugwatch_ingestion.fetcher import PoliteFetcher
 from drugwatch_ingestion.sources import UnexpectedResponseError
+from drugwatch_ingestion.sources.html_tables import parse_tables
 from drugwatch_ingestion.store import RawStore
 
 LISTING_URL = "https://cdsco.gov.in/opencms/opencms/en/Notifications/Alerts/"
@@ -119,12 +119,11 @@ def parse_listing(page: str, page_url: str = LISTING_URL) -> list[list[str | Non
     Fails loudly if the table is missing or a row doesn't have the five expected cells
     (ADR 0004: a changed format stops the run).
     """
-    parser = _AlertTableParser()
-    parser.feed(page)
-    if not parser.rows:
+    tables = [table for table in parse_tables(page) if table.attrs.get("id") == "example"]
+    if not tables or not tables[0].rows:
         raise UnexpectedResponseError(f"{page_url}: no rows found in the alerts table")
     rows = []
-    for cells in parser.rows:
+    for cells in tables[0].rows:
         if len(cells) != 5 or cells[3][1] is None:
             raise UnexpectedResponseError(f"{page_url}: unexpected row {cells!r}")
         number, title, released, (_, href), size = cells
@@ -207,47 +206,6 @@ class CdscoPdf:
             },
         )
         return DocumentResult(document, "stored" if stored.created else "unchanged", stored.key)
-
-
-class _AlertTableParser(HTMLParser):
-    """Collects the rows of the alerts table (<table id="example">): each cell's text and link."""
-
-    def __init__(self):
-        super().__init__()  # convert_charrefs=True by default: "&amp;" arrives as "&"
-        self.rows: list[list[tuple[str, str | None]]] = []  # row -> [(cell text, href or None)]
-        self._in_table = False
-        self._row: list[tuple[str, str | None]] | None = None
-        self._text: list[str] | None = None  # text pieces of the current cell
-        self._href: str | None = None
-
-    def handle_starttag(self, tag, attrs):
-        if tag == "table" and dict(attrs).get("id") == "example":
-            self._in_table = True
-        elif not self._in_table:
-            return
-        elif tag == "tr":
-            self._row = []
-        elif tag == "td" and self._row is not None:
-            self._text, self._href = [], None
-        elif tag == "a" and self._text is not None:
-            self._href = dict(attrs).get("href")
-
-    def handle_data(self, data):
-        if self._text is not None:
-            self._text.append(data)
-
-    def handle_endtag(self, tag):
-        if not self._in_table:
-            return
-        if tag == "td" and self._row is not None and self._text is not None:
-            self._row.append((" ".join("".join(self._text).split()), self._href))
-            self._text = None
-        elif tag == "tr" and self._row is not None:
-            if self._row:  # the header row has only <th> cells, so it ends up empty: skip it
-                self.rows.append(self._row)
-            self._row = None
-        elif tag == "table":
-            self._in_table = False
 
 
 def _file_id(link: str) -> str:

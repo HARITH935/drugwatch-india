@@ -6,24 +6,32 @@ PoliteFetcher enforces the scraping etiquette in a single place, so no source ad
 - an honest User-Agent that names the project and its public repo;
 - a connect + read timeout on every request;
 - retries with capped exponential backoff, but only for temporary failures (network errors, 5xx);
-- an immediate stop on 403 / 429: a site refusing us is never retried harder.
+- an immediate stop on 403 / 429: a site refusing us is never retried harder;
+- full HTTPS certificate checks, trusting Python's usual roots (certifi) plus the intermediates in
+  certs/ that some servers forget to send (nppa.gov.in). Certificate errors are never retried.
 
 Retries are a short loop here, not urllib3's built-in Retry: urllib3 retries the first failure with
 no delay and bypasses our per-host limiter, which would break the 3-second rule.
 """
 
+import ssl
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
 import requests
+import requests.certs
+from requests.adapters import HTTPAdapter
+from urllib3.util.ssl_ import create_urllib3_context
 
 from drugwatch_ingestion import __version__
 
 USER_AGENT = f"DrugWatchIndia/{__version__} (+https://github.com/HARITH935/drugwatch-india)"
+EXTRA_CERTS_DIR = Path(__file__).with_name("certs")  # public intermediates, each with a header
 
 RETRY_STATUSES = frozenset({500, 502, 503, 504})  # temporary server-side failures: worth retrying
 STOP_STATUSES = frozenset({403, 429})  # "forbidden" / "too many requests": stop (ADR 0003)
@@ -102,6 +110,31 @@ class HostRateLimiter:
         self._last_end[host] = self._clock()
 
 
+def trust_context() -> ssl.SSLContext:
+    """The HTTPS settings requests uses by default, plus our extra intermediate certificates.
+
+    Adding an intermediate grants no new trust: it's only accepted because a certifi root signed
+    it. It just supplies the link a badly configured server forgets to send.
+    """
+    context = create_urllib3_context()  # same TLS settings as requests' default (verification ON)
+    context.load_verify_locations(cafile=requests.certs.where())  # Python's usual trusted roots
+    for pem in sorted(EXTRA_CERTS_DIR.glob("*.pem")):
+        context.load_verify_locations(cafile=str(pem))
+    return context
+
+
+class _TrustAdapter(HTTPAdapter):
+    """Plugs our SSL context into requests' connection pool (requests' extension point)."""
+
+    def __init__(self, ssl_context: ssl.SSLContext):
+        self._ssl_context = ssl_context  # set first: HTTPAdapter.__init__ calls init_poolmanager
+        super().__init__()
+
+    def init_poolmanager(self, *args, **kwargs):
+        kwargs["ssl_context"] = self._ssl_context
+        super().init_poolmanager(*args, **kwargs)
+
+
 class PoliteFetcher:
     def __init__(
         self,
@@ -124,6 +157,7 @@ class PoliteFetcher:
         self._limiter = HostRateLimiter(min_interval, clock, sleep)
         self._session = requests.Session()  # reuses connections to the same host (keep-alive)
         self._session.headers["User-Agent"] = USER_AGENT
+        self._session.mount("https://", _TrustAdapter(trust_context()))  # for every https:// URL
 
     def fetch(
         self,
@@ -194,6 +228,10 @@ class PoliteFetcher:
                     last_modified=response.headers.get("Last-Modified"),
                     fetched_at=datetime.now(UTC),
                 )
+        except requests.exceptions.SSLError as exc:
+            # Checked before NETWORK_ERRORS (SSLError is a kind of ConnectionError): a certificate
+            # problem never fixes itself, so fail at once instead of retrying.
+            raise FetchError(f"{http_method} {url}: TLS certificate check failed: {exc}") from exc
         except NETWORK_ERRORS as exc:
             raise _TemporaryError(f"{type(exc).__name__}: {exc}") from exc
 

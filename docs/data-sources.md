@@ -136,6 +136,9 @@ of Essential Medicines (NLEM 2011 / 2015 / 2022).
 
 **Hosts:**
 - `nppa.gov.in` is the main site. The old `nppaindia.nic.in` no longer resolves in DNS.
+  **Its HTTPS chain is incomplete:** the server leaves out the Sectigo "Public Server Authentication CA DV R36"
+  intermediate, so Python fails with `CERTIFICATE_VERIFY_FAILED`. We supply that intermediate (ADR 0006).
+  The site's certificate expires **2026-11-18**: if the renewal changes the chain, add the new intermediate.
 - `nppaipdms.gov.in` hosts NPPA's applications (IPDMS = Integrated Pharmaceutical Database Management System).
 
 NPPA's data is spread over five places, none of which is one clean, current, bulk source:
@@ -161,6 +164,9 @@ NPPA's data is spread over five places, none of which is one clean, current, bul
 **b. Consolidated lists:** https://nppa.gov.in/en/dpco2013
 - `CEILING PRICES OF SCHEDULED FORMULATIONS UNDER DPCO, 2013` as on **30.09.2020** (934 KB), **13.08.2018** (131 KB),
   30.11.2014 (sub-page), plus 2013/2014 notification lists and retail-price lists for new drugs.
+- **The four 2014 rows link to NPPA pages, not PDFs: the page's HTML table *is* the data** (30.11.2014
+  consolidated list ≈ 396 rows, 2014 notifications ≈ 550, new-drug retail prices 81, Para 19 MRPs 113).
+  The adapter stores those pages as `.html`. The two 2013 rows have no link at all.
 - `LIST OF REVISED MRP OF ANTI-CANCER MEDICINES UNDER TMR APPLICABLE FROM 8th MARCH, 2019`: 526 **brand** MRPs
   (TMR = Trade Margin Rationalisation).
 
@@ -169,7 +175,7 @@ NPPA's data is spread over five places, none of which is one clean, current, bul
   The file names (`2845-fb-posts-...`) suggest they were made for social media.
 
 **d. Circulars / Orders feed:** https://nppa.gov.in/en/view_more?id=4
-- All rows come in one HTML response (DataTables, as on CDSCO). It holds **153 rows, all from 2026**
+- All rows come in one HTML response (DataTables, as on CDSCO). It held **153 rows, all from 2026** (154 on 2026-11-05)
   (06-Jan-2026 → 03-Nov-2026); older orders aren't listed here.
 - By title: 93 draft price worksheets, 23 ceiling-price orders, 16 retail-price orders for new drugs,
   5 MRP lists, 5 exemptions, 11 other.
@@ -189,6 +195,12 @@ NPPA's data is spread over five places, none of which is one clean, current, bul
   scraping etiquette (CLAUDE.md §7), whatever the data.
 - File names under `/storage/uploads/pdf/` end in a 32-hex-character hash, so they can't be predicted.
   Discover them from the listing pages.
+
+**What the adapter keeps** (step 4c, pages of 2026-11-05): **168 documents**: Compendium 2 PDFs (2016, 2022);
+DPCO 2013 3 PDFs (2018 and 2020 lists, 526 anti-cancer brand MRPs) + 4 HTML data pages (2014);
+category lists 5 PDFs; orders feed 154 PDFs (Jan–Nov 2026). Skipped: the 2026 dashboard (off-site: manual
+drop) and the two link-less 2013 rows. NPPA HTML pages change on every visit (CSRF token, visitor counter),
+so they're never byte-identical: stored pages are skipped, and `--refresh` would store a new version each time.
 
 ## 3. Jan Aushadhi product list
 
@@ -318,6 +330,7 @@ raw/<item prefix>/<sha256>.<ext>.meta.json   metadata sidecar (JSON, UTF-8)
   |---|---|---|
   | CDSCO portal | `cdsco-portal/<nsq\|spurious>/<YYYY-MM>` | one month's table, all sources (`source=All`) |
   | Jan Aushadhi | `jan-aushadhi/products/<YYYY-MM>` (month collected) | one snapshot of the whole product list; skipped if this month's exists |
+  | NPPA | `nppa/<compendium\|dpco2013\|category-lists>/<doc id>`, orders: `nppa/orders/<YYYY-MM>/<doc id>` | one listed PDF, or one NPPA data page stored as `.html` (doc id = NPPA's file/page name) |
   | Manual drop (any source) | `<source>/<dataset>/<period>`, e.g. `nppa/compendium-2026/2026-11` | one file a person downloaded in a browser (ADR 0003 §2) |
   | CDSCO PDFs | `cdsco-pdf/<central-nsq\|state-nsq\|spurious\|combined>/<YYYY-MM>/<file id>` (bulk file: `cdsco-pdf/nsq-bulk/2017-2023/<file id>`) | one listed PDF; the file id keeps an original and a "Revised" list apart |
 
@@ -329,6 +342,7 @@ raw/<item prefix>/<sha256>.<ext>.meta.json   metadata sidecar (JSON, UTF-8)
   - plus what the source adapter adds: `alert_month` (CDSCO portal also: `dataset`, `row_count`, `encoding`;
     CDSCO PDFs also: `dataset`, `file_id`, the listing row's `title` / `release_date` / `size_text`, `first_hop_url`;
     Jan Aushadhi: `dataset`, `snapshot_month`, `row_count`, `active_count`, `request_body`; no `alert_month`;
+    NPPA: `dataset` (section), `title`, `order_date` (orders only), `listing` URL and size text;
     manual drops: `dataset`, `period`, and `manual` = who / when (and whether "when" came from the file's
     modified time) / page URL / original file name / note, instead of `request`),
     and for automatic downloads the request details
