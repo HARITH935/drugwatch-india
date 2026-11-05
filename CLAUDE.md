@@ -147,6 +147,12 @@ uv run pytest                   # tests
 uv run ruff check .             # lint (rules in the repo-root ruff.toml)
 uv run ruff format .            # auto-format (CI only checks: --check)
 uv add <pkg>                    # add a dependency: approved libraries only (§4)
+
+# Downloads into RustFS raw/ (from ingestion/, RustFS up; see docs/data-sources.md §6)
+uv run --env-file ../.env python -m drugwatch_ingestion.sources.cdsco_portal --month 2026-09  # or --all, --tab spurious
+uv run --env-file ../.env python -m drugwatch_ingestion.sources.cdsco_pdf --list             # then --file-id N / --all
+uv run --env-file ../.env python -m drugwatch_ingestion.sources.jan_aushadhi                 # this month's snapshot
+uv run --env-file ../.env python -m drugwatch_ingestion.manual_drop FILE --source ... --help  # browser downloads (ADR 0003)
 ```
 
 **Local service ports** (all bound to 127.0.0.1; Postgres and Redis are shifted so they don't clash with OpsPilot):

@@ -318,6 +318,7 @@ raw/<item prefix>/<sha256>.<ext>.meta.json   metadata sidecar (JSON, UTF-8)
   |---|---|---|
   | CDSCO portal | `cdsco-portal/<nsq\|spurious>/<YYYY-MM>` | one month's table, all sources (`source=All`) |
   | Jan Aushadhi | `jan-aushadhi/products/<YYYY-MM>` (month collected) | one snapshot of the whole product list; skipped if this month's exists |
+  | Manual drop (any source) | `<source>/<dataset>/<period>`, e.g. `nppa/compendium-2026/2026-11` | one file a person downloaded in a browser (ADR 0003 §2) |
   | CDSCO PDFs | `cdsco-pdf/<central-nsq\|state-nsq\|spurious\|combined>/<YYYY-MM>/<file id>` (bulk file: `cdsco-pdf/nsq-bulk/2017-2023/<file id>`) | one listed PDF; the file id keeps an original and a "Revised" list apart |
 
 - **Named by content hash:** the same bytes always get the same name, so they're stored once. If a source
@@ -327,7 +328,9 @@ raw/<item prefix>/<sha256>.<ext>.meta.json   metadata sidecar (JSON, UTF-8)
   - always: `source`, `method` (`auto` / `manual`, ADR 0003), `key`, `sha256`, `size_bytes`, `stored_at`;
   - plus what the source adapter adds: `alert_month` (CDSCO portal also: `dataset`, `row_count`, `encoding`;
     CDSCO PDFs also: `dataset`, `file_id`, the listing row's `title` / `release_date` / `size_text`, `first_hop_url`;
-    Jan Aushadhi: `dataset`, `snapshot_month`, `row_count`, `active_count`, `request_body`; no `alert_month`),
+    Jan Aushadhi: `dataset`, `snapshot_month`, `row_count`, `active_count`, `request_body`; no `alert_month`;
+    manual drops: `dataset`, `period`, and `manual` = who / when (and whether "when" came from the file's
+    modified time) / page URL / original file name / note, instead of `request`),
     and for automatic downloads the request details
     (URL with parameters, final URL, HTTP status, content type, ETag, Last-Modified, fetch time, User-Agent).
   - Request headers are never stored, because they can hold tokens.

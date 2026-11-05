@@ -86,7 +86,11 @@ reachable; CI passes.
           `jan-aushadhi/products/<YYYY-MM>`. 13 tests (made-up token/products; token never in stored bytes).
           Real run: 2,453 products stored, no JWT-like string in `raw/`; 2 requests (+2 for a shape probe).
           Found: `mrp` = 0 for 353 products (treat as missing in Phase 3).
-    - [ ] NPPA PDFs + manual drop (ADR 0003)
+    - [x] Manual drop (`manual_drop.py`): stores a browser-downloaded file under `<source>/<dataset>/<period>` with
+          who / when (default: file modified time) / page URL, `method = manual`; strict input checks; no network.
+          16 tests. Verified on real RustFS with a throwaway bucket (no made-up file put in `raw/`).
+          ⏳ First real use: Harith downloads the NPPA 2026 Compendium CSV and drops it.
+    - [ ] NPPA PDFs (compendia, consolidated lists, category lists, 2026 orders feed)
 - [ ] 5. Download the full historical archive into `raw/` with metadata (source, alert month, download time, file hash).
 - [ ] 6. Document everything in `docs/data-sources.md`: URLs, formats, layout changes over time, scanned vs text PDFs.
 
@@ -129,3 +133,4 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-05 | CDSCO PDF raw prefix includes CDSCO's file id (`cdsco-pdf/<kind>/<YYYY-MM>/<file id>`) so two documents for one month never collide; titles whose month doesn't fit the release date are skipped and reported, not stored | `docs/data-sources.md` §6 |
 | 2026-11-05 | Jan Aushadhi stored as one snapshot per collection month (`jan-aushadhi/products/<YYYY-MM>`); guest token validated as a JWT before use and never stored or logged | `sources/jan_aushadhi.py` |
 | 2026-11-05 | Lint false positives are silenced per line with a reason (`# noqa: S105 (...)`), never by disabling a rule | `ruff.toml` |
+| 2026-11-05 | Manual drops stored under `<source>/<dataset>/<period>`; download time defaults to the file's modified time and the sidecar says which was used | `manual_drop.py` |
