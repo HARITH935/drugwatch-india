@@ -76,7 +76,11 @@ reachable; CI passes.
           request, shape check (fields, row count, month) before storing, skip if stored unless `--refresh`.
           16 tests (made-up rows only: real rows aren't committed, ADR 0003). Real run: NSQ Sep-2026 (330 rows)
           + spurious Sep-2026 (1 row) stored in `raw/`; spurious field list confirmed; 5 requests.
-    - [ ] CDSCO legacy PDF list (two-hop `.jsp` → iframe → PDF)
+    - [x] CDSCO legacy PDF list (`sources/cdsco_pdf.py`): reads the alerts table (stdlib `html.parser`), keeps
+          44 documents (21 central NSQ, 9 state, 10 spurious, 3 combined, 1 bulk 2017-2023; matches the step-1
+          inventory), alert month parsed from free-text titles and checked against the release date, two-hop
+          download, `%PDF-` check. 29 tests (real title variants, fake site). Real run: June 2025 central NSQ
+          (file 12927, 6 pages, 188,795 bytes) stored with ETag / Last-Modified; 3 requests.
     - [ ] Jan Aushadhi product API (guest token)
     - [ ] NPPA PDFs + manual drop (ADR 0003)
 - [ ] 5. Download the full historical archive into `raw/` with metadata (source, alert month, download time, file hash).
@@ -117,3 +121,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-04 | raw/ layout: content-addressed `<prefix>/<sha256>.<ext>` + `.meta.json` sidecar written last ("done" marker) | `docs/data-sources.md` §6 |
 | 2026-11-05 | Rate limit measured from the END of one request to the START of the next (slow responses can't shorten the gap). The limiter is per process: run each host's downloads in one process/Airflow task | `fetcher.py` |
 | 2026-11-05 | CDSCO portal raw prefix `cdsco-portal/<nsq\|spurious>/<YYYY-MM>`; stored months skipped unless `--refresh` (recent months change as states report late) | `docs/data-sources.md` §6 |
+| 2026-11-05 | CDSCO alerts HTML parsed with Python's built-in `html.parser` (one simple table), so no new library (BeautifulSoup would need approval) | `sources/cdsco_pdf.py` |
+| 2026-11-05 | CDSCO PDF raw prefix includes CDSCO's file id (`cdsco-pdf/<kind>/<YYYY-MM>/<file id>`) so two documents for one month never collide; titles whose month doesn't fit the release date are skipped and reported, not stored | `docs/data-sources.md` §6 |

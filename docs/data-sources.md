@@ -53,6 +53,11 @@ Quirks:
   widget on every page. None of them list the missing months.
 - One bulk file may cover the history: **"Samples declared NSQ 2017-2023"** (file ID 11955, posted 2024-09-11). Not yet opened.
 - Every page has a scrolling "Alerts" sidebar widget with 225 links that duplicate the table. A scraper should ignore it.
+- **What the adapter keeps** (step 4c, listing of 2026-11-05): **44 documents**: 21 central NSQ, 9 state NSQ,
+  10 spurious, 3 combined NSQ/spurious lists and the bulk 2017-2023 file. It skips 7 NSQ/spurious rows that
+  aren't monthly lists (the "new link" notice, three single-product alerts, guidelines, a whistle-blower
+  scheme, a 2010 survey); `--list` prints them with the reason.
+- One title contains mis-decoded characters: "Januaryâ\x80\x93 2025 Revised" (an en dash, double-encoded).
 
 Monthly NSQ lists found on the listing page (central = CDSCO labs):
 
@@ -305,12 +310,15 @@ raw/<item prefix>/<sha256>.<ext>.meta.json   metadata sidecar (JSON, UTF-8)
   | Source | Prefix | One item = |
   |---|---|---|
   | CDSCO portal | `cdsco-portal/<nsq\|spurious>/<YYYY-MM>` | one month's table, all sources (`source=All`) |
+  | CDSCO PDFs | `cdsco-pdf/<central-nsq\|state-nsq\|spurious\|combined>/<YYYY-MM>/<file id>` (bulk file: `cdsco-pdf/nsq-bulk/2017-2023/<file id>`) | one listed PDF; the file id keeps an original and a "Revised" list apart |
+
 - **Named by content hash:** the same bytes always get the same name, so they're stored once. If a source
   changes a file, the new version is stored next to the old one, never over it.
 - **Sidecar = "done" marker:** written after the file. An item counts as stored only when a sidecar exists.
 - **Sidecar fields:**
   - always: `source`, `method` (`auto` / `manual`, ADR 0003), `key`, `sha256`, `size_bytes`, `stored_at`;
-  - plus what the source adapter adds: `alert_month` (CDSCO portal also: `dataset`, `row_count`, `encoding`),
+  - plus what the source adapter adds: `alert_month` (CDSCO portal also: `dataset`, `row_count`, `encoding`;
+    CDSCO PDFs also: `dataset`, `file_id`, the listing row's `title` / `release_date` / `size_text`, `first_hop_url`),
     and for automatic downloads the request details
     (URL with parameters, final URL, HTTP status, content type, ETag, Last-Modified, fetch time, User-Agent).
   - Request headers are never stored, because they can hold tokens.
