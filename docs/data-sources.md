@@ -86,6 +86,16 @@ The portal publishes **no PDFs**. Its page calls JSON endpoints (all `GET`, no l
 | `/CDSCO/statesPendingSubmission` | `month=Mon-YYYY` | states that have not yet submitted for that month |
 
 Coverage reported by the portal: **NSQ 2019 – 2026** (2026 up to Sep), **spurious Jun 2025 – Sep 2026** (15 months in its menus).
+
+**Full download (step 5a, 2026-11-05):** 93 NSQ months, **6,956 rows**; 15 spurious months, **49 rows**; no empty months.
+
+| NSQ rows | 2019 | 2020 | 2021 | 2022 | 2023 | 2024 | 2025 | 2026 (Jan–Sep) |
+|---|---|---|---|---|---|---|---|---|
+| | 404 | 326 | 345 | 572 | 644 | 877 | 1,898 | 1,890 |
+
+The jump from 2025 matches state labs reporting through the portal (Mar-2025: 61 of 131 rows from state labs).
+More rows mean **more reporting**, not necessarily worse medicines: keep that in mind for every chart and for the
+risk score (CLAUDE.md §6).
 Sampled months return real rows:
 
 | Month | Rows | By source |
@@ -300,7 +310,9 @@ across all hosts (step 1: ~25, step 2: ~30, step 3: ~7).
 1. ~~Which CDSCO source is primary?~~ **Decided (ADR 0004):** portal JSON from 2019; PDFs kept for 2017–2018 and Phase 2.
 2. **Do the PDF and the portal agree** for months covered by both (Apr 2024 – Jun 2025, plus several earlier ones)?
    Compare row counts and batch numbers (step 6).
-3. Where are the unlisted Aug–Dec 2024 PDFs linked from, if anywhere?
+3. ~~Where are the unlisted Aug–Dec 2024 PDFs linked from, if anywhere?~~ **Decided (Harith, 2026-11-05): skipped.**
+   The portal JSON (primary, ADR 0004) already has those months' rows; the PDFs would only add extraction-benchmark
+   months, and Apr 2024 – Jun 2025 already gives about 14 overlap months. No URL guessing.
 4. What does the bulk "Samples declared NSQ 2017-2023" file contain?
 5. Are the PDFs text-based or scanned images? (step 6)
 6. ~~Scraping policy for guest tokens / request signing?~~ **Decided (ADR 0003):** anonymous-visitor rule.
