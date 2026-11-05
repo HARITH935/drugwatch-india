@@ -4,6 +4,9 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
+from botocore.exceptions import ClientError
+
+from drugwatch_ingestion.store import RawStore
 
 
 class FakeClock:
@@ -67,3 +70,30 @@ def http_server():
     yield server
     server.shutdown()
     server.server_close()
+
+
+class FakeS3:
+    """In-memory stand-in for a boto3 S3 client: only the three calls RawStore uses."""
+
+    def __init__(self):
+        self.objects: dict[str, bytes] = {}  # key -> body
+        self.puts: list[str] = []  # keys written, in order
+
+    def put_object(self, Bucket, Key, Body, **kwargs):
+        self.objects[Key] = Body
+        self.puts.append(Key)
+
+    def head_object(self, Bucket, Key):
+        if Key not in self.objects:
+            raise ClientError({"Error": {"Code": "404", "Message": "Not Found"}}, "HeadObject")
+        return {}
+
+    def list_objects_v2(self, Bucket, Prefix):
+        keys = sorted(k for k in self.objects if k.startswith(Prefix))
+        return {"Contents": [{"Key": k} for k in keys]} if keys else {}
+
+
+@pytest.fixture
+def raw_store() -> RawStore:
+    """A RawStore backed by FakeS3: unit tests never need RustFS."""
+    return RawStore(FakeS3())

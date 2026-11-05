@@ -1,7 +1,8 @@
 """Polite HTTP fetcher: the one way ingestion code talks to source websites (ADR 0003).
 
 PoliteFetcher enforces the scraping etiquette in a single place, so no source adapter can forget it:
-- at least `min_interval` seconds (default 3) between requests to the same host;
+- at least `min_interval` seconds (default 3) from the end of one request to a host to the start
+  of the next;
 - an honest User-Agent that names the project and its public repo;
 - a connect + read timeout on every request;
 - retries with capped exponential backoff, but only for temporary failures (network errors, 5xx);
@@ -77,7 +78,8 @@ class FetchResult:
 
 
 class HostRateLimiter:
-    """Keeps the starts of requests to the same host at least `min_interval` seconds apart."""
+    """Leaves at least `min_interval` seconds between the END of one request to a host and the
+    START of the next, so a slow response never shortens the gap."""
 
     def __init__(
         self, min_interval: float, clock: Callable[[], float], sleep: Callable[[float], None]
@@ -85,15 +87,19 @@ class HostRateLimiter:
         self.min_interval = min_interval
         self._clock = clock
         self._sleep = sleep
-        self._last_start: dict[str, float] = {}  # host -> clock time its last request started
+        self._last_end: dict[str, float] = {}  # host -> clock time its last request finished
 
     def wait(self, host: str) -> None:
-        last = self._last_start.get(host)
+        """Call just before a request: sleeps if the host's last request ended too recently."""
+        last = self._last_end.get(host)
         if last is not None:
             remaining = self.min_interval - (self._clock() - last)
             if remaining > 0:
                 self._sleep(remaining)
-        self._last_start[host] = self._clock()
+
+    def finished(self, host: str) -> None:
+        """Call when a request ends, whether it succeeded or failed."""
+        self._last_end[host] = self._clock()
 
 
 class PoliteFetcher:
@@ -139,6 +145,8 @@ class PoliteFetcher:
                 return self._fetch_once(http_method, url, params, json, headers)
             except _TemporaryError as exc:
                 problem = str(exc)
+            finally:  # runs after return and after errors alike
+                self._limiter.finished(host)
         raise FetchError(
             f"{http_method} {url}: gave up after {self.max_attempts} attempts ({problem})"
         )

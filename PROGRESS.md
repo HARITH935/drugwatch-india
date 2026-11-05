@@ -71,8 +71,14 @@ reachable; CI passes.
         `store.py` (RawStore: content-addressed keys + `.meta.json` sidecar, never overwrites).
         27 unit tests (local scripted HTTP server, fake clock, fake S3) + 1 integration test passed on real
         RustFS (throwaway bucket). Layout documented in `docs/data-sources.md` §6.
-  - [ ] 4c. Source adapters: CDSCO portal JSON, CDSCO PDF list (two-hop), Jan Aushadhi API, NPPA PDFs,
-        manual drop (ADR 0003).
+  - [ ] 4c. Source adapters, one at a time:
+    - [x] CDSCO portal JSON (`sources/cdsco_portal.py`): month list from the portal's menus, one month per
+          request, shape check (fields, row count, month) before storing, skip if stored unless `--refresh`.
+          16 tests (made-up rows only: real rows aren't committed, ADR 0003). Real run: NSQ Sep-2026 (330 rows)
+          + spurious Sep-2026 (1 row) stored in `raw/`; spurious field list confirmed; 5 requests.
+    - [ ] CDSCO legacy PDF list (two-hop `.jsp` → iframe → PDF)
+    - [ ] Jan Aushadhi product API (guest token)
+    - [ ] NPPA PDFs + manual drop (ADR 0003)
 - [ ] 5. Download the full historical archive into `raw/` with metadata (source, alert month, download time, file hash).
 - [ ] 6. Document everything in `docs/data-sources.md`: URLs, formats, layout changes over time, scanned vs text PDFs.
 
@@ -109,3 +115,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-04 | Python tooling: requests, boto3, uv (one project per Python folder), pytest, ruff (repo-root config); Python 3.13 | ADR 0005 |
 | 2026-11-04 | Retries hand-written so every attempt passes the 3 s/host limiter (urllib3 `Retry` retries instantly once) | ADR 0005 (amended) |
 | 2026-11-04 | raw/ layout: content-addressed `<prefix>/<sha256>.<ext>` + `.meta.json` sidecar written last ("done" marker) | `docs/data-sources.md` §6 |
+| 2026-11-05 | Rate limit measured from the END of one request to the START of the next (slow responses can't shorten the gap). The limiter is per process: run each host's downloads in one process/Airflow task | `fetcher.py` |
+| 2026-11-05 | CDSCO portal raw prefix `cdsco-portal/<nsq\|spurious>/<YYYY-MM>`; stored months skipped unless `--refresh` (recent months change as states report late) | `docs/data-sources.md` §6 |

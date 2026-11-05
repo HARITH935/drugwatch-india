@@ -131,10 +131,24 @@ def test_rate_limiter_tracks_each_host_separately(fake_clock):
     limiter = HostRateLimiter(3.0, fake_clock.time, fake_clock.sleep)
 
     limiter.wait("cdsco.gov.in")
+    limiter.finished("cdsco.gov.in")
     limiter.wait("nppa.gov.in")  # different host: no wait
+    limiter.finished("nppa.gov.in")
     fake_clock.now += 1.0
-    limiter.wait("cdsco.gov.in")  # 1 s since its last request: waits the other 2 s
+    limiter.wait("cdsco.gov.in")  # 1 s since its last request ended: waits the other 2 s
+    limiter.finished("cdsco.gov.in")
     fake_clock.now += 5.0
-    limiter.wait("nppa.gov.in")  # 8 s since its last request: no wait
+    limiter.wait("nppa.gov.in")  # 8 s since its last request ended: no wait
 
     assert fake_clock.sleeps == [2.0]
+
+
+def test_rate_limiter_gap_starts_when_a_slow_request_ends(fake_clock):
+    limiter = HostRateLimiter(3.0, fake_clock.time, fake_clock.sleep)
+
+    limiter.wait("cdsco.gov.in")
+    fake_clock.now += 10.0  # the response took 10 s to arrive
+    limiter.finished("cdsco.gov.in")
+    limiter.wait("cdsco.gov.in")
+
+    assert fake_clock.sleeps == [3.0]  # still a full 3 s after the slow request finished

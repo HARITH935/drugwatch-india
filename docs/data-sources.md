@@ -1,6 +1,6 @@
 # Data sources
 
-> Living document, filled in during Phase 1. Status: **steps 1–3 done** (sources located; robots.txt and terms read); raw storage layout in §6.
+> Living document, filled in during Phase 1. Status: **steps 1–3 done** (sources located; robots.txt and terms read); raw storage layout in §6 (step 4).
 > Layout / scanned-vs-text notes (step 6) are still to come.
 > All findings below were checked on **2026-11-04**.
 
@@ -80,7 +80,7 @@ The portal publishes **no PDFs**. Its page calls JSON endpoints (all `GET`, no l
 | `/CDSCO/viewPublicSpuriousDrugData` | none | default spurious table (not called yet) |
 | `/CDSCO/statesPendingSubmission` | `month=Mon-YYYY` | states that have not yet submitted for that month |
 
-Coverage reported by the portal: **NSQ 2019 – 2026** (2026 up to Sep), **spurious 2025 – 2026**.
+Coverage reported by the portal: **NSQ 2019 – 2026** (2026 up to Sep), **spurious Jun 2025 – Sep 2026** (15 months in its menus).
 Sampled months return real rows:
 
 | Month | Rows | By source |
@@ -105,16 +105,21 @@ Sampled months return real rows:
 | `str_reported_by_lab_or_state` | `LUCKNOW, Uttar Pradesh` | |
 | `dt_reporting_month_year` | `SEP-2026` | upper case (request uses `Sep-2026`) |
 
-Spurious rows use different field names (from the page's JavaScript, not yet sampled):
+Spurious rows use different field names (from the page's JavaScript; **confirmed** on the real Sep-2026 table, step 4c):
 `product_name_from_dtl`, `str_brand_name`, `str_batch_no`, `dt_manufacturing_date`, `dt_expiry_date`,
 `str_spurious_manufacturer_name`, `str_spurious_manufactured_by`, `str_reporting_source`,
 `str_reported_by_lab_or_state`, `dt_reporting_month_year`, `str_nsq_remarks`, `str_firm_reply`.
 
 Quirks:
-- **Encoding:** responses aren't valid UTF-8 (byte `0xAE`, i.e. `®`). They decode as **Windows-1252 (cp1252)**.
+- **Encoding:** responses aren't valid UTF-8 (byte `0xAE`, i.e. `®`). We decode as **Windows-1252 (cp1252)**.
+  The server itself declares `Content-Type: text/plain;charset=ISO-8859-1`. The two differ only for bytes
+  `0x80`–`0x9F`, and none appear in any sample (2019–2026: the only non-ASCII byte is one `0xAE`), so both give
+  the same text. Bronze (Phase 3) should decode strictly and fail loudly on a byte cp1252 doesn't define.
 - **Source labels change over time:** `CDSCO lab` (2019–2025 samples) vs `CDSCO Labs` (Sep 2026); `State lab` vs `State Lab`.
 - `publicReportingMonths` returns Jan–Dec for every full year, so it doesn't prove a month has data. Check the row count.
 - No row has a link to an original document. Provenance for portal rows is the request URL plus the download time.
+- No `ETag` or `Last-Modified` headers, so the only way to detect a change is to download and compare hashes.
+  (Sep-2026 fetched on 2026-11-04 and 2026-11-05 was byte-identical.)
 
 ---
 
@@ -295,13 +300,17 @@ raw/<item prefix>/<sha256>.<ext>             the bytes exactly as downloaded (ne
 raw/<item prefix>/<sha256>.<ext>.meta.json   metadata sidecar (JSON, UTF-8)
 ```
 
-- **Item prefix:** one logical thing we download, e.g. `cdsco-portal/nsq/2026-09`. The exact prefix scheme
-  per source is set in step 4c.
+- **Item prefix:** one logical thing we download. Per source (set in step 4c):
+
+  | Source | Prefix | One item = |
+  |---|---|---|
+  | CDSCO portal | `cdsco-portal/<nsq\|spurious>/<YYYY-MM>` | one month's table, all sources (`source=All`) |
 - **Named by content hash:** the same bytes always get the same name, so they're stored once. If a source
   changes a file, the new version is stored next to the old one, never over it.
 - **Sidecar = "done" marker:** written after the file. An item counts as stored only when a sidecar exists.
 - **Sidecar fields:**
   - always: `source`, `method` (`auto` / `manual`, ADR 0003), `key`, `sha256`, `size_bytes`, `stored_at`;
-  - plus what the source adapter adds: `alert_month`, and for automatic downloads the request details
+  - plus what the source adapter adds: `alert_month` (CDSCO portal also: `dataset`, `row_count`, `encoding`),
+    and for automatic downloads the request details
     (URL with parameters, final URL, HTTP status, content type, ETag, Last-Modified, fetch time, User-Agent).
   - Request headers are never stored, because they can hold tokens.
