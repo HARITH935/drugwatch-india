@@ -215,13 +215,20 @@ Jan Aushadhi (PMBJP) is the government's chain of low-cost generic medicine stor
 | Auth | `Authorization: Bearer <guest token>`. For anonymous visitors the page first calls `GET :8443/auth/generateGuestToken`, keeps the token until its JWT `exp`, then fetches a new one |
 
 - Without the guest token the API returns a generic `HTTP 500` (tested with two requests).
-  **We haven't called `generateGuestToken`**: whether to use it is a policy question for step 3 (see §5).
+  Using the guest token was approved in step 3 (ADR 0003: every anonymous visitor gets one).
+- **Guest token response** (verified 2026-11-05): `{"responseBody": "<JWT>", "message", "responseCode"}`.
+  The adapter checks it is JWT-shaped before putting it in a header, and never stores or logs it.
 - `/api/v1/admin/...` endpoints (add/delete products, CSV upload, PDF export) also exist. They belong to the
   admin panel and are **off-limits**.
 - Old static file `janaushadhi.gov.in/data/MRPList.pdf` is **gone** (returns the SPA fallback page).
 - Historical lists cited by search results: `pmbi.co.in/old-data/PriceListMay2014.pdf`, `PriceListDec2014.pdf` (not fetched).
 - Unofficial copies exist (sarkariyojana.com, Scribd). They're **not used**: not official, and no provenance.
-- Expected fields, from those copies (not yet verified): drug code, generic name, unit size, MRP, group name.
+- **Product fields** (verified 2026-11-05): `productId`, `genericName`, `groupName`, `drugCode`, `unitSize`, `mrp`,
+  `status`, `serialNo` (row number only).
+- **Snapshot of 2026-11-05:** 2,453 products in one response (`totalElement` = 2,453), all `status 1`, 470 KB.
+  319 are "Surgical & Medical Consumables". `drugCode` has no duplicates, so it's a usable key.
+- **Quirk: `mrp` is 0 for 353 products (14%)**, spread across almost every group. Most likely "price not set",
+  not free. Phase 3 should treat 0 as missing, never as a real price of ₹0.
 
 ---
 
@@ -310,6 +317,7 @@ raw/<item prefix>/<sha256>.<ext>.meta.json   metadata sidecar (JSON, UTF-8)
   | Source | Prefix | One item = |
   |---|---|---|
   | CDSCO portal | `cdsco-portal/<nsq\|spurious>/<YYYY-MM>` | one month's table, all sources (`source=All`) |
+  | Jan Aushadhi | `jan-aushadhi/products/<YYYY-MM>` (month collected) | one snapshot of the whole product list; skipped if this month's exists |
   | CDSCO PDFs | `cdsco-pdf/<central-nsq\|state-nsq\|spurious\|combined>/<YYYY-MM>/<file id>` (bulk file: `cdsco-pdf/nsq-bulk/2017-2023/<file id>`) | one listed PDF; the file id keeps an original and a "Revised" list apart |
 
 - **Named by content hash:** the same bytes always get the same name, so they're stored once. If a source
@@ -318,7 +326,8 @@ raw/<item prefix>/<sha256>.<ext>.meta.json   metadata sidecar (JSON, UTF-8)
 - **Sidecar fields:**
   - always: `source`, `method` (`auto` / `manual`, ADR 0003), `key`, `sha256`, `size_bytes`, `stored_at`;
   - plus what the source adapter adds: `alert_month` (CDSCO portal also: `dataset`, `row_count`, `encoding`;
-    CDSCO PDFs also: `dataset`, `file_id`, the listing row's `title` / `release_date` / `size_text`, `first_hop_url`),
+    CDSCO PDFs also: `dataset`, `file_id`, the listing row's `title` / `release_date` / `size_text`, `first_hop_url`;
+    Jan Aushadhi: `dataset`, `snapshot_month`, `row_count`, `active_count`, `request_body`; no `alert_month`),
     and for automatic downloads the request details
     (URL with parameters, final URL, HTTP status, content type, ETag, Last-Modified, fetch time, User-Agent).
   - Request headers are never stored, because they can hold tokens.

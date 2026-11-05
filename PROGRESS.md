@@ -81,7 +81,11 @@ reachable; CI passes.
           inventory), alert month parsed from free-text titles and checked against the release date, two-hop
           download, `%PDF-` check. 29 tests (real title variants, fake site). Real run: June 2025 central NSQ
           (file 12927, 6 pages, 188,795 bytes) stored with ETag / Last-Modified; 3 requests.
-    - [ ] Jan Aushadhi product API (guest token)
+    - [x] Jan Aushadhi product API (`sources/jan_aushadhi.py`): guest token (checked JWT-shaped, never stored) →
+          whole list in one POST (the site's own export body) → completeness + field check → monthly snapshot
+          `jan-aushadhi/products/<YYYY-MM>`. 13 tests (made-up token/products; token never in stored bytes).
+          Real run: 2,453 products stored, no JWT-like string in `raw/`; 2 requests (+2 for a shape probe).
+          Found: `mrp` = 0 for 353 products (treat as missing in Phase 3).
     - [ ] NPPA PDFs + manual drop (ADR 0003)
 - [ ] 5. Download the full historical archive into `raw/` with metadata (source, alert month, download time, file hash).
 - [ ] 6. Document everything in `docs/data-sources.md`: URLs, formats, layout changes over time, scanned vs text PDFs.
@@ -123,3 +127,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-05 | CDSCO portal raw prefix `cdsco-portal/<nsq\|spurious>/<YYYY-MM>`; stored months skipped unless `--refresh` (recent months change as states report late) | `docs/data-sources.md` §6 |
 | 2026-11-05 | CDSCO alerts HTML parsed with Python's built-in `html.parser` (one simple table), so no new library (BeautifulSoup would need approval) | `sources/cdsco_pdf.py` |
 | 2026-11-05 | CDSCO PDF raw prefix includes CDSCO's file id (`cdsco-pdf/<kind>/<YYYY-MM>/<file id>`) so two documents for one month never collide; titles whose month doesn't fit the release date are skipped and reported, not stored | `docs/data-sources.md` §6 |
+| 2026-11-05 | Jan Aushadhi stored as one snapshot per collection month (`jan-aushadhi/products/<YYYY-MM>`); guest token validated as a JWT before use and never stored or logged | `sources/jan_aushadhi.py` |
+| 2026-11-05 | Lint false positives are silenced per line with a reason (`# noqa: S105 (...)`), never by disabling a rule | `ruff.toml` |
