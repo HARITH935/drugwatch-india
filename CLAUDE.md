@@ -153,6 +153,7 @@ uv run --env-file ../.env python -m drugwatch_ingestion.sources.cdsco_portal --m
 uv run --env-file ../.env python -m drugwatch_ingestion.sources.cdsco_pdf --list             # then --file-id N / --all
 uv run --env-file ../.env python -m drugwatch_ingestion.sources.jan_aushadhi                 # this month's snapshot
 uv run --env-file ../.env python -m drugwatch_ingestion.manual_drop FILE --source ... --help  # browser downloads (ADR 0003)
+uv run --env-file ../.env python -m drugwatch_ingestion.inventory   # check raw/: sidecars + SHA-256 of every file (exit 1 = problem)
 ```
 
 **Local service ports** (all bound to 127.0.0.1; Postgres and Redis are shifted so they don't clash with OpsPilot):

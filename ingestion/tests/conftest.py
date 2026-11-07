@@ -1,5 +1,6 @@
 """Shared test fixtures (pytest loads conftest.py automatically for every test in this folder)."""
 
+import io
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -73,7 +74,9 @@ def http_server():
 
 
 class FakeS3:
-    """In-memory stand-in for a boto3 S3 client: only the three calls RawStore uses."""
+    """In-memory stand-in for a boto3 S3 client: only the calls our code uses."""
+
+    page_size = 1000  # like real S3: a listing returns at most this many keys (tests can lower it)
 
     def __init__(self):
         self.objects: dict[str, bytes] = {}  # key -> body
@@ -88,9 +91,25 @@ class FakeS3:
             raise ClientError({"Error": {"Code": "404", "Message": "Not Found"}}, "HeadObject")
         return {}
 
-    def list_objects_v2(self, Bucket, Prefix):
+    def get_object(self, Bucket, Key):
+        return {"Body": _FakeBody(self.objects[Key])}
+
+    def list_objects_v2(self, Bucket, Prefix="", ContinuationToken=None):
         keys = sorted(k for k in self.objects if k.startswith(Prefix))
-        return {"Contents": [{"Key": k} for k in keys]} if keys else {}
+        start = int(ContinuationToken or 0)  # the "token" is just where the next page starts
+        page = keys[start : start + self.page_size]
+        result = {"Contents": [{"Key": k} for k in page]} if page else {}
+        if start + self.page_size < len(keys):
+            result |= {"IsTruncated": True, "NextContinuationToken": str(start + self.page_size)}
+        return result
+
+
+class _FakeBody(io.BytesIO):
+    """Like boto3's StreamingBody: read() everything, or iter_chunks() a piece at a time."""
+
+    def iter_chunks(self, chunk_size=1024):
+        while chunk := self.read(chunk_size):
+            yield chunk
 
 
 @pytest.fixture

@@ -360,3 +360,5 @@ raw/<item prefix>/<sha256>.<ext>.meta.json   metadata sidecar (JSON, UTF-8)
     and for automatic downloads the request details
     (URL with parameters, final URL, HTTP status, content type, ETag, Last-Modified, fetch time, User-Agent).
   - Request headers are never stored, because they can hold tokens.
+- **Checking it:** `python -m drugwatch_ingestion.inventory` lists the bucket and confirms every file has its sidecar
+  (and the reverse) and still matches its SHA-256. 2026-11-07: 321 files, 152.5 MB, no problems.
