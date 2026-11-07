@@ -57,3 +57,11 @@ The plan was built on CDSCO's monthly NSQ / spurious alert PDFs. Phase 1 step 1 
 - **Interview angle:** "The source I planned around turned out to have been replaced mid-2025. I found the new
   structured feed by tracing the portal's own JavaScript, made it the primary source, and turned the old
   PDFs into a measurable extraction benchmark instead of throwing that work away."
+
+## Update (2026-11-07, Phase 1 step 6)
+
+Looking inside the PDFs showed that the 2017–2023 "central NSQ" PDFs are **vaccine-only** one-page lists. Full drug
+NSQ lists in PDF begin in Apr 2024, and the portal also holds the vaccine rows (two batches checked). This strengthens
+the decision: the portal is the primary source; the PDFs add unique history only before 2019 (six vaccine lists, two
+full drug lists from 2018, the bulk vaccine file), and Phase 2's extraction benchmark is the Apr 2024 – Jun 2025 PDFs.
+Details: `docs/data-sources.md` §7.1.

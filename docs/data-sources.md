@@ -1,7 +1,7 @@
 # Data sources
 
-> Living document, filled in during Phase 1. Status: **steps 1–3 done** (sources located; robots.txt and terms read); raw storage layout in §6 (step 4).
-> Layout / scanned-vs-text notes (step 6) are still to come.
+> Living document, filled in during Phase 1. Status: **Phase 1 steps 1–6 done** (sources located, terms read,
+> everything downloaded incl. the manual NPPA 2026 export; raw layout in §6; what's inside the files in §7).
 > All findings below were checked on **2026-11-04**.
 
 ---
@@ -170,6 +170,11 @@ NPPA's data is spread over five places, none of which is one clean, current, bul
   This is the best current consolidated list. The dashboard loads `crypto-js` and runs on the same framework
   as Pharma Sahi Daam, so scripted access probably meets the same request signing (not tested).
   A person clicking "Download CSV" in a browser is the intended use.
+- **Collected (manual drop, ADR 0003):** the dashboard's **Download PDF** export, "All Drugs Ceiling Prices", NLEM version
+  **All**, 60 text pages (made with iText), printed 05/11/2026 09:56. Columns: SL No · NLEM Version · Formulation ·
+  Dosage & Strength · SO Number · SO Date · Ceiling Price (Excluding Taxes) (Rs.)(Per Unit). Row numbers restart per
+  NLEM version, and the rupee sign appears as the literal text `&#8377`. Stored under `nppa/compendium-2026/2026-11`.
+  A CSV export of the same list would save Phase 3 a PDF parse; optional.
 
 **b. Consolidated lists:** https://nppa.gov.in/en/dpco2013
 - `CEILING PRICES OF SCHEDULED FORMULATIONS UNDER DPCO, 2013` as on **30.09.2020** (934 KB), **13.08.2018** (131 KB),
@@ -323,6 +328,9 @@ across all hosts (step 1: ~25, step 2: ~30, step 3: ~7).
    dashboard, stored via the downloader's manual-drop path (file + who/when/where metadata).
 9. **NPPA ceiling-price history has gaps:** compendia 2016/2022 and lists 2014/2018/2020, then orders from 2026 only.
    Orders from 2021–2025 aren't listed anywhere we found.
+10. **Jan Aushadhi `mrp` = 0 for 353 products (14%)** (§3). Decide in Phase 3 how to treat them (proposed: missing).
+11. **9 NPPA orders have no extractable text** (6 scanned, 3 text-as-graphics; §7.2), 4 of them with prices. OCR isn't
+    in the stack. Decide in Phase 3/4 whether they matter once the 2026 Compendium CSV (manual drop) is in.
 
 ---
 
@@ -362,3 +370,52 @@ raw/<item prefix>/<sha256>.<ext>.meta.json   metadata sidecar (JSON, UTF-8)
   - Request headers are never stored, because they can hold tokens.
 - **Checking it:** `python -m drugwatch_ingestion.inventory` lists the bucket and confirms every file has its sidecar
   (and the reverse) and still matches its SHA-256. 2026-11-07: 321 files, 152.5 MB, no problems.
+
+---
+
+## 7. What's inside the files (step 6)
+
+Surveyed 2026-11-07 from the copies in `raw/`, with **pdfplumber 0.11.10** run temporarily (`uv run --with`, not added
+to the project: it becomes a project dependency in Phase 2). A page counts as **text** with ≥ 50 characters, **scanned**
+with fewer characters and images covering over half the page, otherwise **blank**.
+
+### 7.1 CDSCO PDFs (44 files, 251 pages)
+
+**All 44 are real text, with no scanned pages** (one blank page, Mar 2025). Phase 2 needs no OCR for CDSCO.
+
+**Five layout families** (Phase 2 needs one parser per family, not per month):
+
+| Family | Files | Months | Columns | Made with | Notes |
+|---|---|---|---|---|---|
+| A. Vaccine lists (central) | 11 | Jul 2017 – Apr 2023, scattered | 8: Vaccine Name, Batch No., Mfg Date, Expiry Date, Manufactured By, NSQ Result, Reported by CDSCO Laboratory | Excel 2016 | **1 page each, a few rows**; title and "A. Central Laboratories" rows above the header |
+| B. NSQ lists (central + state) | 30 | Apr 2024 – Jun 2025 | 8: S.No, Product/Drug Name, Batch No., Manufacturing Date, Expiry Date, Manufactured By, NSQ Result, Reported by CDSCO/State Laboratory | Word 2013–2019 | Up to Feb 2025 a section row ("A. CDSCO/Central Laboratories", "B. State Laboratories") comes before the header; from Mar 2025 the header is first |
+| C. Spurious / combined lists | 11 | Apr 2024 – Jun 2025 | 9–12: Name of Drugs/medical devices…, Batch No., Date of Manufacture, Date of Expiry, Manufactured By, Reason for failure, Drawn By, (From), Firm's reply, (Remarks) | Word 2013–2019 | Columns drift: "From" in Aug 2024, no "Remarks" in Sep 2024, merged name cells → 12 columns in Jun 2025; Apr 2024 grouped by state ("NCT of DELHI") |
+| D. Combined lists 2018 | 2 | May, Aug 2018 | 6: Sl. No., Name of Drugs/medical devices, Batch No./Date of Manufacture (**one cell**), Reason for failure, Drawn By, From | Word 2016 | full drug lists, 6–7 pages |
+| E. Bulk vaccine file | 1 | 2017 – 2023 | 10, incl. regulatory action | Acrobat Pro 9 | 5 pages |
+
+Things a parser must tolerate: header words broken across lines (`Manufactu ring Date`, `S.N o`), section rows inside
+tables, merged cells, and column sets that change month to month.
+
+**Key finding: the 2017–2023 "central NSQ" PDFs are vaccine-only lists** (Central Drugs Laboratory). Full drug NSQ lists
+in PDF start only in **Apr 2024**. The portal includes vaccines too: batches `4121MC040` (Jun 2022) and `1641V`
+(Apr 2019) from the vaccine PDFs appear in the portal for the same months. So the PDFs' **unique** history is pre-2019:
+six vaccine lists (2017–2018), the two full drug lists of 2018 (family D) and the bulk vaccine file. **Phase 2's main
+work and its accuracy benchmark are families B and C (2024–2025), with the portal as the answer key.**
+
+### 7.2 NPPA PDFs (164 files, 1,209 pages, no read errors)
+
+| Section | Files | Pages | Result |
+|---|---|---|---|
+| Compendium (2016, 2022) | 2 | 75 | all text (1 blank page) |
+| DPCO 2013 lists (2018, 2020, TMR brands) | 3 | 47 | all text |
+| Category lists | 5 | 36 | all text (2 blank pages) |
+| Orders 2026 | 154 | 1,051 | **145 text, 6 scanned, 3 with no extractable text** (pages drawn as graphics) |
+
+The 9 unreadable orders: 6 scanned one- or two-page letters (mostly circulars, but one is a ceiling-price fixation,
+17 Apr 2026) and 3 from 1 Jun 2026 (retail prices for 30 new drugs, a ceiling-price revision, a Ringer Lactate
+corrigendum). Open question 11. The four 2014 DPCO lists are HTML tables (§2), so they need no PDF parsing at all.
+
+### 7.3 Structured sources
+
+The CDSCO portal (§1b) and Jan Aushadhi (§3) are JSON with named fields. They need decoding and cleaning (Phase 3),
+not extraction.

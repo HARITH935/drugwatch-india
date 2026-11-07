@@ -2,7 +2,7 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 1 — Source discovery 🟨 **in progress** (approved 2026-11-04).
+**Current phase:** Phase 1 — Source discovery ✅ **done** (2026-11-07). Phase 2 awaits Harith's approval.
 
 ---
 
@@ -11,7 +11,7 @@ Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWA
 | Phase | Name | Status |
 |---|---|---|
 | 0 | Setup | ✅ Done |
-| 1 | Source discovery | 🟨 In progress |
+| 1 | Source discovery | ✅ Done |
 | 2 | PDF extraction ⚠️ checkpoint | ⬜ Not started |
 | 3 | Cleaning (bronze → silver) | ⬜ Not started |
 | 4 | Warehouse (gold) | ⬜ Not started |
@@ -96,7 +96,7 @@ reachable; CI passes.
           certificate errors no longer retried. Tests: 12 NPPA + 3 table-reader + 4 fetcher. Real run: 2016
           Compendium (44-page PDF) + 30.11.2014 list (HTML) stored. Requests to nppa.gov.in: 12 (8 to study the pages,
           4 in the live run), plus 4 failed TLS attempts before the fix and 1 certificate download from Sectigo.
-- [ ] 5. Download the full historical archive into `raw/` with metadata (source, alert month, download time, file hash).
+- [x] 5. Download the full historical archive into `raw/` with metadata (source, alert month, download time, file hash).
   - [x] 5a. CDSCO portal: every NSQ month (Jan 2019 – Sep 2026) + spurious (Jun 2025 – Sep 2026), ~118 requests.
         Done 2026-11-05 (118 requests, 7 min): 93 NSQ months = 6,956 rows; 15 spurious months = 49 rows; no empty
         months, every shape check passed. 3.5 MB in `raw/cdsco-portal/`.
@@ -105,13 +105,23 @@ reachable; CI passes.
         11.3 MB, every file a real PDF. Four 1-page files of 6–8 KB (2017-09, 2018-02, 2022-03, 2022-06): check in step 6.
   - [x] 5c. NPPA: 168 documents (13 PDFs, 4 HTML pages, 154 orders), ~170 requests.
         Done 2026-11-05 (12 min): all 168 stored (164 PDFs + 4 HTML data pages), 137 MB; orders alone 129.8 MB.
-  - [ ] 5d. Harith: NPPA 2026 Compendium CSV via manual drop.
+  - [x] 5d. Harith: NPPA 2026 Compendium CSV via manual drop.
+        Harith downloaded the dashboard's **PDF** export on 2026-11-05 ("All Drugs Ceiling Prices", NLEM: All, 60 text
+        pages); stored 2026-11-07 with `manual_drop` under `nppa/compendium-2026/2026-11` (method = manual).
   - [x] 5e. Inventory check: every file has a sidecar, hashes match, counts per source.
         `inventory.py` (9 tests; follows listing pages; exit 1 on any problem, for Airflow in Phase 5).
         Real run 2026-11-07: 321 files, 152.5 MB, every SHA-256 re-checked, no problems (8 s).
-- [ ] 6. Document everything in `docs/data-sources.md`: URLs, formats, layout changes over time, scanned vs text PDFs.
+- [x] 6. Document everything in `docs/data-sources.md`: URLs, formats, layout changes over time, scanned vs text PDFs.
+      §7 (2026-11-07, pdfplumber run temporarily, not added to the project): all 44 CDSCO PDFs are text (no OCR
+      needed); 5 CDSCO layout families; 2017–2023 central PDFs are vaccine-only, full drug PDFs start Apr 2024, so
+      Phase 2's main work is Apr 2024 – Jun 2025 (families B, C) with the portal as answer key. NPPA: 164 PDFs, all
+      reference docs text; 9 of 154 orders unreadable without OCR (open question 11).
 
 **Done when:** every available historical file is in RustFS with metadata, and sources are documented.
+
+**Done-when check (2026-11-07):** sources documented ✅ (`docs/data-sources.md` §1–7). Every automatically available file
+is in RustFS with a sidecar and a verified SHA-256 ✅, and the manual NPPA 2026 Compendium export is in too ✅.
+Final inventory 2026-11-07: **322 files, 153.5 MB, every SHA-256 re-checked, no problems.** Phase 1 done.
 
 ---
 
@@ -155,3 +165,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-05 | NPPA pages whose table is the data (2014 DPCO lists) stored as `.html` exactly as received (CSRF token and visitor counter included: raw is never edited) | `sources/nppa.py` |
 | 2026-11-05 | Unlisted Aug–Dec 2024 CDSCO PDFs skipped: portal JSON covers those months; no URL guessing | `docs/data-sources.md` §5 Q3 |
 | 2026-11-07 | Inventory check re-hashes every raw/ file and exits 1 on any problem, so the Phase 5 pipeline can fail on it | `inventory.py` |
+| 2026-11-07 | Step 6: CDSCO PDFs all text (no OCR); pre-2024 central PDFs vaccine-only; Phase 2 focus = Apr 2024 – Jun 2025 layout families B and C, benchmarked against the portal | `docs/data-sources.md` §7, ADR 0004 update |
+| 2026-11-07 | Local Docker VM clock can drift after Mac sleep (`RequestTimeTooSkewed`): restart Docker Desktop; long jobs run under `caffeinate -i` | CLAUDE.md §10 |

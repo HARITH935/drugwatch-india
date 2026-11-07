@@ -168,6 +168,8 @@ uv run --env-file ../.env python -m drugwatch_ingestion.inventory   # check raw/
 | Mailpit inbox | http://localhost:8025 | — |
 
 S3 clients talking to RustFS must use **path-style addressing** (see ADR 0002).
+If S3 calls fail with `RequestTimeTooSkewed` after the Mac has slept, Docker's VM clock has drifted more than
+15 min from the Mac's: quit and restart Docker Desktop. Wrap long local jobs in `caffeinate -i` to stop sleep.
 
 ---
 
