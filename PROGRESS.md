@@ -133,6 +133,11 @@ Final inventory 2026-11-07: **322 files, 153.5 MB, every SHA-256 re-checked, no 
       families A 11 · B 19 · C 10 · D 2 · E 1 · F 1 (F = Apr 2024 spurious list, newly separated). 14 unit tests
       (self-built PDFs, no real data in git) + 1 integration test on the real archive. `docs/extraction-report.md` §1.
 - [ ] 2. Build pdfplumber extraction for each layout family; use Camelot where table borders are clear.
+  - [x] Family B (NSQ lists 2024–2025, 19 files): `family_b.py` + `rows.py`. 1,179 rows, no serial gaps; columns
+        matched by header position (handles Apr 2024's 12-column page); page-break rows merged. Portal agreement
+        93.8% / 95.1%; remaining mismatches are the portal dropping leading zeros / dashes. 7 unit + 1 integration
+        test. pdfplumber's ruled-table finder was enough: no Camelot needed so far.
+  - [ ] Families A, C, D, E, F
 - [ ] 3. Handle multi-page tables, merged cells, and multi-line product names.
 - [ ] 4. Attach provenance to each row: source file, page, row index.
 - [ ] 5. Assign a confidence flag per row (all required fields present and well-formed = high).
@@ -191,3 +196,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-08 | `extraction/` reuses `ingestion` via an editable uv path dependency (one RawStore, no copy) | `extraction/pyproject.toml` |
 | 2026-11-08 | Layout family decided from table header cells, never file name/date; `unknown` fails the run. Sixth family F found; B corrected to 19 files | `classify.py`, data-sources §7.1 |
 | 2026-11-08 | Tests never use real CDSCO files: they build tiny PDFs themselves; real-archive checks are local integration tests | `extraction/tests/` |
+| 2026-11-08 | Family-B columns matched by the header's x-positions, not by cell count; split cells merged, repeated lines dropped | `family_b.py` |
+| 2026-11-08 | Portal batch numbers drop leading zeros and turn dashes into `?`: Phase 3 joins must normalise both | data-sources §1b |

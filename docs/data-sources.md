@@ -133,6 +133,9 @@ Quirks:
 - **Source labels change over time:** `CDSCO lab` (2019–2025 samples) vs `CDSCO Labs` (Sep 2026); `State lab` vs `State Lab`.
 - `publicReportingMonths` returns Jan–Dec for every full year, so it doesn't prove a month has data. Check the row count.
 - No row has a link to an original document. Provenance for portal rows is the request URL plus the download time.
+- **Batch numbers lose information in the portal** (found in Phase 2 by comparing with the PDFs): leading zeros
+  are dropped (`04010026` → `4010026`) and some characters become `?` (`CHI – 40139` → `CHI ? 40139`). When joining
+  portal and PDF rows (Phase 3), compare batches ignoring leading zeros and treating `?`, `–`, `-` alike.
 - No `ETag` or `Last-Modified` headers, so the only way to detect a change is to download and compare hashes.
   (Sep-2026 fetched on 2026-11-04 and 2026-11-05 was byte-identical.)
 
