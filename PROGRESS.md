@@ -2,7 +2,7 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 1 — Source discovery ✅ **done** (2026-11-07). Phase 2 awaits Harith's approval.
+**Current phase:** Phase 2 — PDF extraction 🟨 **in progress** (approved 2026-11-08).
 
 ---
 
@@ -12,7 +12,7 @@ Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWA
 |---|---|---|
 | 0 | Setup | ✅ Done |
 | 1 | Source discovery | ✅ Done |
-| 2 | PDF extraction ⚠️ checkpoint | ⬜ Not started |
+| 2 | PDF extraction ⚠️ checkpoint | 🟨 In progress |
 | 3 | Cleaning (bronze → silver) | ⬜ Not started |
 | 4 | Warehouse (gold) | ⬜ Not started |
 | 5 | Automation | ⬜ Not started |
@@ -114,7 +114,7 @@ reachable; CI passes.
 - [x] 6. Document everything in `docs/data-sources.md`: URLs, formats, layout changes over time, scanned vs text PDFs.
       §7 (2026-11-07, pdfplumber run temporarily, not added to the project): all 44 CDSCO PDFs are text (no OCR
       needed); 5 CDSCO layout families; 2017–2023 central PDFs are vaccine-only, full drug PDFs start Apr 2024, so
-      Phase 2's main work is Apr 2024 – Jun 2025 (families B, C) with the portal as answer key. NPPA: 164 PDFs, all
+      Phase 2's main work is Apr 2024 – Jun 2025 (families B, C, F) with the portal as answer key. NPPA: 164 PDFs, all
       reference docs text; 9 of 154 orders unreadable without OCR (open question 11).
 
 **Done when:** every available historical file is in RustFS with metadata, and sources are documented.
@@ -122,6 +122,26 @@ reachable; CI passes.
 **Done-when check (2026-11-07):** sources documented ✅ (`docs/data-sources.md` §1–7). Every automatically available file
 is in RustFS with a sidecar and a verified SHA-256 ✅, and the manual NPPA 2026 Compendium export is in too ✅.
 Final inventory 2026-11-07: **322 files, 153.5 MB, every SHA-256 re-checked, no problems.** Phase 1 done.
+
+---
+
+## Phase 2 — PDF extraction ⚠️ checkpoint
+
+- [x] 1. Classify PDFs: text-based vs scanned; layout family (central vs state, old vs new format).
+      `extraction/` uv project (pdfplumber; `ingestion` as an editable path dependency for RawStore) and
+      `classify.py`: family read from table header cells, `unknown` fails the run. All 44 CDSCO PDFs are text;
+      families A 11 · B 19 · C 10 · D 2 · E 1 · F 1 (F = Apr 2024 spurious list, newly separated). 14 unit tests
+      (self-built PDFs, no real data in git) + 1 integration test on the real archive. `docs/extraction-report.md` §1.
+- [ ] 2. Build pdfplumber extraction for each layout family; use Camelot where table borders are clear.
+- [ ] 3. Handle multi-page tables, merged cells, and multi-line product names.
+- [ ] 4. Attach provenance to each row: source file, page, row index.
+- [ ] 5. Assign a confidence flag per row (all required fields present and well-formed = high).
+- [ ] 6. Write rows to `bronze/` as Parquet.
+- [ ] 7. Create a **labelled eval set**: ~300 rows labelled by hand, sampled across months and layouts.
+- [ ] 8. Measure rule-based parser accuracy against the labelled eval set (field-level precision/recall/F1).
+
+**Done when:** parser runs across the whole archive and baseline F1 is recorded.
+**Checkpoint decision:** if extraction quality is too low or PDFs are mostly scanned images, re-scope here.
 
 ---
 
@@ -167,3 +187,7 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-07 | Inventory check re-hashes every raw/ file and exits 1 on any problem, so the Phase 5 pipeline can fail on it | `inventory.py` |
 | 2026-11-07 | Step 6: CDSCO PDFs all text (no OCR); pre-2024 central PDFs vaccine-only; Phase 2 focus = Apr 2024 – Jun 2025 layout families B and C, benchmarked against the portal | `docs/data-sources.md` §7, ADR 0004 update |
 | 2026-11-07 | Local Docker VM clock can drift after Mac sleep (`RequestTimeTooSkewed`): restart Docker Desktop; long jobs run under `caffeinate -i` | CLAUDE.md §10 |
+| 2026-11-08 | Phase 2 approved | — |
+| 2026-11-08 | `extraction/` reuses `ingestion` via an editable uv path dependency (one RawStore, no copy) | `extraction/pyproject.toml` |
+| 2026-11-08 | Layout family decided from table header cells, never file name/date; `unknown` fails the run. Sixth family F found; B corrected to 19 files | `classify.py`, data-sources §7.1 |
+| 2026-11-08 | Tests never use real CDSCO files: they build tiny PDFs themselves; real-archive checks are local integration tests | `extraction/tests/` |

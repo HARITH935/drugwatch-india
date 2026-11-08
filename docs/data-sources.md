@@ -383,15 +383,18 @@ with fewer characters and images covering over half the page, otherwise **blank*
 
 **All 44 are real text, with no scanned pages** (one blank page, Mar 2025). Phase 2 needs no OCR for CDSCO.
 
-**Five layout families** (Phase 2 needs one parser per family, not per month):
+**Six layout families** (Phase 2 needs one parser per family, not per month). Corrected 2026-11-08 by the Phase 2
+classifier (`extraction/src/drugwatch_extraction/classify.py`), which checks every file's header cells: the first
+version of this table said B had 30 files and lumped F into C.
 
 | Family | Files | Months | Columns | Made with | Notes |
 |---|---|---|---|---|---|
 | A. Vaccine lists (central) | 11 | Jul 2017 – Apr 2023, scattered | 8: Vaccine Name, Batch No., Mfg Date, Expiry Date, Manufactured By, NSQ Result, Reported by CDSCO Laboratory | Excel 2016 | **1 page each, a few rows**; title and "A. Central Laboratories" rows above the header |
-| B. NSQ lists (central + state) | 30 | Apr 2024 – Jun 2025 | 8: S.No, Product/Drug Name, Batch No., Manufacturing Date, Expiry Date, Manufactured By, NSQ Result, Reported by CDSCO/State Laboratory | Word 2013–2019 | Up to Feb 2025 a section row ("A. CDSCO/Central Laboratories", "B. State Laboratories") comes before the header; from Mar 2025 the header is first |
-| C. Spurious / combined lists | 11 | Apr 2024 – Jun 2025 | 9–12: Name of Drugs/medical devices…, Batch No., Date of Manufacture, Date of Expiry, Manufactured By, Reason for failure, Drawn By, (From), Firm's reply, (Remarks) | Word 2013–2019 | Columns drift: "From" in Aug 2024, no "Remarks" in Sep 2024, merged name cells → 12 columns in Jun 2025; Apr 2024 grouped by state ("NCT of DELHI") |
+| B. NSQ lists (central + state) | 19 (10 central, 9 state) | Apr 2024 – Jun 2025 | 8: S.No, drug name, Batch No., Manufacturing Date, Expiry Date, Manufactured By, NSQ Result, Reported by CDSCO/State Laboratory | Word 2013–2019 | **Two names for the drug column:** "Name of Drugs/medical device/cosmetics" (2024) and "Product/Drug Name" (2025). Up to Feb 2025 a section row ("A. CDSCO/Central Laboratories", "B. State Laboratories") comes before the header |
+| C. Spurious / combined lists | 10 (9 spurious, 1 combined) | Aug 2024 – Jun 2025 | 9–12: Name of Drugs/medical devices…, Batch No., Date of Manufacture, Date of Expiry, Manufactured By, Reason for failure, Drawn By, (From), Firm's reply, (Remarks) | Word 2013–2019 | Columns drift: "From" in Aug 2024, no "Remarks" in Sep 2024, merged name cells → 12 columns in Jun 2025 |
 | D. Combined lists 2018 | 2 | May, Aug 2018 | 6: Sl. No., Name of Drugs/medical devices, Batch No./Date of Manufacture (**one cell**), Reason for failure, Drawn By, From | Word 2016 | full drug lists, 6–7 pages |
 | E. Bulk vaccine file | 1 | 2017 – 2023 | 10, incl. regulatory action | Acrobat Pro 9 | 5 pages |
+| F. Spurious list Apr 2024 | 1 | Apr 2024 | Product/Drug Name, B.No., Manufacturing Date, Expiry Date, Manufactured by as per label, Sales outlets involved in distribution, Response of original manufacturer, Reported by CDSCO/State/Manufacturer | Word 2016 | grouped by state ("NCT of DELHI" rows); no "Reason for failure" |
 
 Things a parser must tolerate: header words broken across lines (`Manufactu ring Date`, `S.N o`), section rows inside
 tables, merged cells, and column sets that change month to month.
@@ -400,7 +403,7 @@ tables, merged cells, and column sets that change month to month.
 in PDF start only in **Apr 2024**. The portal includes vaccines too: batches `4121MC040` (Jun 2022) and `1641V`
 (Apr 2019) from the vaccine PDFs appear in the portal for the same months. So the PDFs' **unique** history is pre-2019:
 six vaccine lists (2017–2018), the two full drug lists of 2018 (family D) and the bulk vaccine file. **Phase 2's main
-work and its accuracy benchmark are families B and C (2024–2025), with the portal as the answer key.**
+work and its accuracy benchmark are families B, C and F (2024–2025), with the portal as the answer key.**
 
 ### 7.2 NPPA PDFs (164 files, 1,209 pages, no read errors)
 

@@ -1,0 +1,34 @@
+# Python project for PDF extraction (Phase 2): classify, parse, evaluate. Managed by uv (ADR 0005).
+[project]
+name = "drugwatch-extraction"
+version = "0.1.0"
+description = "Rule-based extraction of CDSCO NSQ / spurious alert PDFs into bronze rows"
+authors = [
+    { name = "Harith", email = "181994424+HARITH935@users.noreply.github.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "drugwatch-ingestion", # RawStore for reading raw/ (path dependency, see [tool.uv.sources])
+    "pdfplumber>=0.11.10", # PDF text, characters and tables (plan §6)
+]
+
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14.0"]
+build-backend = "uv_build"
+
+# Use the ingestion package from this repo's folder, not from PyPI. editable = changes there are seen at once.
+[tool.uv.sources]
+drugwatch-ingestion = { path = "../ingestion", editable = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.4", # lint + format rules live in the repo-root ruff.toml
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: needs the local RustFS with the real raw/ archive (skipped when its credentials aren't set)",
+]

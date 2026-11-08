@@ -140,7 +140,7 @@ docker compose logs -f rustfs   # follow one service's logs
 docker compose down             # stop (data kept in named volumes)
 docker compose down -v          # stop AND delete all local data
 
-# Python (ingestion/ now; later Python folders work the same way; ADR 0005)
+# Python (ingestion/, extraction/; later Python folders work the same way; ADR 0005)
 cd ingestion
 uv sync                         # create .venv and install the exact versions in uv.lock
 uv run pytest                   # tests
@@ -154,6 +154,9 @@ uv run --env-file ../.env python -m drugwatch_ingestion.sources.cdsco_pdf --list
 uv run --env-file ../.env python -m drugwatch_ingestion.sources.jan_aushadhi                 # this month's snapshot
 uv run --env-file ../.env python -m drugwatch_ingestion.manual_drop FILE --source ... --help  # browser downloads (ADR 0003)
 uv run --env-file ../.env python -m drugwatch_ingestion.inventory   # check raw/: sidecars + SHA-256 of every file (exit 1 = problem)
+
+# Extraction (from extraction/, RustFS up)
+uv run --env-file ../.env python -m drugwatch_extraction.classify   # text vs scanned + layout family of every CDSCO PDF
 ```
 
 **Local service ports** (all bound to 127.0.0.1; Postgres and Redis are shifted so they don't clash with OpsPilot):
