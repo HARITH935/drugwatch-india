@@ -18,12 +18,15 @@ For each PDF:
    - anything else: reported in ParseResult.skipped, never silently dropped.
    A table with fewer cells than the header has columns (e.g. a 1-column footnote box) is reported
    and never merged into a record.
+4. A cell whose text is OVERPRINTED (two texts drawn on top of each other, so the extracted text is
+   garbled, like Feb 2018's "2M0/s1 0B0io9 med.") is kept as extracted, and its row gets a warning.
 """
 
 import io
 import re
 
 import pdfplumber
+from pdfplumber.table import Row
 
 from drugwatch_extraction.rows import ExtractedRow, ParseResult
 
@@ -32,6 +35,12 @@ Column = tuple[str, float, float]  # (field, left x, right x) in PDF points
 
 MIN_HEADER_FIELDS = 4
 _SERIAL = re.compile(r"(\d{1,4})\.?")  # "8." or "11" (the "." sometimes lands in the next cell)
+
+# Overprint test: two DIFFERENT characters on one line whose boxes overlap by at least half the
+# narrower one's width. One such pair is just a tight font (the archive has two "al" pairs);
+# overprinted text gives a run of them (the Feb 2018 cell has six).
+OVERLAP_SHARE = 0.5
+OVERLAP_PAIRS = 2
 
 
 def parse_tables(data: bytes, vocabulary: Vocabulary) -> ParseResult:
@@ -61,6 +70,10 @@ def parse_tables(data: bytes, vocabulary: Vocabulary) -> ParseResult:
                         result.skipped.append((page_no, f"{len(texts)} columns", texts))
                         continue
                     cells = _align(row.cells, texts, columns)
+                    warnings = [
+                        f"{field}: overprinted text (two texts drawn on top of each other)"
+                        for field in _overprinted_fields(page.chars, row, columns)
+                    ]
                     serial = cells.get("serial_no", "").strip()
                     if _SERIAL.fullmatch(serial):
                         open_rows.append(
@@ -69,10 +82,12 @@ def parse_tables(data: bytes, vocabulary: Vocabulary) -> ParseResult:
                                 "pages": [page_no],
                                 "section": section,
                                 "fields": cells,
+                                "warnings": warnings,
                             }
                         )
                     elif not serial and open_rows:
                         _continue_row(open_rows[-1], cells, page_no)
+                        open_rows[-1]["warnings"] += warnings
                     else:
                         result.skipped.append((page_no, "row not recognised", texts))
 
@@ -87,6 +102,7 @@ def parse_tables(data: bytes, vocabulary: Vocabulary) -> ParseResult:
                 fields=row["fields"],
             )
         )
+        result.warnings += [(index, message) for message in row["warnings"]]
     _check_serials(result)
     return result
 
@@ -134,10 +150,52 @@ def _align(boxes: list, texts: list[str], columns: list[Column]) -> dict[str, st
     for box, text in zip(boxes, texts, strict=True):
         if box is None or not text.strip():
             continue
-        centre = (box[0] + box[2]) / 2
-        field = min(columns, key=lambda column: _distance(centre, column))[0]
-        pieces[field].append(text)
+        pieces[_column_for(box, columns)].append(text)
     return {field: _merge_pieces(parts) for field, parts in pieces.items()}
+
+
+def _column_for(box: tuple, columns: list[Column]) -> str:
+    """The field of the header column a cell sits under (by the cell's centre)."""
+    centre = (box[0] + box[2]) / 2
+    return min(columns, key=lambda column: _distance(centre, column))[0]
+
+
+def _overprinted_fields(page_chars: list[dict], row: Row, columns: list[Column]) -> list[str]:
+    """Fields of this row whose cell text is overprinted."""
+    _, top, _, bottom = row.bbox
+    in_row = [c for c in page_chars if top <= (c["top"] + c["bottom"]) / 2 <= bottom]
+    fields = {
+        _column_for(box, columns)
+        for box in row.cells
+        if box is not None and _overprinted(in_row, box)
+    }
+    return sorted(fields)
+
+
+def _overprinted(chars: list[dict], box: tuple) -> bool:
+    """True when the cell has at least OVERLAP_PAIRS pairs of different, overlapping characters."""
+    x0, top, x1, bottom = box
+    inside = sorted(
+        (
+            c
+            for c in chars
+            if c["text"].strip()
+            and x0 <= (c["x0"] + c["x1"]) / 2 <= x1
+            and top <= (c["top"] + c["bottom"]) / 2 <= bottom
+        ),
+        key=lambda c: c["x0"],
+    )
+    pairs = 0
+    for i, a in enumerate(inside):
+        for b in inside[i + 1 :]:
+            if b["x0"] >= a["x1"]:
+                break  # sorted by left edge: no later character can reach back over `a`
+            if a["text"] == b["text"] or abs(a["top"] - b["top"]) > 2:
+                continue  # the same letter twice is bold printing; a different top is another line
+            narrower = min(a["x1"] - a["x0"], b["x1"] - b["x0"])
+            if narrower > 0 and min(a["x1"], b["x1"]) - b["x0"] >= OVERLAP_SHARE * narrower:
+                pairs += 1
+    return pairs >= OVERLAP_PAIRS
 
 
 def _distance(x: float, column: Column) -> float:

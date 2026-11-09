@@ -54,3 +54,25 @@ def test_a_new_header_replaces_the_column_positions(table_pdf):
         ("X", "B1"),
         ("Y", "B2"),
     ]
+
+
+def test_overprinted_text_is_kept_but_warned_about(table_pdf):
+    header = ["S.No", "Name", "Batch No.", "Result"]
+    garbled = ["1.", ["Test Pharma", "20100901"], "B1", "R"]  # two texts drawn on the same spot
+
+    result = parse_tables(table_pdf([header, garbled, ["2.", "Y", "B2", "R"]]), VOCABULARY)
+
+    assert len(result.rows) == 2  # the row is kept, as extracted
+    assert result.warnings == [
+        (1, "product_name: overprinted text (two texts drawn on top of each other)")
+    ]
+
+
+def test_one_overlapping_pair_or_bold_printing_is_not_overprint(table_pdf):
+    header = ["S.No", "Name", "Batch No.", "Result"]
+    one_pair = ["1.", ["X", "Y"], "B1", "R"]  # a single collision: could just be a tight font
+    bold = ["2.", ["Bold", "Bold"], "B2", "R"]  # the same letters drawn twice
+
+    result = parse_tables(table_pdf([header, one_pair, bold]), VOCABULARY)
+
+    assert len(result.rows) == 2 and result.warnings == []

@@ -161,7 +161,13 @@ Final inventory 2026-11-07: **322 files, 153.5 MB, every SHA-256 re-checked, no 
       every record with source key + SHA-256, CDSCO source URL, dataset, alert month, file id, listing title, family,
       page(s), row index, section, `extraction_method = rule`, extractor version, warnings. 44 PDFs → 1,317 records,
       all with full provenance. 3 unit + 1 integration test.
-- [ ] 5. Assign a confidence flag per row (all required fields present and well-formed = high).
+- [x] 5. Assign a confidence flag per row (all required fields present and well-formed = high).
+      `confidence.py`: high = required fields present and well-formed + no parser warning; low lists every reason
+      (`missing`, `not stated`, `not a date`, `Excel day number`, `several values`, `parser warning`, ...).
+      **1,214 high (92.2%), 103 low**; only 3 low rows are parser problems, the other 100 are what the PDF prints.
+      Engine now warns on overprinted cells (the Feb 2018 one). Found and fixed a step-2 gap: B Apr 2024's
+      `Mfg Dt` / `Exp Dt` headers (17 rows' dates were in `other_*`); the archive test now fails on any unknown header.
+      Tests: 35 confidence unit tests, 2 overprint + 1 B-header unit tests, archive counts in the integration test.
 - [ ] 6. Write rows to `bronze/` as Parquet.
 - [ ] 7. Create a **labelled eval set**: ~300 rows labelled by hand, sampled across months and layouts.
 - [ ] 8. Measure rule-based parser accuracy against the labelled eval set (field-level precision/recall/F1).
@@ -226,3 +232,6 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-09 | Engine: a repeated header replaces the column positions (latest header wins) | `table_parser.py` |
 | 2026-11-09 | Family E repeats family A's 16 vaccine batches (and 2019+ are in the portal): Phase 3 must treat them as one finding per batch | extraction report §2.6 |
 | 2026-11-09 | Every record carries provenance; `source_url` is the downloaded CDSCO PDF URL; extraction refuses bytes that don't match the sidecar SHA-256 | `extract.py` |
+| 2026-11-09 | Confidence = high only if required fields are present and well-formed and the parser raised no warning. Placeholders (`NIL`) and Excel day numbers count as low (the plan's rule); reasons keep parser problems apart from source values | `confidence.py`, extraction report §2.9 |
+| 2026-11-09 | Engine warns on overprinted cells: 2+ pairs of different characters overlapping by half a character width | `table_parser.py` |
+| 2026-11-09 | Family B vocabulary gains `Mfg Dt` / `Exp Dt` (missed in step 2); the archive test fails on any unknown header | `family_b.py`, `test_extract.py` |

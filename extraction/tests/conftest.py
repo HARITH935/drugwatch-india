@@ -4,7 +4,9 @@ import pytest
 
 CELL_W, CELL_H, LEFT, TOP = 70, 20, 10, 800
 
-Cell = str | tuple[str, float]  # text, or (text, width) for a narrower or wider cell
+# text; (text, width) for a narrower or wider cell; or [text, text, ...] drawn at the same spot
+# (OVERPRINTED, like a Feb 2018 cell)
+Cell = str | tuple[str, float] | list[str]
 
 
 def make_table_pdf(*tables: list[list[Cell]], blank_pages: int = 0) -> bytes:
@@ -46,10 +48,14 @@ def _draw_table(rows: list[list[Cell]]) -> str:
     for r, row in enumerate(rows):
         x, y = LEFT, TOP - (r + 1) * CELL_H
         for cell in row:
-            text, width = (cell, CELL_W) if isinstance(cell, str) else cell
+            if isinstance(cell, tuple):
+                texts, width = [cell[0]], cell[1]
+            else:
+                texts, width = ([cell] if isinstance(cell, str) else cell), CELL_W
             drawing.append(f"{x} {y} {width} {CELL_H} re S")  # rectangle, stroked = cell borders
-            safe = text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-            drawing.append(f"BT /F1 6 Tf {x + 2} {y + 7} Td ({safe}) Tj ET")  # text in the cell
+            for text in texts:
+                safe = text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+                drawing.append(f"BT /F1 6 Tf {x + 2} {y + 7} Td ({safe}) Tj ET")  # text in the cell
             x += width
     return "\n".join(drawing)
 

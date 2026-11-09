@@ -9,7 +9,8 @@ A record is a flat dict: the row's fields as extracted (see rows.py), plus where
 - source_dataset, alert_month, file_id, listing_title: what CDSCO's alerts page said about the file;
 - family, page, pages, row_index, section: where in the file the row sits;
 - extraction_method: "rule" (Phase 10's LLM fallback will write "llm");
-- warnings: problems known for this row (the step-5 confidence flag reads them).
+- warnings: problems the parser found in this row;
+- confidence, confidence_reasons: "high" or "low", and why (confidence.py).
 
 Run (from extraction/, RustFS up):
     uv run --env-file ../.env python -m drugwatch_extraction.extract --all
@@ -26,6 +27,7 @@ from typing import Any
 
 from drugwatch_extraction import __version__
 from drugwatch_extraction.classify import classify_pdf
+from drugwatch_extraction.confidence import assess
 from drugwatch_extraction.family_a import parse_family_a
 from drugwatch_extraction.family_b import parse_family_b
 from drugwatch_extraction.family_c import parse_family_c
@@ -88,17 +90,17 @@ def records_for(data: bytes, sidecar: dict[str, Any]) -> ExtractionResult:
         "extractor_version": __version__,  # which parser code produced the record
     }
     for row in parse.rows:
-        result.records.append(
-            {
-                **row.fields,
-                **provenance,
-                "page": row.page,
-                "pages": list(row.pages),
-                "row_index": row.row_index,
-                "section": row.section,
-                "warnings": warnings_by_row.get(row.row_index, []),
-            }
-        )
+        record = {
+            **row.fields,
+            **provenance,
+            "page": row.page,
+            "pages": list(row.pages),
+            "row_index": row.row_index,
+            "section": row.section,
+            "warnings": warnings_by_row.get(row.row_index, []),
+        }
+        record["confidence"], record["confidence_reasons"] = assess(record)
+        result.records.append(record)
     return result
 
 
@@ -143,6 +145,10 @@ def main(argv: list[str] | None = None) -> None:
         f"{len(keys)} PDFs -> {len(records)} records; by family: {dict(sorted(families.items()))}"
     )
     print(f"records with warnings: {warned}")
+    print(f"confidence: {dict(Counter(record['confidence'] for record in records))}")
+    reasons = Counter(reason for record in records for reason in record["confidence_reasons"])
+    for reason, count in reasons.most_common():
+        print(f"  {count:5}  {reason}")
     for record in records[: args.show]:
         print(json.dumps(record, ensure_ascii=False, indent=1))
     if problems:

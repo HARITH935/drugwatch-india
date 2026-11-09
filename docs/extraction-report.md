@@ -61,6 +61,9 @@ Fields with the same meaning share a name across families: B's "NSQ Result" and 
 - **Columns are matched by position**, using the header's cell positions from page 1. Apr 2024 page 4 is drawn
   as a 12-column grid (name and manufacturer split over 3 cells each); position matching maps it back to 8 fields.
 - **Duplicated lines** from split cells (a cell holding a whole address that the next rows repeat) are not added twice.
+- **Short date headers, fixed in step 5.** Apr 2024's state-lab pages print `Mfg Dt` / `Exp Dt`. Step 2's vocabulary
+  missed them, so those 17 rows had their dates under `other_mfg_dt` / `other_exp_dt` (an unknown header that no
+  test checked). Step 5's field profile found it; the archive test now fails if any file has an unknown header.
 
 **Agreement with the portal** (batch numbers, same month and lab type, ignoring spaces and line breaks):
 
@@ -113,7 +116,7 @@ aside. The title row and "A. Central Laboratories" above each header are section
 - **Mar 2022 starts at serial 3** (3, 4, 5). The page holds nothing else, so that is CDSCO's own numbering, not a
   missed row; `first_serial` records it.
 - **Kept as extracted, for Phase 3 and the step-5 confidence flag:** one Feb 2018 manufacturer cell holds two texts
-  printed on top of each other (`2M0/s1 0B0i`), some "Manufactured By" cells say `Spurious`, two Sep 2018 rows share a
+  printed on top of each other (`2M0/s1 0B0i`; since step 5 the engine detects this and warns, §2.9), some "Manufactured By" cells say `Spurious`, two Sep 2018 rows share a
   batch (two results for one batch).
 
 ### 2.5 Family D: combined lists, May and Aug 2018 (2026-11-09)
@@ -173,10 +176,56 @@ the file, runs that family's parser, and turns every row into a **record**: the 
 | `source_dataset`, `alert_month`, `file_id`, `listing_title` | what CDSCO's alerts page said about the file |
 | `family`, `page`, `pages`, `row_index`, `section` | where in the file the row sits |
 | `extraction_method`, `extractor_version` | `rule` (Phase 10's LLM fallback will write `llm`) and the parser code version |
-| `warnings` | known problems with this row, for the step-5 confidence flag |
+| `warnings` | problems the parser found in this row |
+| `confidence`, `confidence_reasons` | `high` / `low` and why (step 5, §2.9) |
 
 **Whole archive: 44 PDFs → 1,317 records**, every one with a `https://cdsco.gov.in/` source URL, a SHA-256, a page and a row
-number; 2 records carry warnings (the 2018 two-part packs). Run: `uv run --env-file ../.env python -m drugwatch_extraction.extract --all`.
+number; 3 records carry warnings (the 2018 two-part packs and, since step 5, the overprinted Feb 2018 cell). Run: `uv run --env-file ../.env python -m drugwatch_extraction.extract --all`.
+
+### 2.9 Confidence flag (step 5, 2026-11-09)
+
+`extraction/src/drugwatch_extraction/confidence.py`: `assess(record)` gives every record `confidence` (`high` / `low`)
+and `confidence_reasons`. The plan's rule: **all required fields present and well-formed = high.**
+
+- **Required:** product name, batch number, manufacturing date, expiry date, manufacturer, and failure reason. Family
+  F (the Apr 2024 spurious list) has no failure column, so it isn't required there.
+- **High** also needs **no parser warning** for the row.
+- Checks read a compact copy of each value (spaces and line breaks removed), so `0 9 / 2 0 2 4 .`, `Dec/202⏎3`,
+  `Feb'16` and `June, 2023` are dates. Months must be 1–12, days 1–31, four-digit years 1990–2049. The record keeps the
+  value as extracted.
+
+| Problem | Meaning |
+|---|---|
+| `missing` | empty cell, or no such column |
+| `not stated` | the PDF prints a placeholder: `NIL`, `NM`, `Not mentioned`, `--`, `N/A`, `No expiry`; or a manufacturer cell saying `Spurious` |
+| `not a date` | a rule instead of a date ("Best before 36 months from the date of Mfg."), two dates in one cell, `30-062025` |
+| `Excel day number` | a date printed as a spreadsheet's day count: `45200` = 1 Oct 2023 (days since 1899-12-30) |
+| `no digit` / `several values` | a batch number with no digit / two batches in one cell (which one failed?) |
+| `no name` | a product or manufacturer cell with no word in it |
+| `parser warning` | the parser flagged the row; the messages are in `warnings` |
+
+**Whole archive: 1,214 high (92.2%), 103 low**: B 86, A 8, E 7, D 2; every C and F row is high. One record can have
+several reasons:
+
+| Reason | Records | | Reason | Records |
+|---|---|---|---|---|
+| `expiry_date: Excel day number` | 31 | | `mfg_date: missing` | 16 |
+| `mfg_date: Excel day number` | 25 | | `batch_no: not stated` | 9 |
+| `mfg_date: not stated` | 22 | | `parser warning` | 3 |
+| `expiry_date: not a date` | 17 | | `mfg_date: not a date` | 2 |
+| `expiry_date: missing` | 17 | | `batch_no: several values` | 2 |
+| `manufacturer: not stated` | 16 | | `batch_no: missing` | 2 |
+| `expiry_date: not stated` | 16 | | `manufacturer: missing` | 2 |
+
+**Only 3 low rows come from the parser** (the two 2018 two-part packs, the overprinted cell). The other 100 are low
+because of what the PDF itself prints: the extraction is right, the source value isn't a usable date or name. This
+matters for Phase 10: an LLM fallback can only help where the parser misread the PDF, and the reasons let it select
+those rows. Phase 3 can convert Excel day numbers and compute "N months from the date of Mfg." expiries.
+
+**Overprint detection (engine).** Two *different* characters on one line whose boxes overlap by at least half the
+narrower one's width form an overlapping pair. A cell with **2 or more** pairs is overprinted: the row is kept as
+extracted and gets a warning. Across the archive the one known cell has 6 pairs; two other cells have a single `al`
+pair, which is just a tight font, and the same letter drawn twice (bold printing) never counts.
 
 ## 3. Accuracy against the labelled eval set (steps 7–8)
 

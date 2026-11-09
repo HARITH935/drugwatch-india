@@ -32,6 +32,19 @@ def test_reads_numbered_rows_into_named_fields(table_pdf):
     assert result.serial_gaps == [] and result.skipped == []
 
 
+def test_short_date_headers_name_the_date_fields(table_pdf):
+    # Apr 2024's state-lab pages print "Mfg Dt" / "Exp Dt" instead of the long names.
+    header = [*HEADER[:3], "Mfg Dt", "Exp Dt", *HEADER[5:]]
+
+    result = parse_family_b(table_pdf([header, row("1.")]))
+
+    assert result.unknown_headers == []
+    assert (result.rows[0].fields["mfg_date"], result.rows[0].fields["expiry_date"]) == (
+        "01/2025",
+        "12/2026",
+    )
+
+
 def test_remembers_section_rows(table_pdf):
     section = ["B. State Laboratories", "", "", "", "", "", "", ""]
 

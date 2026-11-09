@@ -402,6 +402,14 @@ version of this table said B had 30 files and lumped F into C.
 Things a parser must tolerate: header words broken across lines (`Manufactu ring Date`, `S.N o`), section rows inside
 tables, merged cells, and column sets that change month to month.
 
+Values Phase 3 must clean (found by Phase 2's confidence flag; counts in `docs/extraction-report.md` §2.9):
+- **Excel day numbers as dates** (Jan 2025: 32 rows, Feb 2025: 1): `45200` = 1 Oct 2023, counted from 1899-12-30.
+- **Expiry printed as a rule** (Jun 2024 – Apr 2025, 13 cells): "Best before 36 months from the date of Mfg.",
+  "5 Yrs from the date of Mfg.". The date can be computed from the manufacturing date. One more says "Best Before July 27".
+- **Placeholders:** `NIL`, `NM`, `Not mentioned`, `--`, `N/A`, `NO EXPIRY`; `Spurious` in the vaccine lists'
+  "Manufactured By" column (12 rows: the real maker is unknown).
+- **Two batches in one cell** (Jun 2025, 2 rows) and two dates in one cell (one 2017 vaccine row, repeated in family E).
+
 **Key finding: the 2017–2023 "central NSQ" PDFs are vaccine-only lists** (Central Drugs Laboratory). Full drug NSQ lists
 in PDF start only in **Apr 2024**. The portal includes vaccines too: batches `4121MC040` (Jun 2022) and `1641V`
 (Apr 2019) from the vaccine PDFs appear in the portal for the same months. So the PDFs' **unique** history is pre-2019:

@@ -47,6 +47,7 @@ def test_every_record_carries_its_provenance(table_pdf):
     assert (first["page"], first["row_index"], first["extraction_method"]) == (1, 1, "rule")
     assert result.records[1]["row_index"] == 2
     assert first["warnings"] == []
+    assert (first["confidence"], first["confidence_reasons"]) == ("high", [])
 
 
 def test_bytes_that_dont_match_the_sidecar_give_no_records(table_pdf):
@@ -81,6 +82,7 @@ def test_the_whole_archive_extracts_with_full_provenance():
     for key in keys:
         result = extract_pdf(s3, key)
         assert result.problem is None, key
+        assert result.parse.unknown_headers == [], key  # every header cell is a known field
         families[result.family] += len(result.records)
         records += result.records
 
@@ -91,4 +93,6 @@ def test_the_whole_archive_extracts_with_full_provenance():
         assert re.fullmatch(r"[0-9a-f]{64}", record["source_sha256"])
         assert record["page"] >= 1 and record["row_index"] >= 1
         assert record["extraction_method"] == "rule"
-    assert sum(1 for record in records if record["warnings"]) == 2  # the two 2018 two-part packs
+    # The two 2018 two-part packs and the overprinted Feb 2018 manufacturer.
+    assert sum(1 for record in records if record["warnings"]) == 3
+    assert Counter(record["confidence"] for record in records) == {"high": 1214, "low": 103}

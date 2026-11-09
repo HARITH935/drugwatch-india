@@ -13,8 +13,9 @@ VOCABULARY: Vocabulary = (
     ("serial_no", ("s.no", "sl.no", "s.n.")),  # Apr 2024 prints "S." / "N." on two lines
     ("product_name", ("product/drugname", "nameofdrugs")),
     ("batch_no", ("batchno",)),
-    ("mfg_date", ("manufacturingdate", "dateofmanufacture")),
-    ("expiry_date", ("expirydate", "dateofexpiry")),
+    # Apr 2024's state-lab pages shorten these to "Mfg Dt" / "Exp Dt" (found in step 5).
+    ("mfg_date", ("manufacturingdate", "dateofmanufacture", "mfgdt")),
+    ("expiry_date", ("expirydate", "dateofexpiry", "expdt")),
     ("manufacturer", ("manufacturedby",)),
     ("failure_reason", ("nsqresult",)),  # printed as "NSQ Result"
     ("reported_by", ("reportedby",)),  # the lab that tested the sample
