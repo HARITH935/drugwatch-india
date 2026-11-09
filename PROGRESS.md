@@ -156,7 +156,11 @@ Final inventory 2026-11-07: **322 files, 153.5 MB, every SHA-256 re-checked, no 
 - [x] 3. Handle multi-page tables, merged cells, and multi-line product names.
       Done inside the step-2 engine and tested: page-break continuations merged (`test_merges_a_row_cut_by_a_page_break`),
       split / merged cells aligned by header position (B Apr 2024, C Jun 2025), multi-line text kept with line breaks.
-- [ ] 4. Attach provenance to each row: source file, page, row index.
+- [x] 4. Attach provenance to each row: source file, page, row index.
+      `extract.py`: `extract_pdf(raw key)` checks the bytes against the sidecar SHA-256, classifies, parses, and stamps
+      every record with source key + SHA-256, CDSCO source URL, dataset, alert month, file id, listing title, family,
+      page(s), row index, section, `extraction_method = rule`, extractor version, warnings. 44 PDFs → 1,317 records,
+      all with full provenance. 3 unit + 1 integration test.
 - [ ] 5. Assign a confidence flag per row (all required fields present and well-formed = high).
 - [ ] 6. Write rows to `bronze/` as Parquet.
 - [ ] 7. Create a **labelled eval set**: ~300 rows labelled by hand, sampled across months and layouts.
@@ -221,3 +225,4 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-09 | Family D's combined cell: kept as printed (`batch_details`) and split at CDSCO's own labels; a cell with a repeated label (multi-part pack) is not split and gets a warning | Harith; `family_d.py` |
 | 2026-11-09 | Engine: a repeated header replaces the column positions (latest header wins) | `table_parser.py` |
 | 2026-11-09 | Family E repeats family A's 16 vaccine batches (and 2019+ are in the portal): Phase 3 must treat them as one finding per batch | extraction report §2.6 |
+| 2026-11-09 | Every record carries provenance; `source_url` is the downloaded CDSCO PDF URL; extraction refuses bytes that don't match the sidecar SHA-256 | `extract.py` |

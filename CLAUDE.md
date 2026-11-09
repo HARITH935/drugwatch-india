@@ -157,6 +157,7 @@ uv run --env-file ../.env python -m drugwatch_ingestion.inventory   # check raw/
 
 # Extraction (from extraction/, RustFS up)
 uv run --env-file ../.env python -m drugwatch_extraction.classify   # text vs scanned + layout family of every CDSCO PDF
+uv run --env-file ../.env python -m drugwatch_extraction.extract --all   # every CDSCO PDF -> records with provenance (--show N)
 ```
 
 **Local service ports** (all bound to 127.0.0.1; Postgres and Redis are shifted so they don't clash with OpsPilot):

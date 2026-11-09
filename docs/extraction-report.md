@@ -160,6 +160,24 @@ dropped; values are otherwise as printed. The labels are perfectly consistent: a
 
 pdfplumber's ruled-table finder handled every family: **Camelot was not needed.**
 
+### 2.8 Provenance (step 4, 2026-11-09)
+
+`extraction/src/drugwatch_extraction/extract.py` is the one entry point: it reads a PDF and its `raw/` sidecar, checks
+the bytes still match the sidecar's SHA-256 (otherwise no records: provenance must name the exact bytes), classifies
+the file, runs that family's parser, and turns every row into a **record**: the row's fields plus
+
+| Field | Meaning |
+|---|---|
+| `source_key`, `source_sha256` | the PDF in `raw/` and its fingerprint |
+| `source_url` | the CDSCO URL it was downloaded from: the "link to the original document" (CLAUDE.md §6) |
+| `source_dataset`, `alert_month`, `file_id`, `listing_title` | what CDSCO's alerts page said about the file |
+| `family`, `page`, `pages`, `row_index`, `section` | where in the file the row sits |
+| `extraction_method`, `extractor_version` | `rule` (Phase 10's LLM fallback will write `llm`) and the parser code version |
+| `warnings` | known problems with this row, for the step-5 confidence flag |
+
+**Whole archive: 44 PDFs → 1,317 records**, every one with a `https://cdsco.gov.in/` source URL, a SHA-256, a page and a row
+number; 2 records carry warnings (the 2018 two-part packs). Run: `uv run --env-file ../.env python -m drugwatch_extraction.extract --all`.
+
 ## 3. Accuracy against the labelled eval set (steps 7–8)
 
 To come: field-level precision, recall and F1.
