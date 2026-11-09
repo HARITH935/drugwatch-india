@@ -29,3 +29,5 @@ class ParseResult:
     skipped: list[tuple[int, str, list[str]]] = field(default_factory=list)
     first_serial: int | None = None
     serial_gaps: list[int] = field(default_factory=list)  # numbers missing from first..last
+    # Rows kept but with a known problem: (row_index, message). The confidence flag reads these.
+    warnings: list[tuple[int, str]] = field(default_factory=list)

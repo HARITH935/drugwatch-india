@@ -146,7 +146,10 @@ Final inventory 2026-11-07: **322 files, 153.5 MB, every SHA-256 re-checked, no 
         only. ⚠️ Spurious rows name the manufacturer printed on the fake label: never count them against it.
   - [x] Family A (vaccine lists 2017–2023, 11 files): 16 rows, no gaps; 7/7 batches from 2019 on match the portal.
         Mar 2022 starts at serial 3 (CDSCO's numbering). One overprinted cell (`2M0/s1 0B0i`) for the confidence flag.
-  - [ ] Families D, E
+  - [x] Family D (combined lists 2018, 2 files): 77 rows, no gaps. Combined batch/date/maker cell kept as printed
+        and split at CDSCO's labels (Harith's decision): 75 split; 2 two-part packs left unsplit with a warning.
+        `ParseResult.warnings` added for the confidence flag.
+  - [ ] Family E (bulk vaccine file)
 - [ ] 3. Handle multi-page tables, merged cells, and multi-line product names.
 - [ ] 4. Attach provenance to each row: source file, page, row index.
 - [ ] 5. Assign a confidence flag per row (all required fields present and well-formed = high).
@@ -210,3 +213,4 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-09 | One table engine for all families: the header row defines the fields, each family is a vocabulary; unknown header cells kept as `other_*` and reported | `table_parser.py` |
 | 2026-11-09 | Bronze field names shared across families where the meaning is the same (`failure_reason`); "Drawn By" and "Reported by" stay separate | `rows.py` |
 | 2026-11-09 | Spurious rows (families C, F) name the manufacturer printed on the fake label, usually the copied brand: Phase 3 / Phase 7 must never count them against that company | `family_f.py`, extraction report §2.3 |
+| 2026-11-09 | Family D's combined cell: kept as printed (`batch_details`) and split at CDSCO's own labels; a cell with a repeated label (multi-part pack) is not split and gets a warning | Harith; `family_d.py` |

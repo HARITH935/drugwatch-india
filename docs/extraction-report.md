@@ -116,9 +116,26 @@ aside. The title row and "A. Central Laboratories" above each header are section
   printed on top of each other (`2M0/s1 0B0i`), some "Manufactured By" cells say `Spurious`, two Sep 2018 rows share a
   batch (two results for one batch).
 
-### 2.5 Other families
+### 2.5 Family D: combined lists, May and Aug 2018 (2026-11-09)
 
-To come: D, E.
+`family_d.py`. **2 files → 77 rows** (43 + 34), no gaps, no unknown headers, nothing set aside.
+
+The third column prints **four values in one cell**, each labelled: `B. No.: … , Mfg dt: … , Exp dt: … , Mfd by: …`.
+**Decided by Harith:** bronze keeps the cell exactly as printed (`batch_details`) **and** fills `batch_no`,
+`mfg_date`, `expiry_date`, `manufacturer` by cutting at CDSCO's own labels. Only the comma between two labelled parts is
+dropped; values are otherwise as printed. The labels are perfectly consistent: all four, spelled the same, in every cell.
+
+- **75 rows split.** The other **2 are two-part packs** (a powder plus the liquid it's mixed with: May row 8, Aug row 2),
+  each part with its own batch, dates and maker, and one part with no `Mfd by:` label at all. A label appearing twice means
+  the cell is **not split**: split fields stay empty, the original is kept, and the row gets a **warning**. Guessing could
+  pair a batch with the wrong maker; these are "hard rows" for the Phase 10 LLM fallback.
+- New in `ParseResult`: `warnings` (row index, message) for rows kept with a known problem. Step 5's confidence flag
+  will read them.
+- No portal answer key: the portal starts in 2019.
+
+### 2.6 Other families
+
+To come: E.
 
 ## 3. Accuracy against the labelled eval set (steps 7–8)
 
