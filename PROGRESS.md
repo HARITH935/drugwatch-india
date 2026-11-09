@@ -137,7 +137,12 @@ Final inventory 2026-11-07: **322 files, 153.5 MB, every SHA-256 re-checked, no 
         matched by header position (handles Apr 2024's 12-column page); page-break rows merged. Portal agreement
         93.8% / 95.1%; remaining mismatches are the portal dropping leading zeros / dashes. 7 unit + 1 integration
         test. pdfplumber's ruled-table finder was enough: no Camelot needed so far.
-  - [ ] Families A, C, D, E, F
+  - [x] Shared engine `table_parser.py` (the header decides the fields; family = vocabulary). Family B moved onto it
+        with identical results (1,179 rows). Shared field names (`failure_reason` for B's "NSQ Result" and C's
+        "Reason for failure").
+  - [x] Family C (spurious / combined 2024–2025, 10 files): 24 rows, no gaps, no unknown headers; column drift
+        handled by the header; Jun 2025 matches the portal 4/4. Engine + C: 6 unit tests, 1 integration test.
+  - [ ] Families A, D, E, F
 - [ ] 3. Handle multi-page tables, merged cells, and multi-line product names.
 - [ ] 4. Attach provenance to each row: source file, page, row index.
 - [ ] 5. Assign a confidence flag per row (all required fields present and well-formed = high).
@@ -198,3 +203,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-08 | Tests never use real CDSCO files: they build tiny PDFs themselves; real-archive checks are local integration tests | `extraction/tests/` |
 | 2026-11-08 | Family-B columns matched by the header's x-positions, not by cell count; split cells merged, repeated lines dropped | `family_b.py` |
 | 2026-11-08 | Portal batch numbers drop leading zeros and turn dashes into `?`: Phase 3 joins must normalise both | data-sources §1b |
+| 2026-11-09 | One table engine for all families: the header row defines the fields, each family is a vocabulary; unknown header cells kept as `other_*` and reported | `table_parser.py` |
+| 2026-11-09 | Bronze field names shared across families where the meaning is the same (`failure_reason`); "Drawn By" and "Reported by" stay separate | `rows.py` |

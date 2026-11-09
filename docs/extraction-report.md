@@ -43,10 +43,17 @@ uv run --env-file ../.env pytest -m integration                         # assert
 
 ## 2. Rows extracted (steps 2–6)
 
+All families run on one engine, `extraction/src/drugwatch_extraction/table_parser.py`: **the header decides the
+fields.** Each family supplies a vocabulary (field → phrases its header cell can contain). The header row (≥ 4
+matching cells, one of them S.No) gives every column a field name and an x-position; every cell is assigned to the
+column it sits under. Header cells no vocabulary knows still get a column (`other_<words>`) and are reported.
+Values are kept **as extracted** (bronze rule): wrapped cells keep their line breaks, dates stay as printed.
+Fields with the same meaning share a name across families: B's "NSQ Result" and C's "Reason for failure" are both
+`failure_reason`.
+
 ### 2.1 Family B: NSQ lists, Apr 2024 – Jun 2025 (2026-11-08)
 
-`extraction/src/drugwatch_extraction/family_b.py`. Values are kept **as extracted** (bronze rule): wrapped cells
-keep their line breaks, dates stay as printed.
+`family_b.py` (vocabulary only).
 
 - **19 files → 1,179 rows.** Serial numbers run 1…N with **no gaps** in every file; no row left unrecognised.
   The only rows set aside are 1-column footnote boxes (2 per file in most months), which are never merged.
@@ -72,9 +79,22 @@ a parser error**: the portal drops leading zeros (`04010026` → `4010026`, `008
 file, not a pdfplumber setting), batch numbers wrapped inside a cell (`RDCPH230\n02`), a serial's dot landing in
 the next cell (`11` | `. DofloxOZ`), dates with trailing dots (`12/2022.`), placeholders (`Nil`, `-`).
 
-### 2.2 Other families
+### 2.2 Family C: spurious and combined lists, Aug 2024 – Jun 2025 (2026-11-09)
 
-To come: A, C, D, E, F.
+`family_c.py` (vocabulary only). **10 files → 24 rows**, no serial gaps, no unknown header cells.
+
+- **Column drift handled by the header, no special cases:** Aug 2024 has `drawn_from` and no `remarks`; Sep 2024
+  has no `remarks`; Jun 2025's merged name cell (12 header cells) still gives the usual 10 columns.
+- The Jan 2025 "Revised" combined list holds one entry, **serial 23**: serial gaps are counted from the first serial,
+  and `first_serial` is reported (family B requires 1).
+- Aug 2024: 7 one-column "tables" set aside are boxes nested inside product-name cells; every fragment is also in
+  the parsed product names, so nothing is lost.
+- **Agreement with the portal:** Jun 2025 is the only month where the PDFs and the portal's spurious list overlap:
+  **4 of 4 batches match**, nothing extra either side.
+
+### 2.3 Other families
+
+To come: A, D, E, F.
 
 ## 3. Accuracy against the labelled eval set (steps 7–8)
 

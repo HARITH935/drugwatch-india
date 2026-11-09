@@ -71,7 +71,7 @@ def test_aligns_split_cells_by_position(table_pdf):
     fourth = result.rows[1]
     assert fourth.fields["product_name"] == "Cyclo"  # short enough to fit its narrow cell
     assert fourth.fields["batch_no"] == "TB4"
-    assert fourth.fields["nsq_result"] == "Water"
+    assert fourth.fields["failure_reason"] == "Water"
 
 
 def test_a_footnote_box_is_reported_not_glued_onto_the_last_row(table_pdf):
@@ -83,7 +83,7 @@ def test_a_footnote_box_is_reported_not_glued_onto_the_last_row(table_pdf):
 
     result = parse_family_b(table_pdf([HEADER, row("1.")], footnote_page))
 
-    assert result.rows[0].fields["nsq_result"] == "Assay"  # not glued onto the last record
+    assert result.rows[0].fields["failure_reason"] == "Assay"  # not glued onto the last record
     assert [why for _, why, _ in result.skipped] == ["1 columns", "1 columns"]
 
 

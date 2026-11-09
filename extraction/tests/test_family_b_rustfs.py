@@ -45,7 +45,7 @@ def test_family_b_parses_the_whole_archive_and_agrees_with_the_portal():
             if classify_pdf(data).family != "B":
                 continue
             result = parse_family_b(data)
-            assert result.serial_gaps == [], key
+            assert result.serial_gaps == [] and result.first_serial == 1, key
             assert not [s for s in result.skipped if s[1] == "row not recognised"], key
             files += 1
             rows += len(result.rows)
