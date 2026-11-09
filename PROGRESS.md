@@ -132,7 +132,8 @@ Final inventory 2026-11-07: **322 files, 153.5 MB, every SHA-256 re-checked, no 
       `classify.py`: family read from table header cells, `unknown` fails the run. All 44 CDSCO PDFs are text;
       families A 11 · B 19 · C 10 · D 2 · E 1 · F 1 (F = Apr 2024 spurious list, newly separated). 14 unit tests
       (self-built PDFs, no real data in git) + 1 integration test on the real archive. `docs/extraction-report.md` §1.
-- [ ] 2. Build pdfplumber extraction for each layout family; use Camelot where table borders are clear.
+- [x] 2. Build pdfplumber extraction for each layout family; use Camelot where table borders are clear.
+      All 6 families parse: 44 files → 1,317 rows (`docs/extraction-report.md` §2.7). Camelot not needed.
   - [x] Family B (NSQ lists 2024–2025, 19 files): `family_b.py` + `rows.py`. 1,179 rows, no serial gaps; columns
         matched by header position (handles Apr 2024's 12-column page); page-break rows merged. Portal agreement
         93.8% / 95.1%; remaining mismatches are the portal dropping leading zeros / dashes. 7 unit + 1 integration
@@ -149,8 +150,12 @@ Final inventory 2026-11-07: **322 files, 153.5 MB, every SHA-256 re-checked, no 
   - [x] Family D (combined lists 2018, 2 files): 77 rows, no gaps. Combined batch/date/maker cell kept as printed
         and split at CDSCO's labels (Harith's decision): 75 split; 2 two-part packs left unsplit with a warning.
         `ParseResult.warnings` added for the confidence flag.
-  - [ ] Family E (bulk vaccine file)
-- [ ] 3. Handle multi-page tables, merged cells, and multi-line product names.
+  - [x] Family E (bulk vaccine file): 16 rows, one year per page (`report_year`). Same 16 batches as family A plus
+        status and regulatory action: Phase 3 must count each finding once. Engine: a repeated header now replaces
+        the column positions (each page of E draws its columns differently); no other family changed.
+- [x] 3. Handle multi-page tables, merged cells, and multi-line product names.
+      Done inside the step-2 engine and tested: page-break continuations merged (`test_merges_a_row_cut_by_a_page_break`),
+      split / merged cells aligned by header position (B Apr 2024, C Jun 2025), multi-line text kept with line breaks.
 - [ ] 4. Attach provenance to each row: source file, page, row index.
 - [ ] 5. Assign a confidence flag per row (all required fields present and well-formed = high).
 - [ ] 6. Write rows to `bronze/` as Parquet.
@@ -214,3 +219,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-09 | Bronze field names shared across families where the meaning is the same (`failure_reason`); "Drawn By" and "Reported by" stay separate | `rows.py` |
 | 2026-11-09 | Spurious rows (families C, F) name the manufacturer printed on the fake label, usually the copied brand: Phase 3 / Phase 7 must never count them against that company | `family_f.py`, extraction report §2.3 |
 | 2026-11-09 | Family D's combined cell: kept as printed (`batch_details`) and split at CDSCO's own labels; a cell with a repeated label (multi-part pack) is not split and gets a warning | Harith; `family_d.py` |
+| 2026-11-09 | Engine: a repeated header replaces the column positions (latest header wins) | `table_parser.py` |
+| 2026-11-09 | Family E repeats family A's 16 vaccine batches (and 2019+ are in the portal): Phase 3 must treat them as one finding per batch | extraction report §2.6 |

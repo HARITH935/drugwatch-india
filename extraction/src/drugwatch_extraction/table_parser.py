@@ -5,9 +5,10 @@ Phrases are compared with spaces removed and in lower case ("Manufactu ring Date
 "manufacturingdate"); a phrase starting with "=" must match the whole cell ("=from").
 
 For each PDF:
-1. The HEADER row is the first row where at least 4 cells match the vocabulary, one being S.No.
-   Its cells give every column a field name and an x-position. A header cell the vocabulary doesn't
-   know still gets a column ("other_<words>") and is listed in ParseResult.unknown_headers.
+1. A HEADER row is a row where at least 4 cells match the vocabulary, one being S.No. Its cells
+   give every column a field name and an x-position. A header cell the vocabulary doesn't know
+   still gets a column ("other_<words>") and is listed in ParseResult.unknown_headers. When a
+   header appears again (e.g. on every page), its positions replace the old ones.
 2. Every other row is ALIGNED to those positions: each cell belongs to the column it sits under
    (by its centre), so a page drawn with extra lines (split cells) maps onto the same fields.
 3. The aligned row is then one of:
@@ -45,7 +46,9 @@ def parse_tables(data: bytes, vocabulary: Vocabulary) -> ParseResult:
                     texts = [text or "" for text in texts]  # pdfplumber gives None for empty
                     header = _header_columns(row.cells, texts, vocabulary, result)
                     if header is not None:
-                        columns = columns or header  # the first header wins; repeats are skipped
+                        # The latest header wins: a file built from one table per page (family E)
+                        # draws each page's columns at different positions.
+                        columns = header
                         continue
                     first = texts[0].strip()
                     others_empty = not any(text.strip() for text in texts[1:])

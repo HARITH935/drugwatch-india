@@ -40,3 +40,17 @@ def test_an_exact_phrase_matches_only_the_whole_cell(table_pdf):
 
     assert "drawn_from" not in result.columns  # "=from" needs a cell that is exactly "From"
     assert result.unknown_headers == ["other_reported_from_lab"]
+
+
+def test_a_new_header_replaces_the_column_positions(table_pdf):
+    # Page 2 is a separate table whose first column is much wider (like family E's pages): its
+    # rows must be read with page 2's header positions, not page 1's.
+    page_1 = [["S.No", "Name", "Batch No.", "Result"], ["1.", "X", "B1", "R1"]]
+    page_2 = [[("S.No", 150), "Name", "Batch No.", "Result"], [("2.", 150), "Y", "B2", "R2"]]
+
+    result = parse_tables(table_pdf(page_1, page_2), VOCABULARY)
+
+    assert [(r.fields["product_name"], r.fields["batch_no"]) for r in result.rows] == [
+        ("X", "B1"),
+        ("Y", "B2"),
+    ]

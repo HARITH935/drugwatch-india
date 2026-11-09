@@ -133,9 +133,32 @@ dropped; values are otherwise as printed. The labels are perfectly consistent: a
   will read them.
 - No portal answer key: the portal starts in 2019.
 
-### 2.6 Other families
+### 2.6 Family E: bulk vaccine file, 2017 – 2023 (2026-11-09)
 
-To come: E.
+`family_e.py`. **1 file → 16 rows**, no warnings, no unknown headers, nothing set aside.
+
+- **One table and one year per page.** Page 1's title is the table's first row; pages 2–5 print theirs above the table.
+  Each row gets its own page's title as `section` and the year as `report_year`: 2017 ×2, 2018 ×6, 2019 ×2,
+  2022 ×5, 2023 ×1 (no pages for 2020–2021). Serial numbers restart on every page, so they're checked page by page.
+- **Engine change found here:** each page's table draws its columns at different positions, so a repeated header now
+  **replaces** the column positions (before, the first header won, which shifted cells and lost the 2023 row). All other
+  families' results were unchanged; a new engine test fails with the old rule.
+- **Same 16 batches as family A**, plus `status`, `sample_source` and `regulatory_action`. With the portal (2019+), the
+  same vaccine finding can appear in three sources: **Phase 3 must count it once.**
+
+### 2.7 Summary
+
+| Family | Files | Rows | Checked against the portal |
+|---|---|---|---|
+| A vaccine lists | 11 | 16 | 7 / 7 batches (2019+) |
+| B NSQ lists | 19 | 1,179 | 93.8% / 95.1%, remaining gaps are the portal's |
+| C spurious / combined | 10 | 24 | Jun 2025: 4 / 4 |
+| D combined 2018 | 2 | 77 | (portal starts 2019) |
+| E bulk vaccine file | 1 | 16 | same batches as A |
+| F spurious Apr 2024 | 1 | 5 | (portal spurious starts Jun 2025) |
+| **All** | **44** | **1,317** | |
+
+pdfplumber's ruled-table finder handled every family: **Camelot was not needed.**
 
 ## 3. Accuracy against the labelled eval set (steps 7–8)
 
