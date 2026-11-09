@@ -103,9 +103,22 @@ so each record carries its state. Two columns of its own: `sales_outlets` (where
 > name printed on the **fake** pack, usually the genuine company whose brand was copied. Spurious rows (families C
 > and F) must never be counted against that company (CLAUDE.md §6).
 
-### 2.4 Other families
+### 2.4 Family A: vaccine lists, Jul 2017 – Apr 2023 (2026-11-09)
 
-To come: A, D, E.
+`family_a.py` (vocabulary only). **11 files → 16 rows** (1–3 per file), no gaps, no unknown headers, nothing set
+aside. The title row and "A. Central Laboratories" above each header are section rows.
+
+- **Agreement with the portal** (2019 onwards, 5 files): **7 of 7 batches match**. One more row prints `--` for its
+  batch (no number), so there is nothing to match.
+- **Mar 2022 starts at serial 3** (3, 4, 5). The page holds nothing else, so that is CDSCO's own numbering, not a
+  missed row; `first_serial` records it.
+- **Kept as extracted, for Phase 3 and the step-5 confidence flag:** one Feb 2018 manufacturer cell holds two texts
+  printed on top of each other (`2M0/s1 0B0i`), some "Manufactured By" cells say `Spurious`, two Sep 2018 rows share a
+  batch (two results for one batch).
+
+### 2.5 Other families
+
+To come: D, E.
 
 ## 3. Accuracy against the labelled eval set (steps 7–8)
 
