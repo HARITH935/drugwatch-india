@@ -92,9 +92,20 @@ the next cell (`11` | `. DofloxOZ`), dates with trailing dots (`12/2022.`), plac
 - **Agreement with the portal:** Jun 2025 is the only month where the PDFs and the portal's spurious list overlap:
   **4 of 4 batches match**, nothing extra either side.
 
-### 2.3 Other families
+### 2.3 Family F: spurious list, Apr 2024 (2026-11-09)
 
-To come: A, D, E, F.
+`family_f.py` (vocabulary only, no engine change). **1 file → 5 rows**, no gaps, no unknown headers, nothing set
+aside. Rows are grouped by state: full-width rows ("NCT of DELHI": rows 1–4, "JHARKHAND": row 5) are section rows,
+so each record carries its state. Two columns of its own: `sales_outlets` (where the fake stock was found) and
+`manufacturer_response` (the genuine company's reply). No portal answer key: the portal's spurious list starts Jun 2025.
+
+> **Caution for Phase 3 and the Phase 7 risk score.** In a *spurious* list, "Manufactured by (as per label)" is the
+> name printed on the **fake** pack, usually the genuine company whose brand was copied. Spurious rows (families C
+> and F) must never be counted against that company (CLAUDE.md §6).
+
+### 2.4 Other families
+
+To come: A, D, E.
 
 ## 3. Accuracy against the labelled eval set (steps 7–8)
 
