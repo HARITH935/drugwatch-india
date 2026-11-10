@@ -265,4 +265,8 @@ call: the test failed). Writing never started pool threads.
 
 ## 3. Accuracy against the labelled eval set (steps 7–8)
 
-To come: field-level precision, recall and F1.
+**Eval set (step 7, 2026-11-10):** 309 rows, up to 12 random rows from every PDF, split by whole PDF into train 187 /
+validation 53 / test 69 rows. Design, split rules and the labelling guide: `docs/eval-set.md`. Labelling by Harith:
+pre-filled values checked against a picture of the PDF page. Labels stay local (ADR 0003).
+
+To come (step 8): field-level precision, recall and F1.

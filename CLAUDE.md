@@ -159,6 +159,8 @@ uv run --env-file ../.env python -m drugwatch_ingestion.inventory   # check raw/
 uv run --env-file ../.env python -m drugwatch_extraction.classify   # text vs scanned + layout family of every CDSCO PDF
 uv run --env-file ../.env python -m drugwatch_extraction.extract --all   # every CDSCO PDF -> records with provenance (--show N)
 uv run --env-file ../.env python -m drugwatch_extraction.bronze --all    # same, written to bronze/ as Parquet + read back
+uv run --env-file ../.env python -m drugwatch_extraction.label           # label eval-set rows (guide: docs/eval-set.md; --redo N)
+# (eval_set --sample drew eval/manifest.csv once; it refuses to redraw)
 ```
 
 **Local service ports** (all bound to 127.0.0.1; Postgres and Redis are shifted so they don't clash with OpsPilot):

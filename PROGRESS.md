@@ -175,6 +175,13 @@ Final inventory 2026-11-07: **322 files, 153.5 MB, every SHA-256 re-checked, no 
       hang in Arrow's thread pools on macOS by reading single-threaded from an Arrow buffer (0 pool threads; 4/4 runs
       exit). Portal JSON → bronze is a separate later step (Harith's choice). Tests: 7 unit + 1 integration.
 - [ ] 7. Create a **labelled eval set**: ~300 rows labelled by hand, sampled across months and layouts.
+  - [x] Labelling kit (2026-11-10): `eval_set.py` draws the sample (up to 12 random rows per PDF, seed 2026: **309 rows**,
+        all 44 PDFs, 28 months, 6 families) and fixes the split by whole PDF (train 187 / validation 53 / test 69) in
+        `extraction/eval/manifest.csv` (row IDs only; refuses to be overwritten). `label.py`: terminal tool that opens the
+        page picture with the row outlined, asks field by field (Enter / text / `/b` / `/u` / `/q`), saves each row at
+        once, resumes, `--redo N`. Guide: `docs/eval-set.md`. Tests: 8 + 5 unit, 1 integration (manifest reproducible).
+  - [ ] Harith labels the 309 rows (`uv run --env-file ../.env python -m drugwatch_extraction.label`), backing up
+        `data/eval-set/labels.jsonl` after each session.
 - [ ] 8. Measure rule-based parser accuracy against the labelled eval set (field-level precision/recall/F1).
 
 **Done when:** parser runs across the whole archive and baseline F1 is recorded.
@@ -243,3 +250,6 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-09 | pyarrow (used directly, explicit schema) writes bronze Parquet; one file per source PDF at its `raw/` key; one schema for all families | Harith; ADR 0007 |
 | 2026-11-09 | Step 6 covers PDF records only; portal JSON → bronze (with `extraction_method = api`) is its own later step | Harith |
 | 2026-11-09 | Parquet is read single-threaded from an Arrow buffer (`from_parquet`): Arrow's thread pools hung the process at exit on macOS | ADR 0007, extraction report §2.10 |
+| 2026-11-10 | Eval-set labelling: pre-filled parser values checked against a picture of the PDF page (anchoring risk accepted; the guide's rule is to look before pressing Enter) | Harith; `docs/eval-set.md` |
+| 2026-11-10 | Eval-set labels stay in git-ignored `data/eval-set/` with Harith's private backup; the repo holds only code, guide and a manifest of row IDs (ADR 0003) | Harith; `docs/eval-set.md` §2 |
+| 2026-11-10 | Eval sample: up to 12 random rows per PDF (seed 2026, 309 rows); split fixed at sampling time by whole PDF, per family (test/validation/train 20/20/60); row ID = file SHA-256 + page + S.No | `eval_set.py`, `eval/manifest.csv` |
