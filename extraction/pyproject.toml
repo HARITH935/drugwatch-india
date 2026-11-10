@@ -10,6 +10,7 @@ requires-python = ">=3.13"
 dependencies = [
     "drugwatch-ingestion", # RawStore for reading raw/ (path dependency, see [tool.uv.sources])
     "pdfplumber>=0.11.10", # PDF text, characters and tables (plan §6)
+    "pyarrow>=26.0.1", # writes bronze Parquet with an explicit schema (ADR 0007)
 ]
 
 [build-system]

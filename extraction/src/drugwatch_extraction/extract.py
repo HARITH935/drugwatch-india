@@ -104,6 +104,16 @@ def records_for(data: bytes, sidecar: dict[str, Any]) -> ExtractionResult:
     return result
 
 
+def pdf_keys(s3: Any, bucket: str = "raw", prefix: str = "cdsco-pdf/") -> list[str]:
+    """Every CDSCO PDF in raw/, sorted."""
+    return sorted(
+        obj["Key"]
+        for page in s3.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix)
+        for obj in page.get("Contents", [])
+        if obj["Key"].endswith(".pdf")
+    )
+
+
 def extract_pdf(s3: Any, key: str, bucket: str = "raw") -> ExtractionResult:
     """Load a PDF and its sidecar from raw/ and extract it."""
     data = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
@@ -120,17 +130,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     s3 = RawStore.from_env().s3
-    if args.all:
-        keys = sorted(
-            obj["Key"]
-            for page in s3.get_paginator("list_objects_v2").paginate(
-                Bucket="raw", Prefix="cdsco-pdf/"
-            )
-            for obj in page.get("Contents", [])
-            if obj["Key"].endswith(".pdf")
-        )
-    else:
-        keys = [args.key]
+    keys = pdf_keys(s3) if args.all else [args.key]
 
     records, families, problems, warned = [], Counter(), [], 0
     for key in keys:

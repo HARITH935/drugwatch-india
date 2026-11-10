@@ -227,6 +227,42 @@ narrower one's width form an overlapping pair. A cell with **2 or more** pairs i
 extracted and gets a warning. Across the archive the one known cell has 6 pairs; two other cells have a single `al`
 pair, which is just a tight font, and the same letter drawn twice (bold printing) never counts.
 
+### 2.10 Bronze Parquet (step 6, 2026-11-09)
+
+`extraction/src/drugwatch_extraction/bronze.py` writes every PDF's records to the `bronze` bucket with **pyarrow**
+(approved by Harith, ADR 0007).
+
+- **One Parquet file per source PDF**, at the PDF's `raw/` key with `.parquet` instead of `.pdf`
+  (`bronze/cdsco-pdf/<dataset>/<month>/<file_id>/<sha256>.parquet`). The name is still the source PDF's SHA-256;
+  re-running replaces the file, never adds a copy.
+- **One schema for every family** (37 columns), declared in code:
+  - provenance keeps its types (`page`, `row_index`: integers; `pages`, `warnings`, `confidence_reasons`: lists);
+  - every row field any family can produce is a text column. **Null = this layout has no such column; `""` = the
+    cell was blank.** A test checks the column list against every family's vocabulary;
+  - a header no vocabulary knows (`other_*`) goes into an `extra_fields` map instead of a new column;
+  - any other unexpected field stops the write (pyarrow on its own would silently drop it), and pyarrow refuses to
+    write a file where a required provenance column (source key, SHA-256, page, ...) is null.
+
+**Whole archive: 44 files, 1,317 rows, 759 KB.** The command reads every file back from RustFS and checks the row
+count and the schema (`read back: 44 files, 1317 rows, schema identical: True`). Run:
+`uv run --env-file ../.env python -m drugwatch_extraction.bronze --all`.
+
+**A hang found on the way (macOS).** The first full run wrote and verified everything, then never exited. A stack
+sample showed the main thread inside `exit()`, in the destructor of one of Arrow's C++ thread pools, waiting forever
+for a pool worker that was itself waiting. It happened in 2 of 2 full runs and in 1 of 2 read-only runs: a race at
+shutdown, not a data problem. Counting the process's threads showed the cause precisely:
+
+| How a Parquet file is read | Arrow pool threads left running |
+|---|---|
+| `pq.read_table(io.BytesIO(data))` (the usual way) | 4–5 |
+| … with `use_threads=False` | 1–2 |
+| `pq.ParquetFile(pa.BufferReader(data)).read(use_threads=False)` | **0** |
+
+Bronze files are a few KB, so threads gain nothing: `from_parquet()` uses the last line, and with no pool threads
+there is nothing to wait for at exit. After the change: 0 pool threads at the end of a full run, and 4 of 4 full
+runs exited normally. A unit test fails if reading ever starts threads again (checked by switching back to the old
+call: the test failed). Writing never started pool threads.
+
 ## 3. Accuracy against the labelled eval set (steps 7–8)
 
 To come: field-level precision, recall and F1.
