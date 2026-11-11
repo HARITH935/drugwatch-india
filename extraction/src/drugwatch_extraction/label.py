@@ -1,7 +1,7 @@
 """Label the eval-set rows by hand (Phase 2 step 7): check every pre-filled value against the PDF.
 
 For each manifest row not labelled yet, the tool saves a picture of the PDF page with the row
-outlined in red and opens it in Preview (in the background), then asks field by field:
+outlined in red and opens it in Preview (in front), then asks field by field:
 
     batch_no        [TB-1201]:
       Enter   the value shown is exactly what the PDF prints
@@ -93,8 +93,8 @@ def save_picture(pdf: bytes, page_no: int, serial: str | None, path: Path) -> Pa
 
 
 def show(path: Path) -> None:
-    if sys.platform == "darwin":  # -g: open in the background, so the terminal keeps the focus
-        subprocess.run(["/usr/bin/open", "-g", str(path)], check=False)  # noqa: S603
+    if sys.platform == "darwin":  # Preview comes to the front; click the terminal to answer
+        subprocess.run(["/usr/bin/open", str(path)], check=False)  # noqa: S603
     else:
         print(f"  picture: {path}")
 

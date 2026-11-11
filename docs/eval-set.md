@@ -53,8 +53,8 @@ cd extraction
 uv run --env-file ../.env python -m drugwatch_extraction.label
 ```
 
-For each row the tool opens a picture of the PDF page in Preview (in the background: put Preview and the terminal side
-by side) with the row **outlined in red**. A row that continues on the next page also opens that page. Then it asks
+For each row the tool opens a picture of the PDF page in Preview, in front of your other windows, with the row
+**outlined in red**. Look at it, then click the terminal to answer. A row that continues on the next page also opens that page. Then it asks
 field by field, showing the parser's value in brackets:
 
 | You type | Meaning |
