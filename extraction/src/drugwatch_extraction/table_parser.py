@@ -122,6 +122,17 @@ def _field_for(header_text: str, vocabulary: Vocabulary) -> str | None:
     return None
 
 
+def is_header(fields: list[str | None]) -> bool:
+    """A header row: at least MIN_HEADER_FIELDS cells name a known field, one of them S.No."""
+    known = [field for field in fields if field]
+    return len(known) >= MIN_HEADER_FIELDS and "serial_no" in known
+
+
+def header_fields(texts: list[str | None], vocabulary: Vocabulary) -> list[str | None]:
+    """The field each cell of a row would name if the row were a header (None: not known)."""
+    return [_field_for(text or "", vocabulary) for text in texts]
+
+
 def _header_columns(
     boxes: list, texts: list[str], vocabulary: Vocabulary, result: ParseResult
 ) -> list[Column] | None:
@@ -129,8 +140,7 @@ def _header_columns(
     named = [
         (box, text, _field_for(text, vocabulary)) for box, text in zip(boxes, texts, strict=True)
     ]
-    known = [field for _, _, field in named if field]
-    if len(known) < MIN_HEADER_FIELDS or "serial_no" not in known:
+    if not is_header([field for _, _, field in named]):
         return None
     columns = []
     for box, text, field in named:

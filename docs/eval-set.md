@@ -32,6 +32,28 @@ The sample is in `extraction/eval/manifest.csv` (committed: row IDs only, no CDS
 to overwrite it: to redraw, delete it deliberately and record why in `PROGRESS.md`. A local test checks that the
 committed manifest is exactly what the code draws from bronze.
 
+## 1b. How the labels are made (changed 2026-11-11)
+
+**First attempt, by hand (set aside).** In the first sessions, 64 of 72 saved rows were saved within 7 seconds of the
+previous one, most within 3: Enter was pressed repeatedly, and keys pressed while the next picture loaded answered
+questions before they appeared. Those rows were not really checked, so the file is kept
+(`labels-attempt1-unchecked-2026-11-11.jsonl`) but not used. The tool now throws away keys pressed before a question
+appears and asks a row again if it was answered in under 8 seconds (`label.py`).
+
+**Method used: AI-assisted labels, every disagreement decided by a person** (Harith's decision: there was no time to check
+309 rows by hand). Each value comes from two independent readings:
+1. the **parser**: pdfplumber reads the PDF's hidden text layer;
+2. a **second reader** (Claude) reads a picture of the row (header strip, the row, any continuation on the next
+   page), drawn from the PDF by pypdfium2, **without seeing the parser's values** (`second_reader.py`).
+
+Where the two agree (spaces and line breaks ignored), that is the label. Where they disagree, Harith decides with the
+picture and both values on screen (`label --review`). A value both readings get wrong in the same way would be
+missed; that is unlikely, as the two methods share nothing but the PDF. **Say it this way in the report and in
+interviews:** "309 rows labelled by AI-assisted double reading; a person decided every disagreement."
+
+**Caution for Phase 10:** the second reader is itself an AI model, so an LLM extractor tested on these labels is
+compared against labels partly made by another LLM. Phase 10's report should say so.
+
 ## 2. Where the labels live (ADR 0003)
 
 Labels contain real CDSCO values, and CDSCO data isn't published until permission is recorded (`docs/permissions.md`).

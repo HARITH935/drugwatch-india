@@ -10,6 +10,10 @@ outlined in red and opens it in Preview (in front), then asks field by field:
       /u      you can't read it (e.g. two texts printed on top of each other)
       /q      stop; every finished row is already saved
 
+Two safety nets keep every answer a real check: keys pressed BEFORE a question appears are thrown
+away (so extra Enters can't answer the next row), and a row answered faster than MIN_SECONDS is
+asked again.
+
 A finished row is appended to ../data/eval-set/labels.jsonl at once, so you can stop and resume
 any time; `--redo N` labels row N again (the newer label replaces the older). The labelling guide
 is docs/eval-set.md.
@@ -22,6 +26,8 @@ import argparse
 import io
 import subprocess
 import sys
+import termios
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -42,14 +48,40 @@ from drugwatch_extraction.eval_set import (
 from drugwatch_ingestion.store import RawStore
 
 COMMANDS = {"/b": "", "/u": None}  # answer -> stored value: "" = blank cell, None = unreadable
+# Checking a whole row against the picture takes longer than this. In the first sessions, 64 of 72
+# rows were saved within 7 s of the previous one (Enter pressed repeatedly): none of them checked.
+MIN_SECONDS = 8
 
 
 class Quit(Exception):
     """The labeller typed /q."""
 
 
-def label_fields(record: dict[str, Any], ask: Callable[[str], str] = input) -> dict[str, Any]:
-    """Ask for every field the row's layout has; returns the label's fields and note."""
+def ask_now(prompt: str) -> str:
+    """input(), but first throw away anything typed before the question appeared."""
+    if sys.stdin.isatty():
+        termios.tcflush(sys.stdin, termios.TCIFLUSH)  # discard keys still waiting to be read
+    return input(prompt)
+
+
+def label_fields(
+    record: dict[str, Any],
+    ask: Callable[[str], str] = ask_now,
+    clock: Callable[[], float] = time.monotonic,
+) -> dict[str, Any]:
+    """Ask for every field the row's layout has; ask the whole row again if it went too fast."""
+    while True:
+        started = clock()
+        answers = _ask_row(record, ask)
+        if clock() - started >= MIN_SECONDS:
+            return answers
+        print(
+            f"\n  That took under {MIN_SECONDS} seconds: too fast to have compared it with the"
+            " picture.\n  Look at the red box, then answer this row again.\n"
+        )
+
+
+def _ask_row(record: dict[str, Any], ask: Callable[[str], str]) -> dict[str, Any]:
     fields: dict[str, str | None] = {}
     for field in REQUIRED.get(record["family"], SHARED):
         shown = record.get(field) or ""

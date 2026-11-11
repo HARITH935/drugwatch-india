@@ -5,7 +5,7 @@ import io
 import pdfplumber
 import pytest
 
-from drugwatch_extraction.label import Quit, label_fields, row_box, save_picture
+from drugwatch_extraction.label import MIN_SECONDS, Quit, label_fields, row_box, save_picture
 
 RECORD = {
     "family": "B",
@@ -30,10 +30,19 @@ def scripted(*answers):
     return ask
 
 
+def clock(*times):
+    """A fake clock: each call returns the next time (in seconds)."""
+    remaining = list(times)
+    return lambda: remaining.pop(0)
+
+
+CAREFUL = (0, MIN_SECONDS + 10)  # the row took long enough to have been checked
+
+
 def test_enter_keeps_the_value_shown_and_text_replaces_it():
     ask = scripted("", "TB-1201", "/b", "/u", "", "Assay of X", "two-part pack")
 
-    label = label_fields(RECORD, ask)
+    label = label_fields(RECORD, ask, clock(*CAREFUL))
 
     assert label == {
         "fields": {
@@ -52,7 +61,7 @@ def test_enter_keeps_the_value_shown_and_text_replaces_it():
 def test_an_unknown_command_asks_again():
     ask = scripted("/x", "", "", "", "", "", "", "")
 
-    label = label_fields(RECORD, ask)
+    label = label_fields(RECORD, ask, clock(*CAREFUL))
 
     assert label["fields"]["product_name"] == "Test Tablets"
     assert len(ask.prompts) == 8  # 6 fields + the repeated question + the note
@@ -60,15 +69,26 @@ def test_an_unknown_command_asks_again():
 
 def test_q_stops_without_returning_a_half_label():
     with pytest.raises(Quit):
-        label_fields(RECORD, scripted("", "/q"))
+        label_fields(RECORD, scripted("", "/q"), clock(*CAREFUL))
 
 
 def test_the_spurious_layout_is_not_asked_for_a_failure_reason():
     ask = scripted("", "", "", "", "", "")
 
-    label = label_fields(RECORD | {"family": "F"}, ask)
+    label = label_fields(RECORD | {"family": "F"}, ask, clock(*CAREFUL))
 
     assert "failure_reason" not in label["fields"]
+
+
+def test_a_row_answered_too_fast_is_asked_again(capsys):
+    # First try: 7 Enters in 2 seconds (not checked). Second try: typed with care.
+    ask = scripted(*[""] * 7, "", "TB-1201", "", "", "", "", "")
+
+    label = label_fields(RECORD, ask, clock(0, 2, 2, 2 + MIN_SECONDS + 10))
+
+    assert label["fields"]["batch_no"] == "TB-1201"  # the second, careful answers are kept
+    assert len(ask.prompts) == 14  # the whole row was asked twice
+    assert "too fast" in capsys.readouterr().out
 
 
 def test_the_picture_outlines_the_row_with_that_s_no(table_pdf, tmp_path):
