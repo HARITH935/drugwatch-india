@@ -15,7 +15,7 @@ away (so extra Enters can't answer the next row), and a row answered faster than
 asked again.
 
 A finished row is appended to ../data/eval-set/labels.jsonl at once, so you can stop and resume
-any time; `--redo N` labels row N again (the newer label replaces the older). The labelling guide
+any time; `--redo N [N ...]` labels those rows again (a newer label replaces the older). The guide
 is docs/eval-set.md.
 
 `--review` decides only the values where the parser and the second reader disagree
@@ -160,7 +160,12 @@ def review(args: argparse.Namespace, manifest: list[dict]) -> None:
         if line.strip()
     ]
     done = load_labels(args.labels)
-    todo = [q for q in queue if row_id(manifest[q["row"] - 1]) not in done]
+    if args.redo:  # decide these rows again (the newer label replaces the older)
+        todo = [q for q in queue if q["row"] in args.redo]
+        if missing := sorted(set(args.redo) - {q["row"] for q in todo}):
+            sys.exit(f"--redo: row(s) {missing} had no disagreement to review")
+    else:
+        todo = [q for q in queue if row_id(manifest[q["row"] - 1]) not in done]
     print(f"{len(todo)} row(s) to decide. 1 = parser, 2 = second reader, or type the value.\n")
     for q in todo:
         item = manifest[q["row"] - 1]
@@ -224,33 +229,32 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Label the eval-set rows by hand.")
     parser.add_argument("--manifest", type=Path, default=MANIFEST)
     parser.add_argument("--labels", type=Path, default=LABELS)
-    parser.add_argument("--redo", type=int, metavar="N", help="label row N of the manifest again")
+    parser.add_argument(
+        "--redo", type=int, nargs="+", metavar="N", help="label these manifest rows again"
+    )
     parser.add_argument("--review", action="store_true", help="decide parser vs second reader")
     args = parser.parse_args(argv)
 
     manifest = read_manifest(args.manifest)
+    if args.redo and not all(1 <= n <= len(manifest) for n in args.redo):
+        sys.exit(f"--redo: choose rows from 1 to {len(manifest)}")
     if args.review:
         review(args, manifest)
         return
     done = load_labels(args.labels)
     if args.redo:  # the new label replaces the old one (load_labels keeps the latest)
-        if not 1 <= args.redo <= len(manifest):
-            sys.exit(f"--redo: choose a row from 1 to {len(manifest)}")
-        todo = [manifest[args.redo - 1]]
+        todo = [(n, manifest[n - 1]) for n in args.redo]
     else:
-        todo = [item for item in manifest if row_id(item) not in done]
-    print(
-        f"{_progress(args.labels, manifest)}."
-        + (f" Labelling row {args.redo} again." if args.redo else "")
-    )
+        todo = [(n, item) for n, item in enumerate(manifest, start=1) if row_id(item) not in done]
+    again = f" Labelling row(s) {', '.join(map(str, args.redo))} again." if args.redo else ""
+    print(f"{_progress(args.labels, manifest)}.{again}")
     print("Enter = as shown, /b = blank, /u = unreadable, /q = stop. Guide: docs/eval-set.md\n")
 
     s3 = RawStore.from_env().s3
     records: dict[tuple, dict] = {}  # row id -> bronze record, loaded one PDF at a time
     pictures = args.labels.parent / "pages"  # git-ignored, next to the labels
     pdfs: dict[str, bytes] = {}
-    first = args.redo or len(manifest) - len(todo) + 1
-    for position, item in enumerate(todo, start=first):
+    for position, item in todo:
         key = item["source_key"]
         if key not in pdfs:
             pdfs[key] = s3.get_object(Bucket="raw", Key=key)["Body"].read()
