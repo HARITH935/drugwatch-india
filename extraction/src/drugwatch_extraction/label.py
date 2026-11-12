@@ -18,12 +18,17 @@ A finished row is appended to ../data/eval-set/labels.jsonl at once, so you can 
 any time; `--redo N` labels row N again (the newer label replaces the older). The labelling guide
 is docs/eval-set.md.
 
+`--review` decides only the values where the parser and the second reader disagree
+(second_reader.py): it shows that row's picture and asks 1 (parser), 2 (second reader) or the
+value typed.
+
 Run (from extraction/, RustFS up):
-    uv run --env-file ../.env python -m drugwatch_extraction.label
+    uv run --env-file ../.env python -m drugwatch_extraction.label            # or --review
 """
 
 import argparse
 import io
+import json
 import subprocess
 import sys
 import termios
@@ -103,6 +108,90 @@ def _ask_row(record: dict[str, Any], ask: Callable[[str], str]) -> dict[str, Any
     return {"fields": fields, "note": note}
 
 
+def review_fields(
+    differ: dict[str, dict],
+    ask: Callable[[str], str] = ask_now,
+    clock: Callable[[], float] = time.monotonic,
+) -> dict[str, Any]:
+    """--review: for each value the two readings disagree on, the person picks 1 (parser) or 2
+    (second reader) or types the right value. Asked again if it went too fast."""
+    while True:
+        started = clock()
+        decided = _review_once(differ, ask)
+        if clock() - started >= MIN_SECONDS:
+            return decided
+        print(
+            f"\n  That took under {MIN_SECONDS} seconds. Look at the picture, then decide again.\n"
+        )
+
+
+def _review_once(differ: dict[str, dict], ask: Callable[[str], str]) -> dict[str, Any]:
+    fields: dict[str, str | None] = {}
+    sources: dict[str, str] = {}
+    for field, pair in differ.items():
+        print(f"  {field}:")
+        print(f"    1  parser:        {_shown(pair['parser'])}")
+        print(f"    2  second reader: {_shown(pair['second_reader'])}")
+        while True:
+            answer = ask("    Which matches the picture? 1 / 2 / type it / /b / /u / /q: ").strip()
+            if answer == "/q":
+                raise Quit
+            if answer in ("1", "2"):
+                source = "parser" if answer == "1" else "second_reader"
+                fields[field], sources[field] = pair[source], source
+            elif answer in COMMANDS or (answer and not answer.startswith("/")):
+                fields[field], sources[field] = COMMANDS.get(answer, answer), "typed"
+            else:
+                print("    1 = the parser's value, 2 = the second reader's, or type what you see")
+                continue
+            break
+    return {"fields": fields, "decided": sources}
+
+
+def _shown(value: str | None) -> str:
+    return "(can't read it)" if value is None else "[" + value.replace("\n", " ⏎ ") + "]"
+
+
+def review(args: argparse.Namespace, manifest: list[dict]) -> None:
+    """Decide the rows where the parser and the second reader disagree (second_reader.py)."""
+    queue = [
+        json.loads(line)
+        for line in (args.labels.parent / "disagreements.jsonl").read_text().splitlines()
+        if line.strip()
+    ]
+    done = load_labels(args.labels)
+    todo = [q for q in queue if row_id(manifest[q["row"] - 1]) not in done]
+    print(f"{len(todo)} row(s) to decide. 1 = parser, 2 = second reader, or type the value.\n")
+    for q in todo:
+        item = manifest[q["row"] - 1]
+        sha, page, serial = row_id(item)
+        where = f"{item['source_dataset']} {item['alert_month']}, file {item['file_id']}"
+        print(f"Row {q['row']} of {len(manifest)}: {where}, page {page}, S.No {serial}")
+        show(args.labels.parent / "crops" / f"{q['row']:03d}.png")  # just this row
+        try:
+            decided = review_fields(q["differ"])
+        except (Quit, EOFError, KeyboardInterrupt):
+            print(f"\nStopped. {_progress(args.labels, manifest)}; every finished row is saved.")
+            return
+        append_label(
+            args.labels,
+            {
+                "source_sha256": sha,
+                "page": page,
+                "serial_no": serial,
+                "family": item["family"],
+                "fields": q["agreed"] | decided["fields"],
+                "decided": decided["decided"],  # which values a person decided, and how
+                "note": "",
+                "method": "parser and second reader (Claude, from the picture); "
+                "disagreements decided by Harith",
+                "labelled_at": datetime.now(UTC).isoformat(timespec="seconds"),
+            },
+        )
+        print()
+    print(f"Done. {_progress(args.labels, manifest)}.")
+
+
 def row_box(page: Any, serial: str) -> tuple | None:
     """The bounding box of the table row whose first cell is this S.No, if it is on the page."""
     for table in page.find_tables():
@@ -136,9 +225,13 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--manifest", type=Path, default=MANIFEST)
     parser.add_argument("--labels", type=Path, default=LABELS)
     parser.add_argument("--redo", type=int, metavar="N", help="label row N of the manifest again")
+    parser.add_argument("--review", action="store_true", help="decide parser vs second reader")
     args = parser.parse_args(argv)
 
     manifest = read_manifest(args.manifest)
+    if args.review:
+        review(args, manifest)
+        return
     done = load_labels(args.labels)
     if args.redo:  # the new label replaces the old one (load_labels keeps the latest)
         if not 1 <= args.redo <= len(manifest):

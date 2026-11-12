@@ -5,7 +5,14 @@ import io
 import pdfplumber
 import pytest
 
-from drugwatch_extraction.label import MIN_SECONDS, Quit, label_fields, row_box, save_picture
+from drugwatch_extraction.label import (
+    MIN_SECONDS,
+    Quit,
+    label_fields,
+    review_fields,
+    row_box,
+    save_picture,
+)
 
 RECORD = {
     "family": "B",
@@ -104,3 +111,46 @@ def test_the_picture_outlines_the_row_with_that_s_no(table_pdf, tmp_path):
     assert path.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"  # a real PNG file
     plain = save_picture(data, 1, None, tmp_path / "pages" / "p1-plain.png")  # continuation page
     assert plain.read_bytes() != path.read_bytes()  # no outline drawn
+
+
+DIFFER = {
+    "batch_no": {"parser": "TB-1201", "second_reader": "TB-1207"},
+    "failure_reason": {"parser": "Light Absortion", "second_reader": "Light Absorption"},
+    "manufacturer": {"parser": "2M0/s1 0B0i", "second_reader": None},
+}
+
+
+def test_review_takes_1_2_or_a_typed_value_and_records_who_decided():
+    ask = scripted("2", "1", "M/s. Test Pharma")
+
+    decided = review_fields(DIFFER, ask, clock(*CAREFUL))
+
+    assert decided == {
+        "fields": {
+            "batch_no": "TB-1207",
+            "failure_reason": "Light Absortion",  # the PDF's own typo, kept
+            "manufacturer": "M/s. Test Pharma",
+        },
+        "decided": {
+            "batch_no": "second_reader",
+            "failure_reason": "parser",
+            "manufacturer": "typed",
+        },
+    }
+
+
+def test_review_asks_again_for_an_empty_answer_and_stops_on_q():
+    ask = scripted("", "1", "/q")
+
+    with pytest.raises(Quit):
+        review_fields(DIFFER, ask, clock(*CAREFUL))
+    assert len(ask.prompts) == 3  # Enter alone is not an answer here
+
+
+def test_a_review_answered_too_fast_is_asked_again():
+    ask = scripted("1", "1", "1", "2", "1", "/b")
+
+    decided = review_fields(DIFFER, ask, clock(0, 1, 1, 1 + MIN_SECONDS + 10))
+
+    assert decided["fields"] == {"batch_no": "TB-1207", "failure_reason": "Light Absortion",
+                                 "manufacturer": ""}  # fmt: skip

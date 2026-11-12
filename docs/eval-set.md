@@ -51,6 +51,21 @@ picture and both values on screen (`label --review`). A value both readings get 
 missed; that is unlikely, as the two methods share nothing but the PDF. **Say it this way in the report and in
 interviews:** "309 rows labelled by AI-assisted double reading; a person decided every disagreement."
 
+**Result (2026-11-12):** all 309 rows read. **1,837 of 1,849 values (99.4%) agree** with the parser, so 300 rows are
+labelled. 12 values in 9 rows disagree and wait for Harith (`label --review`, about 5 minutes):
+
+| Rows | What differs |
+|---|---|
+| 5 | the overprinted manufacturer: garbled in the text layer, readable in the picture |
+| 149 | a two-part pack: the parser leaves its 4 split fields empty (family D rule); the picture shows both parts |
+| 210–213 | the S.No's dot spilled into the product cell: the parser's name starts with `. ` |
+| 18, 178 | the same mark, stored as `★` in the PDF, read as `*` from the picture |
+| 249 | the PDF prints **`Absortion`** (sic). The parser copied it; the second reader "corrected" it to `Absorption` |
+
+Row 249 is why a person decides every disagreement: an AI reader tends to read what *should* be printed. Because
+the two readings are compared, that mistake surfaced instead of becoming a label. (99.4% agreement is not the
+parser's accuracy: step 8 scores the parser against the final labels.)
+
 **Caution for Phase 10:** the second reader is itself an AI model, so an LLM extractor tested on these labels is
 compared against labels partly made by another LLM. Phase 10's report should say so.
 
