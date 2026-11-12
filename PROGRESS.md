@@ -230,6 +230,28 @@ Approved 2026-11-12. Plan: `DRUGWATCH_PHASES.md` §9 Phase 3.
       CI installs Java 17 explicitly for `spark/` (`lint.yml`), rather than trusting the runner's default JDK.
       Tests: 10 unit + 1 integration (prefetch's pieces/resume/checksum logic, S3A config, the real lake read).
 - [ ] 2. Normalize text: case, whitespace, punctuation, common abbreviations ("Ltd." → "Limited").
+  - [x] Whitespace (2026-11-12): `clean_text.normalize_whitespace()` collapses runs of spaces/tabs,
+        strips each line's own edges and the whole value's outer edges, and turns non-breaking spaces
+        into regular ones - while deliberately keeping line breaks, including meaningful blank-line
+        separators (one portal `manufacturer` field states the maker, then a blank line, then the
+        separate marketer). Checked against real bronze: **PDF rows were already clean (0 changes,
+        confirming Phase 2's own line-joining); portal rows had 1,533 values fixed** across 9 fields
+        (`failure_reason` 831, `manufacturer` 368, `generic_name` 225, `reported_by` 72, ...).
+        Letter-spacing ("A s s a y") deliberately deferred: real examples mix spaced and normal text
+        on one line and are not always one character per gap, so a blind regex risks corrupting real
+        text; it needs its own careful, separately-tested pass. Case and abbreviation expansion
+        ("Ltd." -> "Limited") not started. Tests: 9 unit (clean_text.py; grounded in the real quirks
+        found above), plus clean_bronze.py as a read-only report script (nothing written to silver/
+        yet: later steps still need to run first).
+  - [ ] **Found, not yet fixed:** 9 of 7,005 portal NSQ rows (alert month 2019-01) have a **wrong
+        `batch_no`** - the portal's own field is stale (reused from an earlier row) or has a stray
+        trailing comma, while the TRUE batch number, manufacturing date, expiry date and manufacturer
+        are embedded correctly in the `manufacturer` field as one combined cell
+        (`"B. No.: X,\nMfg dt: Y, Exp dt: Z, Mfd by: W"`) - the exact format Phase 2's family_d.py
+        already parses for the 2018 PDFs. Likely a CDSCO portal backend bug for this one batch of
+        historical rows, not anything in our pipeline. **Awaiting Harith's decision**: fix now by
+        reusing family_d's split-by-labels logic (trusting the embedded text over the portal's own
+        batch_no/mfg_date/expiry_date when they disagree), or defer to a dedicated follow-up.
 - [ ] 3. Parse dates from all observed formats; validate mfg date < expiry date.
 - [ ] 4. Split product name into brand, generic/salt, strength, dosage form.
 - [ ] 5. **Manufacturer entity resolution** with RapidFuzz: cluster spelling variants into one canonical manufacturer;
@@ -323,3 +345,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-12 | Portal rows: `extraction_method = api`; provenance = raw key + SHA-256, request URL, fetch time, row position; field names shared with PDF records (NSQ `str_product_name` → `generic_name`); newest response per month | ADR 0004 update, `portal_bronze.py` |
 | 2026-11-12 | `label --review`: Harith decides each disagreement (1 = parser, 2 = second reader, or types it); the label records which values a person decided | `label.py` |
 | 2026-11-10 | Eval sample: up to 12 random rows per PDF (seed 2026, 309 rows); split fixed at sampling time by whole PDF, per family (test/validation/train 20/20/60); row ID = file SHA-256 + page + S.No | `eval_set.py`, `eval/manifest.csv` |
+| 2026-11-12 | Whitespace normalization keeps every line break, including blank-line separators (a portal manufacturer field genuinely separates maker from marketer this way); letter-spacing ("A s s a y") deferred to its own pass, as real examples mix spaced/normal text and aren't always one character per gap | `clean_text.py` |
+| 2026-11-12 | Found: 9 portal NSQ rows (2019-01) have a wrong `batch_no` (stale/reused, or a stray trailing comma); the true batch number is embedded in a mis-mapped `manufacturer` field, in the same combined-cell format family_d.py already parses. Awaiting Harith's decision on fixing it now vs deferring | step 2 report |
