@@ -216,7 +216,19 @@ Approved 2026-11-12. Plan: `DRUGWATCH_PHASES.md` §9 Phase 3.
       Strict cp1252 worked everywhere; no unexpected portal fields. If a month is downloaded twice, only the newest
       response is in bronze. A test caught a real bug first (a sidecar key was accepted as a response key). Mapping:
       `docs/data-sources.md` §1b; ADR 0004 update. Tests: 8 unit + 1 integration.
-- [ ] 1. PySpark job reads bronze Parquet.
+- [x] 1. PySpark job reads bronze Parquet.
+      New `spark/` uv project; PySpark 4.2.1 pinned below 4.3 (its Hadoop version can move). Spark reads RustFS
+      directly via Hadoop's S3A connector (`hadoop-aws:3.5.0` + AWS SDK bundle, ADR 0008, Harith's choice).
+      `read_bronze.py` reads a whole bronze folder (recursive, non-partitioned) as one table. **Confirmed against
+      real RustFS: 1,317 PDF rows (44 files, same family split as Phase 2) and 7,005 portal rows (108 files, same
+      split as step 0)**, both with the expected column counts. A test fails if Spark's own Hadoop version ever
+      stops matching the connector. `prefetch.py`: a resumable, checksum-verified downloader for the 686 MB SDK
+      jar, written after a single-stream download kept failing on a slow connection; it primes Maven's local cache
+      so Spark's own resolver finds it there instead of re-downloading (confirmed: `found ... in local-m2-cache`).
+      Fixed one bug a test didn't yet cover: `RUSTFS_ENDPOINT` defaulting differently here than in
+      `RawStore.from_env()` (both now default to `http://localhost:9000`, matching `.env`, which never sets it).
+      CI installs Java 17 explicitly for `spark/` (`lint.yml`), rather than trusting the runner's default JDK.
+      Tests: 10 unit + 1 integration (prefetch's pieces/resume/checksum logic, S3A config, the real lake read).
 - [ ] 2. Normalize text: case, whitespace, punctuation, common abbreviations ("Ltd." → "Limited").
 - [ ] 3. Parse dates from all observed formats; validate mfg date < expiry date.
 - [ ] 4. Split product name into brand, generic/salt, strength, dosage form.
@@ -304,6 +316,10 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-12 | Phase 2 checkpoint: no re-scope (F1 99.6%, no scanned CDSCO PDFs) | extraction report §3.1 |
 | 2026-11-12 | Phase 2 closed (approved by Harith) | — |
 | 2026-11-12 | Phase 3 approved; starts with step 0, portal JSON → bronze | Harith |
+| 2026-11-12 | Spark reads/writes RustFS through hadoop-aws 3.5.0 (S3A) + AWS SDK bundle (686 MB, local only; CI never downloads it); PySpark pinned `>=4.2.1,<4.3` to keep Hadoop 3.5.0 | Harith; ADR 0008 |
+| 2026-11-12 | `spark/` uv project; one shared Spark session in tests (Spark allows one per process); CI installs Java 17 (Temurin) explicitly rather than trusting the runner's default JDK | `spark/`, `lint.yml` |
+| 2026-11-12 | `prefetch.py`: resumable, checksum-verified downloader for the 686 MB AWS SDK jar, after a single-stream download kept failing on a slow link; primes `~/.m2` so Spark's own resolver finds it there first | ADR 0008 |
+| 2026-11-12 | `RUSTFS_ENDPOINT` in `s3a_conf()` defaults to `http://localhost:9000`, matching `RawStore.from_env()` (a test first caught the mismatch: `.env` never sets this variable) | `session.py` |
 | 2026-11-12 | Portal rows: `extraction_method = api`; provenance = raw key + SHA-256, request URL, fetch time, row position; field names shared with PDF records (NSQ `str_product_name` → `generic_name`); newest response per month | ADR 0004 update, `portal_bronze.py` |
 | 2026-11-12 | `label --review`: Harith decides each disagreement (1 = parser, 2 = second reader, or types it); the label records which values a person decided | `label.py` |
 | 2026-11-10 | Eval sample: up to 12 random rows per PDF (seed 2026, 309 rows); split fixed at sampling time by whole PDF, per family (test/validation/train 20/20/60); row ID = file SHA-256 + page + S.No | `eval_set.py`, `eval/manifest.csv` |

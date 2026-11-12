@@ -16,3 +16,7 @@ select = [
 
 [lint.per-file-ignores]
 "**/tests/**" = ["S101"] # pytest uses plain `assert`, which bandit would otherwise flag
+# S310 (audit URL open) fires on every urlopen()/Request() built from a variable, even a fixed
+# module constant (ADR 0008's CENTRAL = Maven Central): it has no way to see the value never
+# comes from input. This file never opens anything but https://repo1.maven.org URLs.
+"spark/src/drugwatch_spark/prefetch.py" = ["S310"]

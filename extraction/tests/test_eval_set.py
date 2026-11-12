@@ -1,8 +1,11 @@
 """eval_set.py: a reproducible sample, splits by whole PDF, a fixed manifest, resumable labels."""
 
+import io
 import os
 from collections import defaultdict
 
+import pyarrow as pa
+import pyarrow.parquet as pq
 import pytest
 
 from drugwatch_extraction.eval_set import (
@@ -115,6 +118,34 @@ def test_labels_append_and_the_latest_label_of_a_row_wins(tmp_path):
 
 def test_no_labels_yet_is_an_empty_set(tmp_path):
     assert load_labels(tmp_path / "missing.jsonl") == {}
+
+
+def test_bronze_files_reads_only_pdf_records_not_portal():
+    # Portal rows (Phase 3 step 0) have no `page`, so sweeping them in here would break row_id().
+    class FakeS3:
+        def __init__(self):
+            self.files = {
+                "cdsco-pdf/a.parquet": pa.Table.from_pylist([{"page": 1}]),
+                "cdsco-portal/nsq/2019-01/b.parquet": pa.Table.from_pylist(
+                    [{"source_dataset": "nsq"}]
+                ),
+            }
+
+        def get_paginator(self, _name):
+            return self
+
+        def paginate(self, Bucket, Prefix=""):  # noqa: N803 (boto3's own argument names)
+            keys = [k for k in self.files if k.startswith(Prefix)]
+            return [{"Contents": [{"Key": k} for k in keys]}]
+
+        def get_object(self, Bucket, Key):  # noqa: N803
+            sink = pa.BufferOutputStream()
+            pq.write_table(self.files[Key], sink)
+            return {"Body": io.BytesIO(sink.getvalue().to_pybytes())}
+
+    files = bronze_files(FakeS3())
+
+    assert files == [[{"page": 1}]]  # the portal file was never listed, let alone read
 
 
 @pytest.mark.integration

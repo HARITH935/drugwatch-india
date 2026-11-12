@@ -1,0 +1,31 @@
+# Python project for the Phase 3 cleaning jobs (bronze -> silver) with PySpark. Managed by uv (ADR 0005).
+[project]
+name = "drugwatch-spark"
+version = "0.1.0"
+description = "PySpark jobs that clean the bronze CDSCO records into silver"
+authors = [
+    { name = "Harith", email = "181994424+HARITH935@users.noreply.github.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    # Pinned below 4.3: a minor release can move Spark to a new Hadoop version, and the S3A
+    # connector (hadoop-aws, session.py) must match it exactly (ADR 0008).
+    "pyspark>=4.2.1,<4.3",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.4", # lint + format rules live in the repo-root ruff.toml
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: needs the local RustFS with the real bronze/ data (skipped when its credentials aren't set)",
+]

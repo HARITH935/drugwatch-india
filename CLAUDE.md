@@ -165,6 +165,11 @@ uv run --env-file ../.env python -m drugwatch_extraction.evaluate        # parse
 uv run --env-file ../.env python -m drugwatch_extraction.portal_bronze --all   # portal JSON -> bronze/cdsco-portal/
 # (eval_set --sample drew eval/manifest.csv once; it refuses to redraw)
 uv run --env-file ../.env python -m drugwatch_extraction.second_reader --render|--compare   # AI-assisted labels
+
+# Spark (from spark/, RustFS up; needs Java 17+). First S3 run only: prefetch avoids a risky 686 MB
+# single-stream download on a slow link (resumable pieces, SHA-256 checked; ADR 0008).
+uv run python -m drugwatch_spark.prefetch                         # once per machine, no .env needed
+uv run --env-file ../.env python -m drugwatch_spark.read_bronze   # Spark reads both bronze datasets, prints counts
 ```
 
 **Local service ports** (all bound to 127.0.0.1; Postgres and Redis are shifted so they don't clash with OpsPilot):

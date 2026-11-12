@@ -23,15 +23,23 @@ jobs:
 
   python:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20 # spark/: installing PySpark (450 MB) is slow until uv's cache is warm
     strategy:
       matrix:
-        project: [ingestion, extraction] # add spark, ml ... here as each Python folder appears
+        project: [ingestion, extraction, spark] # add ml ... here as each Python folder appears
     defaults:
       run:
         working-directory: ${{ matrix.project }} # every `run:` step below starts in this folder
     steps:
       - uses: actions/checkout@v7
+
+      # spark/ only: PySpark 4.x needs Java 17+ (ADR 0008). The runner's own default JDK isn't
+      # guaranteed to be 17, so this installs one explicitly rather than relying on it.
+      - if: matrix.project == 'spark'
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: "17"
 
       # Pinned to a full commit SHA (this action publishes no floating v10 tag); a SHA can't be re-pointed.
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3

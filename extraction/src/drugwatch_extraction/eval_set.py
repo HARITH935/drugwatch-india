@@ -132,11 +132,12 @@ def append_label(path: Path, label: dict) -> None:
         os.fsync(f.fileno())  # on disk before the next row starts: a crash loses at most one row
 
 
-def bronze_files(s3: Any) -> list[list[dict]]:
-    """Every bronze file's records."""
+def bronze_files(s3: Any, prefix: str = "cdsco-pdf/") -> list[list[dict]]:
+    """Every bronze PDF file's records (not cdsco-portal/: the eval set is about PDF extraction;
+    portal rows have no `page`, so row_id() would fail on them)."""
     keys = [
         obj["Key"]
-        for page in s3.get_paginator("list_objects_v2").paginate(Bucket=BUCKET)
+        for page in s3.get_paginator("list_objects_v2").paginate(Bucket=BUCKET, Prefix=prefix)
         for obj in page.get("Contents", [])
         if obj["Key"].endswith(".parquet")
     ]
