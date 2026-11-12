@@ -263,6 +263,22 @@ Approved 2026-11-12. Plan: `DRUGWATCH_PHASES.md` §9 Phase 3.
         zero trailing-comma leftovers, so family_d.py itself is untouched. Tests: 10 unit (including the
         real PT-180905 and double-comma cases).
 - [ ] 3. Parse dates from all observed formats; validate mfg date < expiry date.
+  - [x] Portal dates (2026-11-12): `parse_dates.parse_portal_dates()`. Checked first, before writing
+        code: portal `mfg_date`/`expiry_date` are **one shape in 100% of ~13,780 real values**
+        (`"Mon-YYYY"`, e.g. `"Aug-2017"`); PDF dates are not (30-40 shapes - 2-digit vs 4-digit years,
+        `DD-MM-YYYY`, letter-spaced, split across a line break, Excel day numbers, textual expiry
+        rules like "5 Yrs from the date of Mfg."), several overlapping the letter-spacing problem
+        already deferred in step 2. Scoped to **portal only** for this slice; PDF dates need their own
+        careful, separately-evidenced pass.
+        Adds `mfg_date_parsed`/`expiry_date_parsed` (real dates; the original text columns are kept,
+        not overwritten) and `dates_valid` (true/false/null - null when a date is missing or didn't
+        parse, never guessed). **Verified against all real portal rows: 6,892/6,892 and 6,889/6,889
+        present values parsed (100%).** Found, not fixed (the plan says *validate*, not correct): **16
+        of 6,876 rows have mfg_date on or after expiry_date** - a real CDSCO/portal data issue, e.g. a
+        manufacturing date a full year after its own expiry date.
+        Found before shipping: Spark 4's `to_date()` is strict (ANSI mode) and **crashes the whole job**
+        on the first unparseable value instead of returning null; switched to `try_to_date()`. Tests: 6
+        unit (a real parse, the original text kept, the real mfg>=expiry examples, null-safety, case).
 - [ ] 4. Split product name into brand, generic/salt, strength, dosage form.
 - [ ] 5. **Manufacturer entity resolution** with RapidFuzz: cluster spelling variants into one canonical manufacturer;
       keep a reviewed mapping table.
@@ -358,3 +374,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-12 | Whitespace normalization keeps every line break, including blank-line separators (a portal manufacturer field genuinely separates maker from marketer this way); letter-spacing ("A s s a y") deferred to its own pass, as real examples mix spaced/normal text and aren't always one character per gap | `clean_text.py` |
 | 2026-11-12 | Fixed: 9 portal NSQ rows (2019-01) with a wrong `batch_no` (stale/reused, or a stray trailing comma), by re-deriving batch_no/mfg_date/expiry_date/manufacturer from the embedded combined cell; trigger is the label pattern, not hardcoded row numbers | Harith; `fix_portal_batch.py` |
 | 2026-11-12 | `split_combined_cell()` strips a whole run of trailing commas/whitespace (`strip(" \t\n,")`), not just one (`removesuffix(",")`): one real row has a double comma before the next label. Checked: Phase 2's shipped family_d.py / PDF bronze is unaffected (0 of 77 rows have the issue), so it is left as-is | `fix_portal_batch.py` |
+| 2026-11-12 | Date parsing (step 3) scoped to portal dates first: one clean shape covers 100% of real values, vs 30-40 PDF shapes needing their own pass; `mfg_date_parsed`/`expiry_date_parsed` added alongside the original text (not overwritten), plus a nullable `dates_valid` flag that is never guessed | `parse_dates.py` |
+| 2026-11-12 | `try_to_date()`, not `to_date()`: Spark 4's ANSI mode makes `to_date()` crash the whole job on one unparseable value instead of returning null; found before shipping, not during a real run | `parse_dates.py` |
