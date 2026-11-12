@@ -243,15 +243,25 @@ Approved 2026-11-12. Plan: `DRUGWATCH_PHASES.md` §9 Phase 3.
         ("Ltd." -> "Limited") not started. Tests: 9 unit (clean_text.py; grounded in the real quirks
         found above), plus clean_bronze.py as a read-only report script (nothing written to silver/
         yet: later steps still need to run first).
-  - [ ] **Found, not yet fixed:** 9 of 7,005 portal NSQ rows (alert month 2019-01) have a **wrong
-        `batch_no`** - the portal's own field is stale (reused from an earlier row) or has a stray
-        trailing comma, while the TRUE batch number, manufacturing date, expiry date and manufacturer
-        are embedded correctly in the `manufacturer` field as one combined cell
-        (`"B. No.: X,\nMfg dt: Y, Exp dt: Z, Mfd by: W"`) - the exact format Phase 2's family_d.py
+  - [x] **Found and fixed** (2026-11-12, Harith's decision): 9 of 7,005 portal NSQ rows (alert month
+        2019-01) had a **wrong `batch_no`** - the portal's own field was stale (reused from an earlier
+        row) or had a stray trailing comma, while the TRUE batch number, manufacturing date, expiry
+        date and manufacturer were sitting correctly inside the `manufacturer` field as one combined
+        cell (`"B. No.: X,\nMfg dt: Y, Exp dt: Z, Mfd by: W"`) - the exact format Phase 2's family_d.py
         already parses for the 2018 PDFs. Likely a CDSCO portal backend bug for this one batch of
-        historical rows, not anything in our pipeline. **Awaiting Harith's decision**: fix now by
-        reusing family_d's split-by-labels logic (trusting the embedded text over the portal's own
-        batch_no/mfg_date/expiry_date when they disagree), or defer to a dedicated follow-up.
+        historical rows, not anything in our pipeline.
+        `fix_portal_batch.py` reimplements family_d's split-by-labels rule (not imported, so Spark jobs
+        don't pull in pdfplumber for one small pure-text function) and overwrites batch_no/mfg_date/
+        expiry_date/manufacturer wherever the pattern matches - the trigger is the pattern itself, not
+        a hardcoded list of 9 rows, so it also catches a recurrence elsewhere. **Verified against real
+        data: all 9 rows corrected** (e.g. a row the portal had wrongly stamped `8S17004,` now reads its
+        real batch `PT-180905`). A second bug found along the way and fixed too: one row's source text
+        has a stray double comma (`"08/2018,               , Exp dt:"`); the original single
+        `removesuffix(",")` logic (inherited from family_d.py) left one comma behind, so this module
+        uses `strip(" \t\n,")` instead, which removes a whole run in one pass. **Checked and confirmed
+        this doesn't affect Phase 2's shipped, closed PDF work**: all 77 real family-D PDF rows have
+        zero trailing-comma leftovers, so family_d.py itself is untouched. Tests: 10 unit (including the
+        real PT-180905 and double-comma cases).
 - [ ] 3. Parse dates from all observed formats; validate mfg date < expiry date.
 - [ ] 4. Split product name into brand, generic/salt, strength, dosage form.
 - [ ] 5. **Manufacturer entity resolution** with RapidFuzz: cluster spelling variants into one canonical manufacturer;
@@ -346,4 +356,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-12 | `label --review`: Harith decides each disagreement (1 = parser, 2 = second reader, or types it); the label records which values a person decided | `label.py` |
 | 2026-11-10 | Eval sample: up to 12 random rows per PDF (seed 2026, 309 rows); split fixed at sampling time by whole PDF, per family (test/validation/train 20/20/60); row ID = file SHA-256 + page + S.No | `eval_set.py`, `eval/manifest.csv` |
 | 2026-11-12 | Whitespace normalization keeps every line break, including blank-line separators (a portal manufacturer field genuinely separates maker from marketer this way); letter-spacing ("A s s a y") deferred to its own pass, as real examples mix spaced/normal text and aren't always one character per gap | `clean_text.py` |
-| 2026-11-12 | Found: 9 portal NSQ rows (2019-01) have a wrong `batch_no` (stale/reused, or a stray trailing comma); the true batch number is embedded in a mis-mapped `manufacturer` field, in the same combined-cell format family_d.py already parses. Awaiting Harith's decision on fixing it now vs deferring | step 2 report |
+| 2026-11-12 | Fixed: 9 portal NSQ rows (2019-01) with a wrong `batch_no` (stale/reused, or a stray trailing comma), by re-deriving batch_no/mfg_date/expiry_date/manufacturer from the embedded combined cell; trigger is the label pattern, not hardcoded row numbers | Harith; `fix_portal_batch.py` |
+| 2026-11-12 | `split_combined_cell()` strips a whole run of trailing commas/whitespace (`strip(" \t\n,")`), not just one (`removesuffix(",")`): one real row has a double comma before the next label. Checked: Phase 2's shipped family_d.py / PDF bronze is unaffected (0 of 77 rows have the issue), so it is left as-is | `fix_portal_batch.py` |

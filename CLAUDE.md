@@ -171,6 +171,7 @@ uv run --env-file ../.env python -m drugwatch_extraction.second_reader --render|
 uv run python -m drugwatch_spark.prefetch                         # once per machine, no .env needed
 uv run --env-file ../.env python -m drugwatch_spark.read_bronze   # Spark reads both bronze datasets, prints counts
 uv run --env-file ../.env python -m drugwatch_spark.clean_bronze  # whitespace-cleaning report (read-only; step 2)
+uv run --env-file ../.env python -m drugwatch_spark.fix_portal_batch  # 9 portal rows w/ a wrong batch_no: before/after
 ```
 
 **Local service ports** (all bound to 127.0.0.1; Postgres and Redis are shifted so they don't clash with OpsPilot):
