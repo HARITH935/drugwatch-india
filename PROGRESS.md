@@ -2,7 +2,7 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 2 — PDF extraction 🟨 **in progress** (approved 2026-11-08).
+**Current phase:** Phase 2 ✅ done (closed 2026-11-12). Phase 3 — Cleaning (bronze → silver) ⬜ **waiting for approval**.
 
 ---
 
@@ -12,7 +12,7 @@ Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWA
 |---|---|---|
 | 0 | Setup | ✅ Done |
 | 1 | Source discovery | ✅ Done |
-| 2 | PDF extraction ⚠️ checkpoint | 🟨 In progress |
+| 2 | PDF extraction ⚠️ checkpoint | ✅ Done |
 | 3 | Cleaning (bronze → silver) | ⬜ Not started |
 | 4 | Warehouse (gold) | ⬜ Not started |
 | 5 | Automation | ⬜ Not started |
@@ -174,7 +174,7 @@ Final inventory 2026-11-07: **322 files, 153.5 MB, every SHA-256 re-checked, no 
       fields refused). **44 files, 1,317 rows, 759 KB**, read back from RustFS with identical schema. Fixed an exit-time
       hang in Arrow's thread pools on macOS by reading single-threaded from an Arrow buffer (0 pool threads; 4/4 runs
       exit). Portal JSON → bronze is a separate later step (Harith's choice). Tests: 7 unit + 1 integration.
-- [ ] 7. Create a **labelled eval set**: ~300 rows labelled by hand, sampled across months and layouts.
+- [x] 7. Create a **labelled eval set**: ~300 rows labelled by hand, sampled across months and layouts.
   - [x] Labelling kit (2026-11-10): `eval_set.py` draws the sample (up to 12 random rows per PDF, seed 2026: **309 rows**,
         all 44 PDFs, 28 months, 6 families) and fixes the split by whole PDF (train 187 / validation 53 / test 69) in
         `extraction/eval/manifest.csv` (row IDs only; refuses to be overwritten). `label.py`: terminal tool that opens the
@@ -188,10 +188,21 @@ Final inventory 2026-11-07: **322 files, 153.5 MB, every SHA-256 re-checked, no 
         (`label --review`). Pilot rows 1–10: 59 of 60 values agree; the 1 disagreement is the parser's overprint error.
         All 309 read (2026-11-12): 1,837 of 1,849 values agree, 300 rows labelled; 12 values in 9 rows wait for Harith
         (`label --review`). Row 249: the second reader "corrected" a CDSCO typo (`Absortion`); the comparison caught it.
-- [ ] 8. Measure rule-based parser accuracy against the labelled eval set (field-level precision/recall/F1).
+  - [x] Harith decided all 12 disagreeing values (2026-11-12): **309 of 309 rows labelled**. Consistency check: rows
+        18 and 210–212 had been decided differently from identical cases (rows 178, 213); with Harith's approval Claude
+        aligned them (recorded in each label as `decided_note`). Labels backed up to Harith's iCloud Drive.
+- [x] 8. Measure rule-based parser accuracy against the labelled eval set (field-level precision/recall/F1).
+      `evaluate.py`: **baseline F1 99.6%** (P 99.7%, R 99.5%; 1,846 values). Test split 99.5%; low-confidence rows in
+      the test split 92.3% (only 6 rows: thin for Phase 10). All 9 errors known: two-part pack (4), overprint (1),
+      stray serial dot (4, flagged high: the confidence flag misses it). Extraction report §3.1. Regression test guards
+      the baseline. 8 unit + 1 integration test.
 
 **Done when:** parser runs across the whole archive and baseline F1 is recorded.
 **Checkpoint decision:** if extraction quality is too low or PDFs are mostly scanned images, re-scope here.
+
+**Phase 2 Done-when check (2026-11-12):** ✅ the parser runs across the whole archive (44 PDFs → 1,317 records →
+44 bronze Parquet files); ✅ baseline F1 recorded (99.6%, extraction report §3.1). Checkpoint: quality is high and no
+PDF is scanned, so no re-scope. **Phase 2 closed with Harith's approval, 2026-11-12.**
 
 ---
 
@@ -260,5 +271,8 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-10 | Eval-set labels stay in git-ignored `data/eval-set/` with Harith's private backup; the repo holds only code, guide and a manifest of row IDs (ADR 0003) | Harith; `docs/eval-set.md` §2 |
 | 2026-11-11 | Eval-set labels made by AI-assisted double reading (parser vs Claude reading the row picture blind); Harith decides every disagreement; reported as such | Harith; `docs/eval-set.md` §1b |
 | 2026-11-11 | Labelling tool: keys typed before a question appears are discarded; rows answered in under 8 s are asked again | `label.py` |
+| 2026-11-12 | Scoring rule: values compared with spaces and line breaks removed; a wrong value counts as FP and FN; blank labels count only invented text; unreadable labels not scored; pooled (micro) over all values | `evaluate.py`, extraction report §3.1 |
+| 2026-11-12 | Phase 2 checkpoint: no re-scope (F1 99.6%, no scanned CDSCO PDFs) | extraction report §3.1 |
+| 2026-11-12 | Phase 2 closed (approved by Harith) | — |
 | 2026-11-12 | `label --review`: Harith decides each disagreement (1 = parser, 2 = second reader, or types it); the label records which values a person decided | `label.py` |
 | 2026-11-10 | Eval sample: up to 12 random rows per PDF (seed 2026, 309 rows); split fixed at sampling time by whole PDF, per family (test/validation/train 20/20/60); row ID = file SHA-256 + page + S.No | `eval_set.py`, `eval/manifest.csv` |

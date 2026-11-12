@@ -269,4 +269,53 @@ call: the test failed). Writing never started pool threads.
 validation 53 / test 69 rows. Design, split rules and the labelling guide: `docs/eval-set.md`. Labelling by Harith:
 pre-filled values checked against a picture of the PDF page. Labels stay local (ADR 0003).
 
-To come (step 8): field-level precision, recall and F1.
+**Labels:** AI-assisted double reading (the parser's text layer vs Claude reading a picture of each row, blind to the
+parser); all 12 disagreeing values decided by Harith; 309 of 309 rows labelled. Method and caveats: `docs/eval-set.md`.
+
+### 3.1 Baseline (step 8, 2026-11-12)
+
+`extraction/src/drugwatch_extraction/evaluate.py`. Each labelled value is compared with the parser's bronze value,
+spaces and line breaks ignored: equal = TP; wrong = FP + FN (invented and missed); empty = FN; text where the cell is
+blank = FP; unreadable labels are not scored; a row the parser lost counts every value as FN. Pooled over all values:
+
+| | TP | FP | FN | Precision | Recall | **F1** |
+|---|---|---|---|---|---|---|
+| **All 309 rows (1,846 values)** | 1,832 | 5 | 9 | 99.7% | 99.5% | **99.6%** |
+| Test split (69 rows) | 402 | 0 | 4 | 100.0% | 99.0% | 99.5% |
+| Low-confidence rows, all splits | 161 | 1 | 5 | 99.4% | 97.0% | 98.2% |
+| **Low-confidence rows, test split (Phase 10's target)** | 24 | 0 | 4 | 100.0% | 85.7% | **92.3%** |
+
+| Field | F1 | | Family | F1 |
+|---|---|---|---|---|
+| product_name | 98.7% | | A vaccine lists | 99.0% |
+| batch_no | 99.8% | | B NSQ lists | 99.7% |
+| mfg_date | 99.8% | | C spurious / combined | 100.0% |
+| expiry_date | 99.8% | | D combined 2018 | 98.6% |
+| manufacturer | 99.5% | | E bulk vaccine file | 100.0% |
+| failure_reason | 100.0% | | F spurious Apr 2024 | 100.0% |
+
+**All 9 wrong or missing values** (3 causes, all known before step 8):
+
+| Rows | Values | Cause | Confidence flag |
+|---|---|---|---|
+| 149 (family D, test) | 4 FN | two-part pack: split fields left empty by design (§2.5) | low ✓ |
+| 5 (family A, train) | 1 FP+FN | overprinted manufacturer: text layer garbled (§2.4) | low ✓ |
+| 210–213 (family B, train) | 4 FP+FN | the S.No's dot sits in the product cell's text (`. Pedxim-200`), hidden under the border in print (§2.1) | **high ✗** |
+
+**What the baseline says, and doesn't:**
+- The rule parser puts the right text in the right field for 99.6% of values. It does not measure cleaning: dates,
+  placeholders and Excel day numbers are scored as printed; turning them into values is Phase 3.
+- **The confidence flag misses one error type:** the stray dot (4 values) sits in rows flagged high. A check for a
+  name starting with `.` would catch it. All 4 rows are in the train split, so fixing it doesn't touch the test split;
+  any parser change after this baseline is reported separately from it.
+- **Phase 10's target is thin:** only 6 low-confidence rows (28 values) are in the test split, and all 4 errors come
+  from one row. Phase 10 should label more low-confidence rows from test-split PDFs before claiming a win.
+- The labels come from two readings agreeing; an error both readings make the same way would be missed. That is unlikely
+  (text layer vs picture), and the second reader's own slips surfaced as disagreements (row 249: it "corrected" a
+  CDSCO typo).
+- The sample is 12 rows per PDF, so small layouts weigh more than in the archive (family B: 74% of the sample, 89% of
+  the archive). B scores 99.7%, so weighting by archive share would barely move the total.
+
+**Checkpoint decision (plan §9):** extraction quality is high and no CDSCO PDF is scanned, so no re-scope is needed.
+Run: `uv run --env-file ../.env python -m drugwatch_extraction.evaluate`. A local regression test fails if the overall
+F1 drops below 99.6%.
