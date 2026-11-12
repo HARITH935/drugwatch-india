@@ -139,6 +139,22 @@ Quirks:
 - No `ETag` or `Last-Modified` headers, so the only way to detect a change is to download and compare hashes.
   (Sep-2026 fetched on 2026-11-04 and 2026-11-05 was byte-identical.)
 
+**In bronze (Phase 3 step 0, 2026-11-12):** `bronze/cdsco-portal/<tab>/<YYYY-MM>/<sha256>.parquet`, 108 months, 7,005
+rows, `extraction_method = api`. Strict cp1252 decoding worked for every response. Field names as in the PDF records:
+
+| Portal field | Bronze field | Note |
+|---|---|---|
+| `str_product_name` (NSQ) | `generic_name` | the generic name only; the brand is separate |
+| `product_name_from_dtl` (spurious) | `product_name` | the whole product cell, as in the PDFs |
+| `str_brand_name` | `brand_name` | spurious rows: almost always `NA` |
+| `str_batch_no`, `dt_manufacturing_date`, `dt_expiry_date` | `batch_no`, `mfg_date`, `expiry_date` | as sent |
+| `str_manufactured_by` | `manufacturer` | name + address. **Spurious tab: the name on the fake pack** (42 of 49 say "Under Investigation"); never count it against that company |
+| `str_nsq_result` | `failure_reason` | |
+| `str_reporting_source`, `str_reported_by_lab_or_state` | `reporting_source`, `reported_by` | |
+| `dt_reporting_month_year` | `reporting_month` | `SEP-2026` |
+| `str_nsq_remarks`, `str_firm_reply` | `remarks`, `firm_reply` | spurious only |
+| `str_spurious_manufacturer_name`, `str_spurious_manufactured_by` | same names without `str_` | the faker, once identified (so far "Under Investigation") |
+
 ---
 
 ## 2. NPPA ceiling prices

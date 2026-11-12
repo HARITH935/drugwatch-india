@@ -280,7 +280,7 @@ RustFS has three buckets (`raw`, `bronze`, `silver`); gold lives in Postgres. db
 | source_file | text | PDF name in RustFS |
 | source_page | int | Page number |
 | source_url | text | Link to original document |
-| extraction_method | text | rule / llm |
+| extraction_method | text | rule / llm / api (portal rows, ADR 0004) |
 
 **`fact_price`** — one row per drug price record
 

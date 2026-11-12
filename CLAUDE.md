@@ -162,6 +162,7 @@ uv run --env-file ../.env python -m drugwatch_extraction.bronze --all    # same,
 uv run --env-file ../.env python -m drugwatch_extraction.label           # label eval-set rows (guide: docs/eval-set.md; --redo N)
 uv run --env-file ../.env python -m drugwatch_extraction.label --review  # decide parser-vs-second-reader disagreements
 uv run --env-file ../.env python -m drugwatch_extraction.evaluate        # parser precision/recall/F1 vs the labels
+uv run --env-file ../.env python -m drugwatch_extraction.portal_bronze --all   # portal JSON -> bronze/cdsco-portal/
 # (eval_set --sample drew eval/manifest.csv once; it refuses to redraw)
 uv run --env-file ../.env python -m drugwatch_extraction.second_reader --render|--compare   # AI-assisted labels
 ```

@@ -2,7 +2,7 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 2 ✅ done (closed 2026-11-12). Phase 3 — Cleaning (bronze → silver) ⬜ **waiting for approval**.
+**Current phase:** Phase 3 — Cleaning (bronze → silver) 🟨 **in progress** (approved 2026-11-12).
 
 ---
 
@@ -13,7 +13,7 @@ Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWA
 | 0 | Setup | ✅ Done |
 | 1 | Source discovery | ✅ Done |
 | 2 | PDF extraction ⚠️ checkpoint | ✅ Done |
-| 3 | Cleaning (bronze → silver) | ⬜ Not started |
+| 3 | Cleaning (bronze → silver) | 🟨 In progress |
 | 4 | Warehouse (gold) | ⬜ Not started |
 | 5 | Automation | ⬜ Not started |
 | 6 | Analytics | ⬜ Not started |
@@ -206,6 +206,35 @@ PDF is scanned, so no re-scope. **Phase 2 closed with Harith's approval, 2026-11
 
 ---
 
+## Phase 3 — Cleaning (bronze → silver)
+
+Approved 2026-11-12. Plan: `DRUGWATCH_PHASES.md` §9 Phase 3.
+
+- [x] 0. Portal JSON → bronze (carried over from Phase 2 step 6, Harith's choice): one Parquet file per downloaded
+      month, cp1252-decoded, shared field names, `extraction_method = api`, provenance without page numbers.
+      `portal_bronze.py`: **108 months → 7,005 rows** (6,956 NSQ + 49 spurious), read back with identical schema, 3 s.
+      Strict cp1252 worked everywhere; no unexpected portal fields. If a month is downloaded twice, only the newest
+      response is in bronze. A test caught a real bug first (a sidecar key was accepted as a response key). Mapping:
+      `docs/data-sources.md` §1b; ADR 0004 update. Tests: 8 unit + 1 integration.
+- [ ] 1. PySpark job reads bronze Parquet.
+- [ ] 2. Normalize text: case, whitespace, punctuation, common abbreviations ("Ltd." → "Limited").
+- [ ] 3. Parse dates from all observed formats; validate mfg date < expiry date.
+- [ ] 4. Split product name into brand, generic/salt, strength, dosage form.
+- [ ] 5. **Manufacturer entity resolution** with RapidFuzz: cluster spelling variants into one canonical manufacturer;
+      keep a reviewed mapping table.
+- [ ] 6. Map failure reasons into standard categories (Assay, Dissolution, Sterility, Description, Particulate,
+      Spurious, Other).
+- [ ] 7. Deduplicate repeated rows across central and state lists.
+- [ ] 8. Great Expectations suite: required fields not null, valid dates, batch number format, category values in
+      allowed set, row counts within expected range.
+- [ ] 9. **Pandas vs PySpark benchmark:** run the same cleaning job in both on the full archive; record runtime and peak
+      memory in `docs/benchmarks.md`.
+
+**Done when:** silver data passes all GE checks, manufacturer duplicates are resolved, and the Pandas vs PySpark
+benchmark is recorded.
+
+---
+
 Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when each phase starts.
 
 ---
@@ -274,5 +303,7 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-12 | Scoring rule: values compared with spaces and line breaks removed; a wrong value counts as FP and FN; blank labels count only invented text; unreadable labels not scored; pooled (micro) over all values | `evaluate.py`, extraction report §3.1 |
 | 2026-11-12 | Phase 2 checkpoint: no re-scope (F1 99.6%, no scanned CDSCO PDFs) | extraction report §3.1 |
 | 2026-11-12 | Phase 2 closed (approved by Harith) | — |
+| 2026-11-12 | Phase 3 approved; starts with step 0, portal JSON → bronze | Harith |
+| 2026-11-12 | Portal rows: `extraction_method = api`; provenance = raw key + SHA-256, request URL, fetch time, row position; field names shared with PDF records (NSQ `str_product_name` → `generic_name`); newest response per month | ADR 0004 update, `portal_bronze.py` |
 | 2026-11-12 | `label --review`: Harith decides each disagreement (1 = parser, 2 = second reader, or types it); the label records which values a person decided | `label.py` |
 | 2026-11-10 | Eval sample: up to 12 random rows per PDF (seed 2026, 309 rows); split fixed at sampling time by whole PDF, per family (test/validation/train 20/20/60); row ID = file SHA-256 + page + S.No | `eval_set.py`, `eval/manifest.csv` |

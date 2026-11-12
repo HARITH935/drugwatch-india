@@ -65,3 +65,11 @@ NSQ lists in PDF begin in Apr 2024, and the portal also holds the vaccine rows (
 the decision: the portal is the primary source; the PDFs add unique history only before 2019 (six vaccine lists, two
 full drug lists from 2018, the bulk vaccine file), and Phase 2's extraction benchmark is the Apr 2024 – Jun 2025 PDFs.
 Details: `docs/data-sources.md` §7.1.
+
+## Update 2026-11-12: portal rows in bronze (Phase 3 step 0)
+
+The open schema question is settled: portal rows carry **`extraction_method = "api"`** (the plan's values are now
+`rule` / `llm` / `api`). Their provenance is the raw key and SHA-256, the request URL with its month parameter, the
+download time and the row's position in the response; there is no page number. `extraction/.../portal_bronze.py`
+writes one Parquet file per month (the newest response, if a month was downloaded twice), decoded strictly as
+cp1252, with field names shared with the PDF records where the meaning is the same. 108 months → 7,005 rows.
