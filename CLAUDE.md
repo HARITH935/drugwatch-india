@@ -177,6 +177,7 @@ uv run --env-file ../.env python -m drugwatch_spark.parse_pdf_dates  # same, for
 uv run --env-file ../.env python -m drugwatch_spark.dosage_form   # dosage form from product names (88.9% filled)
 uv run --env-file ../.env python -m drugwatch_spark.strength      # strengths as a list (38.0% of names print one)
 uv run --env-file ../.env python -m drugwatch_spark.brand_generic # brand vs generic, only where unambiguous (~20-27%)
+uv run --env-file ../.env python -m drugwatch_spark.manufacturer_name  # strip address, expand Pvt./Ltd. (~95-98%)
 ```
 
 **Local service ports** (all bound to 127.0.0.1; Postgres and Redis are shifted so they don't clash with OpsPilot):

@@ -371,6 +371,39 @@ Approved 2026-11-12. Plan: `DRUGWATCH_PHASES.md` §9 Phase 3.
         the matching test fail each time.
 - [ ] 5. **Manufacturer entity resolution** with RapidFuzz: cluster spelling variants into one canonical manufacturer;
       keep a reviewed mapping table.
+      Plan agreed with Harith (2026-11-13): piece 1 cleans the name (strip the address, expand
+      abbreviations); piece 2 finds look-alikes with RapidFuzz; piece 3 is Harith's own review of
+      the borderline pairs, same as the eval-set labelling - a missed merge is better than a wrong
+      merge (CLAUDE.md Section 5). This is also where step 2's deferred case/abbreviation work and
+      step 4 piece 3's brand/generic split actually pay off.
+  - [x] Piece 1, clean the name (2026-11-13): `manufacturer_name.clean_manufacturer_name()` ->
+        `manufacturer_name`/`manufacturer_address`. The `manufacturer` field holds the company name
+        AND its full postal address in one string. Checked against all 8,271 real values first:
+        - Boundary: the first comma (97.4% of values have one); where there is no comma but a
+          legal suffix (Pvt. Ltd., Limited, LLP) is found, its end is the boundary instead.
+        - `"(A Unit of ...)"`/`"(A Division of ...)"`/`"(A Subsidiary of ...)"` right after that
+          boundary is identifying information, not address (49 real occurrences, 2 real companies);
+          the real boundary is pushed to the next comma, past that aside.
+        - **74 of 8,271 values (0.9%) have neither a comma nor a legal suffix anywhere** - no
+          reliable signal to cut on. Left whole (name = full text, address = null) rather than
+          guessed; a few of these are also letter-spaced, the same problem deferred in step 2.
+        - Placeholders (`"Spurious"`, `"Not applicable"`, `"Under Investigation"`, ...) -> both
+          null. The portal spurious tab's own manufacturer is the name on a **fake** pack
+          (CLAUDE.md Section 6) and in the real data is **always** exactly `"Under Investigation"`
+          anyway, so this rule already keeps it out without any special-casing.
+        `M/s.` stripped (4 real spacing/punctuation variants); `Pvt.`/`Ltd.` spelled out. **Case
+        left exactly as printed, not title-cased**: real names mix ALL CAPS with mixed case, and
+        some ALL CAPS names are genuine acronyms (`"JKMSCL"`) that title-casing would turn into
+        `"Jkmscl"` - worse to read and unnecessary, since piece 2's RapidFuzz call can compare
+        case-insensitively on its own.
+        **Found and fixed before shipping**: the same regex bug as `brand_generic.py`'s PHARMA
+        pattern - `\bLtd\.?\b` matches only `"Ltd"` (not its own period) when a non-word character
+        immediately follows, because `\b` needs a transition and `.` next to a comma is non-word
+        on both sides. Fixed with `(?!\w)` instead of the trailing `\b`, everywhere a pattern ends
+        in an optional period.
+        **Verified on real data: 94.8% of PDF values, 97.8% of portal values split into a name and
+        address.** Tests: 10 unit; a mutation check of all 4 rules (ownership aside, suffix
+        fallback, placeholder, `M/s.` stripping) made exactly the matching test fail each time.
 - [ ] 6. Map failure reasons into standard categories (Assay, Dissolution, Sterility, Description, Particulate,
       Spurious, Other).
 - [ ] 7. Deduplicate repeated rows across central and state lists.
@@ -472,3 +505,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-13 | Strengths: a list of every mention as printed (repeats kept, since real combinations share values); slash = "per" only before ml or per-gram; bare ml skipped (bottle size), bare g only for injections, numbers glued to a letter skipped | `strength.py` |
 | 2026-11-13 | Brand/generic split only where exactly one bracket group exists AND a pharmacopoeia marker (IP/BP/USP) sits on exactly one side; a dosage-form-word signal was tried first and rejected (29.5% ambiguous vs 1.9%) | `brand_generic.py` |
 | 2026-11-13 | Found by reading the real split output, not assumed safe: a "brand" that was just the strength (52 cases) or a second synonym description ("Ringer Lactate Solution for Injection", 29 cases) - both rejected by name, not by blocklist, so the rule generalizes | `brand_generic.py` |
+| 2026-11-13 | Manufacturer step 5 split into 3 pieces (clean name, RapidFuzz match, Harith reviews borderline pairs); piece 1 cuts the address at the first comma or legal suffix, keeps an "(A Unit of...)" aside as part of the name, and leaves the 0.9% with no boundary signal whole rather than guessed | Harith; `manufacturer_name.py` |
+| 2026-11-13 | Manufacturer name case is left exactly as printed, not title-cased: some ALL CAPS names are real acronyms ("JKMSCL") that title-casing would wrongly mangle; case-insensitive comparison is left to RapidFuzz's own processor in piece 2 | `manufacturer_name.py` |
