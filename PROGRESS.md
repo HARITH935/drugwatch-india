@@ -339,6 +339,36 @@ Approved 2026-11-12. Plan: `DRUGWATCH_PHASES.md` §9 Phase 3.
         38.5%); the rest print none with a unit (brand numbers like "Telzasig 20" are not guessed).
         Tests: 28 unit; a mutation check of the four main rules (bare ml, gram only for injections,
         glued numbers, slash = "per") made exactly the matching test fail each time.
+  - [x] Piece 3, brand vs generic (2026-11-13, the hardest piece, on purpose last): `brand_generic
+        .split_brand_generic()` -> `split_brand_name`/`split_generic_name`. Real names have no
+        reliable order (brand first or generic first, both happen) and often no separator at all,
+        so this only splits where the SHAPE itself proves which side is which, in two stages, then
+        two rounds of sanity-checking the real result rather than assuming it was safe:
+        1. **Shape**: exactly one top-level bracket group (nested brackets count as one; 50% of
+           PDF names, 36% of portal NSQ names qualify). Zero groups, 2+ groups, unbalanced
+           brackets (a cut-off cell) all stay null.
+        2. **Side**: the side WITH an official pharmacopoeia marker (IP/BP/USP, any dotted form) is
+           the generic, the other is the brand - a brand name essentially never carries one (only
+           1.9% ambiguous, vs 29.5% for a dosage-form-word signal tried first and rejected for
+           being too often ambiguous). Both/neither -> null.
+        3. **Sanity checks on the real result** (not assumed safe in advance): a bare-marker
+           generic with nothing else (1 case: "ABSORBENT COTTON WOOL (IP)"); a "brand" that was
+           really just the strength (52 of 1,860 splits, 2.8%: "(100mg/1.5mg)"), caught by reusing
+           `strength.py`'s own STRENGTH pattern rather than a second, weaker one; and "Ringer
+           Lactate Solution for Injection" (29 occurrences, 5 spellings) - a second, synonym
+           description of the same composition, not a brand, caught because a real brand is never
+           named **for** its own route of administration - checked against all 62 real multi-word
+           candidates: only those 5 spellings rejected, every genuine one ("DOLOSAFE D TABLETS")
+           kept even though it also ends in a dosage-form word.
+        **Verified on real data: 356 of 1,317 PDF names (27.0%), 1,389 of 7,005 portal rows
+        (19.8%) split.** Named `split_*`, not `brand_name`/`generic_name`: portal NSQ rows already
+        have their own `brand_name` bronze column (13.8% real, rest placeholder); overwriting it
+        would silently discard real portal values, so reconciling the two is left to the gold
+        layer. **Known residual, documented rather than chased further**: a handful of scattered
+        cases ("NOT STERILISED", "VET") pass every check but aren't really brand names - rare and
+        unconcentrated, unlike the Ringer Lactate case, so not worth a further rule here. Tests: 16
+        unit; a mutation check of all 4 guards (shape, bare-marker, strength, route) made exactly
+        the matching test fail each time.
 - [ ] 5. **Manufacturer entity resolution** with RapidFuzz: cluster spelling variants into one canonical manufacturer;
       keep a reviewed mapping table.
 - [ ] 6. Map failure reasons into standard categories (Assay, Dissolution, Sterility, Description, Particulate,
@@ -440,3 +470,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-13 | Step 4 split into three pieces (dosage form, strength as a list, brand vs generic only where clear); product names are too inconsistent for one regex splitter, and a null is better than a wrong split | Harith |
 | 2026-11-13 | Dosage form: whole-word vocabulary + abbreviations (not after a hyphen); several forms -> null except "Injection wins" (proven on all 62 real cases); Sachet/Respules/Rotacaps excluded, Bolus added | `dosage_form.py` |
 | 2026-11-13 | Strengths: a list of every mention as printed (repeats kept, since real combinations share values); slash = "per" only before ml or per-gram; bare ml skipped (bottle size), bare g only for injections, numbers glued to a letter skipped | `strength.py` |
+| 2026-11-13 | Brand/generic split only where exactly one bracket group exists AND a pharmacopoeia marker (IP/BP/USP) sits on exactly one side; a dosage-form-word signal was tried first and rejected (29.5% ambiguous vs 1.9%) | `brand_generic.py` |
+| 2026-11-13 | Found by reading the real split output, not assumed safe: a "brand" that was just the strength (52 cases) or a second synonym description ("Ringer Lactate Solution for Injection", 29 cases) - both rejected by name, not by blocklist, so the rule generalizes | `brand_generic.py` |
