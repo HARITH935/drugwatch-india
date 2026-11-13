@@ -304,6 +304,25 @@ Approved 2026-11-12. Plan: `DRUGWATCH_PHASES.md` §9 Phase 3.
         Tests: 5 unit (one per format, the real Bisacodyl row, an ordinary valid row, the real
         double-dash crash, deferred formats staying null).
 - [ ] 4. Split product name into brand, generic/salt, strength, dosage form.
+      Plan agreed with Harith (2026-11-13): three pieces, easiest first, because product names are
+      far messier than dates (brand-first vs generic-first, no reliable separator, combination drugs
+      with several strengths, the step-2 letter-spacing problem, and the portal's `generic_name`
+      sometimes holding the brand while `brand_name` says "NA"). 1. dosage form, 2. strength (kept as
+      a list), 3. brand vs generic only where the pattern is clear (null otherwise; the rest is what
+      Phase 10's LLM fallback is for).
+  - [x] Piece 1, dosage form (2026-11-13): `dosage_form.add_dosage_form()`. Every rule checked against
+        all 8,322 real names first: a fixed vocabulary of form words (whole words, any case); short
+        abbreviations (Tab, Caps, Inj.) proven safe (all 101 abbreviation-only matches genuine), but
+        ignored right after a hyphen (`"NS-CAP"` is a brand, not a capsule); several forms -> null,
+        except **Injection wins** (all 62 distinct real names of that kind are injections: "Solution
+        for Injection", "Powder for Injection"...). "Sachet" (packaging) and "Respules"/"Rotacaps"
+        (device brands) left out of the vocabulary on purpose; "Bolus" (veterinary) added. Adds
+        `dosage_form` and `dosage_forms_found` (so every null can be explained).
+        **Verified on real data: 7,402 of 8,322 names filled (88.9%)**: PDF 86.5%, portal 89.4%.
+        Left null on purpose: 60 mixes with no checked rule (e.g. "Ophthalmic Solution (Eye Drops)")
+        and 860 names with no form word (mostly correct: vaccines, syringes, cotton, sanitizers; a
+        few CDSCO typos like "Tables", "Caspules", "TabletsIP" not guessed). Tests: 17 unit; a mutation
+        check (removing the hyphen guard, then the Injection rule) made exactly the matching test fail.
 - [ ] 5. **Manufacturer entity resolution** with RapidFuzz: cluster spelling variants into one canonical manufacturer;
       keep a reviewed mapping table.
 - [ ] 6. Map failure reasons into standard categories (Assay, Dissolution, Sterility, Description, Particulate,
@@ -402,3 +421,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-12 | `try_to_date()`, not `to_date()`: Spark 4's ANSI mode makes `to_date()` crash the whole job on one unparseable value instead of returning null; found before shipping, not during a real run | `parse_dates.py` |
 | 2026-11-12 | PDF date formats added one at a time, each checked unambiguous against every real value first (zero cross-matches between all 5; day-first for DD-MM-YYYY proven by 17 real values with a day over 12); covers 88.8%/88.6%, rest deferred | `parse_pdf_dates.py` |
 | 2026-11-12 | `plausible_year()`: any parsed date outside 1990-2049 (confidence.py's own range) becomes null. Found because Java's lenient parser reads a doubled dash as a year sign (`"Apr--2026"` -> year -2026, crashes on conversion to a Python date) rather than failing to parse; applied to both date modules for consistent safety, confirmed by a mutation check | `parse_dates.py`, `parse_pdf_dates.py` |
+| 2026-11-13 | Step 4 split into three pieces (dosage form, strength as a list, brand vs generic only where clear); product names are too inconsistent for one regex splitter, and a null is better than a wrong split | Harith |
+| 2026-11-13 | Dosage form: whole-word vocabulary + abbreviations (not after a hyphen); several forms -> null except "Injection wins" (proven on all 62 real cases); Sachet/Respules/Rotacaps excluded, Bolus added | `dosage_form.py` |
