@@ -181,6 +181,7 @@ uv run --env-file ../.env python -m drugwatch_spark.manufacturer_name  # strip a
 uv run --env-file ../.env python -m drugwatch_spark.manufacturer_cluster  # RapidFuzz: 3,320 names -> 2,734 makers
 uv run --env-file ../.env python -m drugwatch_spark.manufacturer_review --batches  # accept the 100 mechanical pairs
 uv run --env-file ../.env python -m drugwatch_spark.manufacturer_review   # decide the 160 borderline ones (y/n/q)
+uv run --env-file ../.env python -m drugwatch_spark.build_silver   # every step together: bronze -> silver (--dry-run)
 ```
 
 **Local service ports** (all bound to 127.0.0.1; Postgres and Redis are shifted so they don't clash with OpsPilot):

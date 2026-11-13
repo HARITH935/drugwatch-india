@@ -465,6 +465,48 @@ Approved 2026-11-12. Plan: `DRUGWATCH_PHASES.md` §9 Phase 3.
         (the `(S)` guard, the unknown-key guard and the asking order); all three were strengthened
         until the mutation failed them. **Not yet run for real - the 100 batch pairs and 160
         judgement calls are Harith's to make.**
+- [x] 5b. **The cleaning pipeline: bronze -> silver** (2026-11-13). Until now every cleaning step was its own
+      module printing its own report and nothing ran them together. `build_silver.py` is the job that does, and
+      the Parquet it writes is Phase 3's silver deliverable (what step 8's GE suite validates, what Phase 4's dbt
+      loads, and the "cleaning job" step 9 benchmarks). Each source gets the steps that suit it (PDF: the 5 proven
+      date formats; portal: the 9 wrong batch numbers, then dates), then both are mapped onto **one 30-column
+      silver schema** with the raw value kept beside every cleaned one. Manufacturer clustering runs **last and
+      across both sources at once**, so one company spelled differently in a PDF and in the portal becomes one
+      manufacturer.
+      **Verified on the real archive: 1,317 + 7,005 = 8,322 silver rows** (row counts unchanged by the pipeline -
+      a duplicate key in the clustering lookup would silently multiply them), written to `s3a://silver/nsq/`
+      partitioned by source and alert month, and read back at 8,322. mfg_date 96.7% / expiry 96.6% / dosage_form
+      88.9% / a strength 38.0% / brand-generic split 21.0% / manufacturer named 98.4%; **2,723 manufacturers**
+      (2,734 standalone, because spurious names are correctly excluded here). The remaining 146 unparsed dates are
+      exactly the formats step 3 deferred on purpose (`NIL`, `Not Mentioned`, Excel day numbers, `29.09.2021`,
+      `5/2023`, line-broken) - no regression.
+      **The spurious rule (CLAUDE.md Section 6) enforced in code:** a spurious alert names the company printed on
+      a FAKE pack. Real data holds three kinds - `"Under Investigation"`, a firm CDSCO says does not exist, and
+      **17 rows naming real, legitimate companies whose identity was counterfeited** (Ipca, Macleods, Sun Pharma,
+      Glenmark, Emcure...). So on a spurious row the text is kept as `name_on_pack` for provenance and every
+      manufacturer column is NULL. **Verified: 77 spurious rows, 0 attributed to any manufacturer.**
+      **Two real defects found by reading the composed output, not assumed safe:**
+      1. `fix_portal_batch` overwrites `batch_no`/`mfg_date`/`expiry_date`/`manufacturer` **in place**, and the
+         `_raw` columns were being built from those already-corrected columns - so silver promised provenance it
+         did not have, exactly where a reader would check it. Fixed with `keep_raw()`, a snapshot taken before any
+         step runs. Verified on real rows: the stale/comma'd originals the portal published (`"HC-834"` ->
+         `"AHB-3086"`, `"AHT-1239,"` -> `"AHT-1239"`) are now visible beside the correction.
+      2. The same fix replaces those rows' dates with the text out of CDSCO's combined cell, which is written the
+         **PDF** way (`"03/2018"`), not the portal's `"Mon-YYYY"` - and `parse_portal_dates` was proven against
+         bronze, before the fix. **All 9 rows silently lost both dates and `dates_valid`.** Fixed by falling back
+         to `parse_pdf_dates`' 5 already-proven formats for whatever the portal format can't read, with
+         `dates_valid` recomputed from what survives. Verified: mfg 8,038 -> 8,047 and expiry 8,031 -> 8,040,
+         exactly +9, nothing else moved; the cell's dates agree with the portal's own where both exist.
+      Tests: 16 unit (13 carried over, 3 new). A mutation check of both fixes (taking the snapshot late; dropping
+      the fallback) made exactly the matching test fail each time.
+      **Left for step 7, both measured:** `alert_month` is NULL on the **16 `nsq-bulk` rows** (CDSCO's bulk
+      2017-2023 file prints one year per page, so there is no single alert month) - they are the same 16 findings
+      family A already reports monthly, so dedup drops them and the nulls with them. And `is_spurious` is read
+      from `source_dataset`, CDSCO's **document-level** category: **78 rows sit in "combined NSQ/spurious"
+      documents**. Checked - all 78 come from the NSQ-shaped table and every failure reason is a lab test, so
+      none is a counterfeit report and today's data is right; but a future combined document with a spurious
+      section would be attributed silently. ⏳ **Harith's call: add a row-level spurious signal, or keep the
+      document-level rule and document it?**
 - [ ] 6. Map failure reasons into standard categories (Assay, Dissolution, Sterility, Description, Particulate,
       Spurious, Other).
 - [ ] 7. Deduplicate repeated rows across central and state lists.
