@@ -323,6 +323,22 @@ Approved 2026-11-12. Plan: `DRUGWATCH_PHASES.md` §9 Phase 3.
         and 860 names with no form word (mostly correct: vaccines, syringes, cotton, sanitizers; a
         few CDSCO typos like "Tables", "Caspules", "TabletsIP" not guessed). Tests: 17 unit; a mutation
         check (removing the hyphen guard, then the Injection rule) made exactly the matching test fail.
+  - [x] Piece 2, strength (2026-11-13): `strength.add_strengths()` -> `strengths`, a list. Every rule
+        checked against all 8,322 real names first. Units: mg, mcg, g/gm, ml, IU, % (+ w/v, w/w,
+        v/v); "cm" (dressings) and "billion" (4 probiotic rows) left out. A slash is "per" only before
+        a volume or "per gram" (`125 mg/5 ml`, `10 mg/ml`, `60000 IU/g`); otherwise it joins two
+        strengths of a combination (`40mg/12.5mg` = 40 mg + 12.5 mg; 43 real names). Skipped on
+        purpose: a bare `N ml` (all 433 real ones are bottle sizes), a bare `N g` outside injections
+        (tube/soap/cotton sizes, a needle gauge "23G", a brand "3G", a typo "Tablets 200 g"; costs 2
+        real gram strengths), and a number glued to a letter (16 real cases; `"VitaminD3250 IU"` is
+        D3 + 250 IU, not 3,250 IU). **Every mention kept in printed order, repeats included**: most
+        repeats are the brand echoing the strength, but some are real combinations sharing a value
+        (`Amoxycillin 250 mg and Cloxacillin 250 mg`), and removing repeats would lose an ingredient.
+        Written one standard way (`1.0 gm` -> `1 g`, `0.50%` -> `0.5%`, `60,000 IU` -> `60000 IU`).
+        **Verified on real data: 3,165 of 8,322 names (38.0%) have a strength** (PDF 35.8%, portal
+        38.5%); the rest print none with a unit (brand numbers like "Telzasig 20" are not guessed).
+        Tests: 28 unit; a mutation check of the four main rules (bare ml, gram only for injections,
+        glued numbers, slash = "per") made exactly the matching test fail each time.
 - [ ] 5. **Manufacturer entity resolution** with RapidFuzz: cluster spelling variants into one canonical manufacturer;
       keep a reviewed mapping table.
 - [ ] 6. Map failure reasons into standard categories (Assay, Dissolution, Sterility, Description, Particulate,
@@ -423,3 +439,4 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-12 | `plausible_year()`: any parsed date outside 1990-2049 (confidence.py's own range) becomes null. Found because Java's lenient parser reads a doubled dash as a year sign (`"Apr--2026"` -> year -2026, crashes on conversion to a Python date) rather than failing to parse; applied to both date modules for consistent safety, confirmed by a mutation check | `parse_dates.py`, `parse_pdf_dates.py` |
 | 2026-11-13 | Step 4 split into three pieces (dosage form, strength as a list, brand vs generic only where clear); product names are too inconsistent for one regex splitter, and a null is better than a wrong split | Harith |
 | 2026-11-13 | Dosage form: whole-word vocabulary + abbreviations (not after a hyphen); several forms -> null except "Injection wins" (proven on all 62 real cases); Sachet/Respules/Rotacaps excluded, Bolus added | `dosage_form.py` |
+| 2026-11-13 | Strengths: a list of every mention as printed (repeats kept, since real combinations share values); slash = "per" only before ml or per-gram; bare ml skipped (bottle size), bare g only for injections, numbers glued to a letter skipped | `strength.py` |
