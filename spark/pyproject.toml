@@ -11,6 +11,7 @@ dependencies = [
     # Pinned below 4.3: a minor release can move Spark to a new Hadoop version, and the S3A
     # connector (hadoop-aws, session.py) must match it exactly (ADR 0008).
     "pyspark>=4.2.1,<4.3",
+    "rapidfuzz>=3.14.6",
 ]
 
 [build-system]

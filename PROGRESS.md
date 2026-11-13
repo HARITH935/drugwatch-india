@@ -404,6 +404,39 @@ Approved 2026-11-12. Plan: `DRUGWATCH_PHASES.md` §9 Phase 3.
         **Verified on real data: 94.8% of PDF values, 97.8% of portal values split into a name and
         address.** Tests: 10 unit; a mutation check of all 4 rules (ownership aside, suffix
         fallback, placeholder, `M/s.` stripping) made exactly the matching test fail each time.
+  - [x] Piece 2, cluster the variants (2026-11-13): `manufacturer_cluster.cluster_variants()` ->
+        `manufacturer_canonical`. RapidFuzz (approved stack, Section 6) `token_sort_ratio` with its
+        own `default_process`, so case and `Private.Limited` vs `Private Limited` cost nothing.
+        **Threshold 98, picked by reading real pairs in every band, not by feel:**
+        - 98-100 (189 pairs): every sampled pair was the same company - plural/singular, punctuation,
+          case, OCR noise (`Relief`/`Relif`, `Healer's`/`Healer?s`), stray page numbers.
+        - 95-98 (260 pairs): **mixed** - real matches (`UPKAR PHARMACEUTIALS`) sit next to clear
+          false ones (`RPL (INDIA) Pharmaceuticals Private Limited` vs `ZRS Pharmaceuticals India
+          Private Limited` scores 95.1 but is two different companies).
+        - 92 and below: mostly false - different companies share the generic tail, so `Sarv`/`Solar`
+          and `PRS`/`Pulse` both score 92+.
+        So 98+ merges automatically, 95-98 goes to piece 3's human review, below 95 neither.
+        `token_set_ratio` was rejected: it ignores extra words, so `Nest Healthcare` and `Nest
+        Healthcare Plot No.: 300` would score 100 and might be two units of one company.
+        Clusters by connected components (union-find), since similarity isn't transitive; checked
+        every real cluster of 3+ for bad chaining - all coherent (8 spellings of `J.M. Laboratories`,
+        8 of `Martin & Brown Bio-Sciences Private Limited`). Conservative on purpose: 3 separate
+        Martin & Brown clusters stay apart (one carries a leftover address fragment), which is what
+        piece 3 is for. Canonical = most rows, then not ALL CAPS/all lower-case, then alphabetical
+        (top count is tied in 126 of 436 clusters; the casing rule decides 6, always readably).
+        **Two bugs found by reading real output, not assumed safe:**
+        1. `dtype=np.uint8` (chosen to save memory) **rounds** - it silently auto-merged 34 real
+           pairs scoring 97.5-98, skipping the review they are meant to get. Most happened to be
+           genuine, which is luck, not a guarantee.
+        2. Fixing that led to a better design: `process.extract` with a `score_cutoff` instead of
+           `process.cdist`. **Identical results** (same 818 pairs at 98+, verified), ~6 s instead of
+           3 s, keeps only the pairs above the cutoff instead of a 44 MB n x n matrix - and **drops
+           the numpy dependency entirely**, so no new library needed approval.
+        **Verified on real data: 3,320 distinct names -> 2,734 manufacturers, merging 586 spelling
+        variants; 260 pairs queued for piece 3.** Tests: 10 unit; a mutation check of all 6 rules
+        (threshold, review floor, both canonical rules, transitive join, band ceiling) made exactly
+        the matching test fail each time.
+  - [ ] Piece 3: Harith reviews the 260 borderline pairs; keep the decisions as a mapping table.
 - [ ] 6. Map failure reasons into standard categories (Assay, Dissolution, Sterility, Description, Particulate,
       Spurious, Other).
 - [ ] 7. Deduplicate repeated rows across central and state lists.
@@ -507,3 +540,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-13 | Found by reading the real split output, not assumed safe: a "brand" that was just the strength (52 cases) or a second synonym description ("Ringer Lactate Solution for Injection", 29 cases) - both rejected by name, not by blocklist, so the rule generalizes | `brand_generic.py` |
 | 2026-11-13 | Manufacturer step 5 split into 3 pieces (clean name, RapidFuzz match, Harith reviews borderline pairs); piece 1 cuts the address at the first comma or legal suffix, keeps an "(A Unit of...)" aside as part of the name, and leaves the 0.9% with no boundary signal whole rather than guessed | Harith; `manufacturer_name.py` |
 | 2026-11-13 | Manufacturer name case is left exactly as printed, not title-cased: some ALL CAPS names are real acronyms ("JKMSCL") that title-casing would wrongly mangle; case-insensitive comparison is left to RapidFuzz's own processor in piece 2 | `manufacturer_name.py` |
+| 2026-11-13 | RapidFuzz threshold 98 for automatic merging, 95-98 for human review, nothing below: chosen by reading real pairs in every band (95-98 mixes real matches with clear false ones like RPL vs ZRS at 95.1) | `manufacturer_cluster.py` |
+| 2026-11-13 | `process.extract` with a score_cutoff, not `process.cdist`: identical results on the real archive, no n x n matrix, and no numpy dependency (so no new library needed approval). Found while fixing uint8 rounding, which silently auto-merged 34 pairs that should have gone to review | `manufacturer_cluster.py` |
