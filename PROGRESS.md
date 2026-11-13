@@ -436,7 +436,35 @@ Approved 2026-11-12. Plan: `DRUGWATCH_PHASES.md` §9 Phase 3.
         variants; 260 pairs queued for piece 3.** Tests: 10 unit; a mutation check of all 6 rules
         (threshold, review floor, both canonical rules, transitive join, band ceiling) made exactly
         the matching test fail each time.
-  - [ ] Piece 3: Harith reviews the 260 borderline pairs; keep the decisions as a mapping table.
+  - [x] Piece 3, the review tool (2026-11-13): `manufacturer_review.py`. Sorts the 260 borderline
+        pairs by **what actually differs**, checked against all of them:
+        - **spacing (13)**: only spaces/punctuation move (`Pharma Roots`/`Pharmaroots`) - no letter
+          changes, safe as a batch;
+        - **common-word typo (87)**: every differing word is a misspelling of a word used across
+          many DIFFERENT companies (`Pharmaceuticlas`->`Pharmaceuticals`, `&`->`and`, `Hidustan
+          Antibitics`->`Hindustan Antibiotics`) - one spelling is a real word, the other is not;
+        - **judgement (160)**: the difference touches the **distinctive** part of the name, where a
+          typo and a second real company look identical (`Agron`/`Argon`, `Sai`/`Sia`,
+          `Dexbio`/`Dexibo`). Asked one at a time; never decided automatically.
+        A word counts as "common" only at 3+ letters: `(S)` reduces to the token `s`, which is all
+        over the archive, so a length-blind rule called `Shell Eastern Chemicals` and `Shell
+        Eastern Chemicals (S)` typos of each other when `(S)` is likely a separate legal entity.
+        Judgement pairs are asked **most-obviously-a-typo first** (a one-letter slip in a long word
+        scores 0.95; a whole extra token like `... Limited II`, possibly a second plant, scores
+        0.00), so the calls needing thought come last instead of being buried mid-list.
+        **Deliberately NOT grouped**: asking once per connected cluster would be fewer questions but
+        chains different companies together - `Apple`/`Apex`/`APT Formulations` land in one group,
+        as do `Spen`/`Super Formulations`, and one "yes" would merge all three. Found by checking,
+        before building the tool around grouping.
+        Decisions append to git-ignored `data/manufacturer-review/decisions.jsonl` as each is made
+        (stop and resume any time; a later answer replaces an earlier one), with the same safety
+        nets as the eval-set labeller: keystrokes typed before a question appears are discarded, an
+        answer faster than 2 s is asked again, an unknown key is not taken as an answer, and Ctrl-D
+        stops quietly instead of printing a traceback over already-saved work.
+        Tests: 21 unit. A first mutation run found **three tests too weak to prove their own claim**
+        (the `(S)` guard, the unknown-key guard and the asking order); all three were strengthened
+        until the mutation failed them. **Not yet run for real - the 100 batch pairs and 160
+        judgement calls are Harith's to make.**
 - [ ] 6. Map failure reasons into standard categories (Assay, Dissolution, Sterility, Description, Particulate,
       Spurious, Other).
 - [ ] 7. Deduplicate repeated rows across central and state lists.
@@ -542,3 +570,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-13 | Manufacturer name case is left exactly as printed, not title-cased: some ALL CAPS names are real acronyms ("JKMSCL") that title-casing would wrongly mangle; case-insensitive comparison is left to RapidFuzz's own processor in piece 2 | `manufacturer_name.py` |
 | 2026-11-13 | RapidFuzz threshold 98 for automatic merging, 95-98 for human review, nothing below: chosen by reading real pairs in every band (95-98 mixes real matches with clear false ones like RPL vs ZRS at 95.1) | `manufacturer_cluster.py` |
 | 2026-11-13 | `process.extract` with a score_cutoff, not `process.cdist`: identical results on the real archive, no n x n matrix, and no numpy dependency (so no new library needed approval). Found while fixing uint8 rounding, which silently auto-merged 34 pairs that should have gone to review | `manufacturer_cluster.py` |
+| 2026-11-13 | The 260 borderline pairs are sorted by what differs (spacing / misspelt common word / distinctive name) rather than reviewed as one list: 100 are mechanical and safe as batches, 160 need judgement | `manufacturer_review.py` |
+| 2026-11-13 | Review pairs are NOT grouped into clusters for one decision each: grouping chains different companies together (Apple/Apex/APT Formulations), so one "yes" would merge all three. Every judgement pair stays its own question | `manufacturer_review.py` |
