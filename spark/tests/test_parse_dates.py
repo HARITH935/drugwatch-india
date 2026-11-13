@@ -48,3 +48,14 @@ def test_an_empty_or_garbage_date_becomes_null_not_a_crash(spark):
 
 def test_month_name_case_does_not_matter(spark):
     assert parsed(spark, "aug-2017", "JUL-2022")["mfg_date_parsed"] == datetime.date(2017, 8, 1)
+
+
+def test_a_doubled_dash_does_not_become_a_wildly_wrong_date(spark):
+    # No real portal value has done this, but PDF dates (parse_pdf_dates.py, same "MMM-yyyy"
+    # format) found that Java's lenient parser reads an extra "-" as a SIGN on the year and
+    # "succeeds" with year -2026 (2027 BC) - a date so extreme even Python can't hold it. The same
+    # shared safety net (plausible_year()) protects this module too.
+    row = parsed(spark, "01/2024", "Aug--2017")
+
+    assert row["expiry_date_parsed"] is None
+    assert row["dates_valid"] is None

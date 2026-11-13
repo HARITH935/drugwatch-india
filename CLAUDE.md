@@ -173,6 +173,7 @@ uv run --env-file ../.env python -m drugwatch_spark.read_bronze   # Spark reads 
 uv run --env-file ../.env python -m drugwatch_spark.clean_bronze  # whitespace-cleaning report (read-only; step 2)
 uv run --env-file ../.env python -m drugwatch_spark.fix_portal_batch  # 9 portal rows w/ a wrong batch_no: before/after
 uv run --env-file ../.env python -m drugwatch_spark.parse_dates   # portal dates -> real dates; flags mfg_date >= expiry_date
+uv run --env-file ../.env python -m drugwatch_spark.parse_pdf_dates  # same, for PDF rows (5 proven-safe formats, 88.8% coverage)
 ```
 
 **Local service ports** (all bound to 127.0.0.1; Postgres and Redis are shifted so they don't clash with OpsPilot):

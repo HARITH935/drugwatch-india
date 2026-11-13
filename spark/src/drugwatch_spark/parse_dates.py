@@ -19,19 +19,34 @@ try_to_date(), not to_date(): Spark 4's default (ANSI) mode makes to_date() rais
 whole job on the first value it can't parse, rather than returning null for it - found while
 checking this against real data, before it could happen during an actual pipeline run.
 
+plausible_year(): a second, independent safety net, found while checking parse_pdf_dates.py (the
+PDF sibling of this module) against real results. Java's lenient parser doesn't always just fail on
+a malformed value: try_to_date("Apr--2026", "MMM-yyyy") "succeeds", reading the doubled dash as a
+SIGN on the year and returning year -2026 (2027 BC) - a date so extreme that even converting it to
+a Python date crashes. Every parsed date here is checked against PLAUSIBLE_YEARS (confidence.py's
+own range for this archive) before being kept, so a value with the same quirk is caught, not just
+passed through as a wildly wrong "successful" parse. No real portal value has triggered this so
+far (every parse checked clean), but the check costs nothing and keeps both modules equally safe.
+
 Run (from spark/, RustFS up):
     uv run --env-file ../.env python -m drugwatch_spark.parse_dates
 """
 
-from pyspark.sql import DataFrame
+from pyspark.sql import Column, DataFrame
 from pyspark.sql import functions as F
 
 PORTAL_DATE_FORMAT = "MMM-yyyy"  # Java/Spark pattern: abbreviated month name, 4-digit year
+PLAUSIBLE_YEARS = (1990, 2049)  # confidence.py's own range for this archive (extraction/, Phase 2)
+
+
+def plausible_year(parsed: Column) -> Column:
+    """`parsed`, or null if its year falls outside PLAUSIBLE_YEARS (never a wildly wrong date)."""
+    return F.when(F.year(parsed).between(*PLAUSIBLE_YEARS), parsed)
 
 
 def parse_portal_dates(df: DataFrame) -> DataFrame:
-    mfg = F.try_to_date(F.col("mfg_date"), PORTAL_DATE_FORMAT)
-    expiry = F.try_to_date(F.col("expiry_date"), PORTAL_DATE_FORMAT)
+    mfg = plausible_year(F.try_to_date(F.col("mfg_date"), PORTAL_DATE_FORMAT))
+    expiry = plausible_year(F.try_to_date(F.col("expiry_date"), PORTAL_DATE_FORMAT))
     return (
         df.withColumn("mfg_date_parsed", mfg)
         .withColumn("expiry_date_parsed", expiry)

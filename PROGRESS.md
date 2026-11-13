@@ -279,6 +279,30 @@ Approved 2026-11-12. Plan: `DRUGWATCH_PHASES.md` §9 Phase 3.
         Found before shipping: Spark 4's `to_date()` is strict (ANSI mode) and **crashes the whole job**
         on the first unparseable value instead of returning null; switched to `try_to_date()`. Tests: 6
         unit (a real parse, the original text kept, the real mfg>=expiry examples, null-safety, case).
+  - [x] PDF dates, part 1 (2026-11-12): `parse_pdf_dates.parse_pdf_dates()`. Added only the formats
+        proven both common and **unambiguous one at a time against every real value** - never a guess:
+        `MM/yyyy`, `MM/yy`, `MMM-yy`, `MMM-yyyy` (all checked zero cross-matches with each other), and
+        `dd-MM-yyyy` (proven day-first: 17 real values have a first number over 12, impossible for a
+        month; zero have a second number over 12, which would have proven month-first). **Covers 88.8%
+        / 88.6% of present mfg_date / expiry_date values**, zero ambiguity. Left for a separately-
+        evidenced follow-up: `DD.MM.YYYY` (ordering not yet checked), Excel day numbers, textual
+        expiry rules, letter-spaced/line-broken dates, placeholders.
+        Found a real row the validity flag is meant to catch: `"Bisacodyl Tablets Ip 5mg"` prints
+        `Jun-42` as its mfg date against a `2026` expiry - a CDSCO typo (manufactured 16 years after
+        its own expiry). Parsed exactly as printed, correctly flagged `dates_valid = false`; **not**
+        silently "corrected" (this is the same row from the eval-set labelling work, so it was already
+        known to be a genuine source typo, not a parser error).
+        **A second, more serious bug found by checking actual results, not assumed:** Java's lenient
+        parser does not just fail on a malformed value - `try_to_date("Apr--2026", "MMM-yyyy")`
+        "succeeds", reading the doubled dash as a **sign on the year** and returning year **-2026**
+        (2027 BC), a date so extreme that even converting it to a Python date **crashes**. Fixed with
+        `plausible_year()`: any parsed date outside confidence.py's own 1990-2049 range for this
+        archive becomes null instead. Applied to **both** date modules (portal included, even though
+        no real portal value has triggered it) for consistent safety; the mutation check (temporarily
+        disabling it) confirmed both regression tests catch it. Re-verified against real data after
+        the fix: exactly one corrupted parse removed (expiry_date 88.6% -> 88.5%), nothing else moved.
+        Tests: 5 unit (one per format, the real Bisacodyl row, an ordinary valid row, the real
+        double-dash crash, deferred formats staying null).
 - [ ] 4. Split product name into brand, generic/salt, strength, dosage form.
 - [ ] 5. **Manufacturer entity resolution** with RapidFuzz: cluster spelling variants into one canonical manufacturer;
       keep a reviewed mapping table.
@@ -376,3 +400,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-12 | `split_combined_cell()` strips a whole run of trailing commas/whitespace (`strip(" \t\n,")`), not just one (`removesuffix(",")`): one real row has a double comma before the next label. Checked: Phase 2's shipped family_d.py / PDF bronze is unaffected (0 of 77 rows have the issue), so it is left as-is | `fix_portal_batch.py` |
 | 2026-11-12 | Date parsing (step 3) scoped to portal dates first: one clean shape covers 100% of real values, vs 30-40 PDF shapes needing their own pass; `mfg_date_parsed`/`expiry_date_parsed` added alongside the original text (not overwritten), plus a nullable `dates_valid` flag that is never guessed | `parse_dates.py` |
 | 2026-11-12 | `try_to_date()`, not `to_date()`: Spark 4's ANSI mode makes `to_date()` crash the whole job on one unparseable value instead of returning null; found before shipping, not during a real run | `parse_dates.py` |
+| 2026-11-12 | PDF date formats added one at a time, each checked unambiguous against every real value first (zero cross-matches between all 5; day-first for DD-MM-YYYY proven by 17 real values with a day over 12); covers 88.8%/88.6%, rest deferred | `parse_pdf_dates.py` |
+| 2026-11-12 | `plausible_year()`: any parsed date outside 1990-2049 (confidence.py's own range) becomes null. Found because Java's lenient parser reads a doubled dash as a year sign (`"Apr--2026"` -> year -2026, crashes on conversion to a Python date) rather than failing to parse; applied to both date modules for consistent safety, confirmed by a mutation check | `parse_dates.py`, `parse_pdf_dates.py` |
