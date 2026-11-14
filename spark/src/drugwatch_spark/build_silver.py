@@ -30,8 +30,8 @@ Attributing any of those would accuse a victim of counterfeiting. So on a spurio
 is kept as `name_on_pack` for provenance, and `manufacturer_canonical` is NULL: those rows are
 counted as spurious reports, never against a manufacturer.
 
-Not here yet, by design: `failure_category` (step 6) and de-duplication across the central and
-state lists (step 7). Each will join this pipeline rather than become another separate report.
+Not here yet, by design: de-duplication across the central and state lists (step 7). It will join
+this pipeline rather than become another separate report.
 
 Two things step 7 is expected to settle, both measured on the real archive (2026-11-13):
   - `alert_month` is NULL on 16 rows, all of them the `nsq-bulk` family E file: CDSCO's bulk
@@ -58,6 +58,7 @@ from pyspark.sql import functions as F
 from drugwatch_spark.brand_generic import add_brand_generic
 from drugwatch_spark.clean_text import normalize_whitespace
 from drugwatch_spark.dosage_form import add_dosage_form
+from drugwatch_spark.failure_category import add_failure_categories
 from drugwatch_spark.fix_portal_batch import fix_combined_manufacturer_cells
 from drugwatch_spark.manufacturer_cluster import add_canonical_manufacturer
 from drugwatch_spark.manufacturer_name import add_clean_manufacturer_name
@@ -98,8 +99,9 @@ SILVER_COLUMNS = [
     # who made it - or, for a spurious report, the name on the fake pack
     "manufacturer_raw", "manufacturer_name", "manufacturer_address", "manufacturer_canonical",
     "is_spurious", "name_on_pack",
-    # what was wrong (failure_category joins in step 6)
-    "failure_reason", "reported_by", "remarks", "firm_reply",
+    # what was wrong: the text as the lab wrote it, plus its standard categories (ADR 0009).
+    # A list, because 22.6% of rows name more than one failed test.
+    "failure_reason", "failure_categories", "reported_by", "remarks", "firm_reply",
 ]  # fmt: skip
 
 
@@ -216,11 +218,15 @@ def build_silver(pdf: DataFrame, portal: DataFrame) -> DataFrame:
 
     The manufacturer clustering runs LAST and across both sources at once, so a company written
     one way in a PDF and another way in the portal lands on a single canonical name.
+
+    Failure categories are added after the union too, because they need `is_spurious`, which
+    to_silver_columns is what works out.
     """
     rows = to_silver_columns(clean_shared(clean_pdf(pdf))).unionByName(
         to_silver_columns(clean_shared(clean_portal(portal)))
     )
-    clustered = add_canonical_manufacturer(rows, F.col("manufacturer_name"))
+    categorised = add_failure_categories(rows)
+    clustered = add_canonical_manufacturer(categorised, F.col("manufacturer_name"))
     return clustered.select(SILVER_COLUMNS)
 
 

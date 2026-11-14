@@ -507,8 +507,58 @@ Approved 2026-11-12. Plan: `DRUGWATCH_PHASES.md` §9 Phase 3.
       none is a counterfeit report and today's data is right; but a future combined document with a spurious
       section would be attributed silently. ⏳ **Harith's call: add a row-level spurious signal, or keep the
       document-level rule and document it?**
-- [ ] 6. Map failure reasons into standard categories (Assay, Dissolution, Sterility, Description, Particulate,
-      Spurious, Other).
+- [x] 6. Map failure reasons into standard categories (2026-11-13). `failure_category.py` ->
+      `failure_categories`, joined into `build_silver`'s pipeline (not another standalone report).
+      **Checked the real values before designing anything:** `failure_reason` is free text written by whichever
+      government lab tested the sample - **3,730 distinct values** over 8,317 rows once case and line breaks are
+      normalised, from a bare `"Dissolution"` to 994-character sentences, and the 800 most common cover only
+      **61.5%** of rows. So a value->category lookup table cannot work; the category is read from the text.
+      **Three decisions Harith made on that evidence (ADR 0009):**
+      1. **A list, not one value per row** - 1,833 rows (22.0%) name more than one failed test
+         (`"Dissolution and Assay"`, `"ph, particulate matter and description"`, up to seven in one row). An array,
+         like `strengths`, so nothing is silently dropped by a priority rule that is hard to defend.
+      2. **A wider vocabulary than the plan's 7** - those 7 left **17.5%** of rows in "Other", and that residue was
+         not noise: every pH, Content, Related Substances, Uniformity, Water, Identification and Disintegration
+         failure sat in it. "Other" would have been the second-largest slice on a dashboard. 14 test categories +
+         Spurious + Other brings **Other down to 3.1%** (255 rows).
+      3. **"Content" counts as Assay** - an assay IS a content determination and CDSCO writes both for the same
+         finding; but `water content`, `moisture content` and `uniformity of content` are other tests, excluded by
+         name.
+      **Spurious comes from `is_spurious`, never from the word** (CLAUDE.md Section 6): one real NSQ row ends
+      `"...the tests for identification and assay spurious"`, and the word appears in **264** rows' text when only
+      **77** are spurious reports. A spurious row still keeps its lab-test categories - those tests were really
+      run, on the seized counterfeit sample.
+      **The false positive that mattered, found by auditing what each pattern actually matched rather than trusting
+      the coverage number:** in this archive "label" usually means the *declared strength*, not the printed label.
+      `"does not conform to label claim with respect to the content of ketoconazole"` (105 rows), `"...34.85% of
+      the labelled amount"` (42), `"conform to label with respect to the content of..."`, `"against labelled claim
+      of 2500 mg"` - all strength shortfalls, already counted under Assay. A bare `\blabel` reported **390
+      labelling offences against the 287 the allow-list finds: 103 rows (26%) were strength shortfalls recorded as
+      labelling offences.** Carving out each phrasing one at a time only moved the goalposts, so the rule was
+      inverted into an **allow-list** of what CDSCO actually writes for a labelling offence. Mislabelling is an
+      accusation, so this category is conservative the same way manufacturer merging is: a missed category beats a
+      wrong accusation.
+      Also: `misbranded` is **Labelling, not Spurious** (filing it under Spurious would accuse a maker of
+      counterfeiting); `Disintegration` is its own category (different test from Dissolution, 303 rows alone);
+      every pattern is bounded, because `bet` (the Bacterial Endotoxin Test) would otherwise match "diabetes" and
+      "betamethasone", and `ph` would match "graph" and "morphine"; CDSCO's own misspellings are matched **as
+      spelled** (`misbrandad` 13, `sterillity` 6, `alochol` 6, `susbtances` 3, `uniformaly` 3, `appeareance` 2) -
+      a typo in the source is not a reason to lose the row's category. A reason naming no test (`"nsq"`,
+      `"not applicable"`, `"does not conform to i.p."`) gets `Other`; **no reason at all gets an empty list**,
+      which is a different fact and stays distinguishable.
+      Fixed before shipping: the module docstring was not a raw string, so the `\b` in its examples was a real
+      backspace character (and `\w` raised a SyntaxWarning).
+      **Verified on the real archive:** silver rebuilt with the column and read back at **8,322 rows, now 31
+      columns**, `failure_categories` typed `array<string>`. Spread: Assay 40.4% (3,365) · Dissolution 26.9%
+      (2,238) · Description 16.0% (1,333) · Sterility 6.9% · Particulate 6.4% · Identification 5.6% · pH 4.4% ·
+      Disintegration 3.6% · Uniformity 3.6% · Labelling 3.4% · Other 3.1% · Physical 2.9% · Related substances
+      2.8% · Water 1.9% · Spurious 0.9%. **No row comes out with zero categories**, which also cross-checks:
+      the only 5 rows with no reason text are the 5 reason-less rows in the spurious documents, so they come out
+      as `["Spurious"]` alone.
+      Tests: 49 unit, every reason text a real archive value.
+      The measured distribution is in **ADR 0009**; the user-facing version belongs in
+      `docs/methodology.md` when that page is written (Phase 11/12). Step 8's GE suite should assert every value is
+      in this vocabulary and watch the "Other" share, which is how a change in CDSCO's wording will show up.
 - [ ] 7. Deduplicate repeated rows across central and state lists.
 - [ ] 8. Great Expectations suite: required fields not null, valid dates, batch number format, category values in
       allowed set, row counts within expected range.
