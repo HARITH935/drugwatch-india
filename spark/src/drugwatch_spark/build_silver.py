@@ -30,22 +30,17 @@ Attributing any of those would accuse a victim of counterfeiting. So on a spurio
 is kept as `name_on_pack` for provenance, and `manufacturer_canonical` is NULL: those rows are
 counted as spurious reports, never against a manufacturer.
 
-Not here yet, by design: de-duplication across the central and state lists (step 7). It will join
-this pipeline rather than become another separate report.
+Step 7's de-duplication (`deduplicate.py`) runs last of all, because its key needs
+`manufacturer_canonical`, which the clustering produces. It also drops the redundant `nsq-bulk`
+file, which is what removes every NULL `alert_month` from silver.
 
-Two things step 7 is expected to settle, both measured on the real archive (2026-11-13):
-  - `alert_month` is NULL on 16 rows, all of them the `nsq-bulk` family E file: CDSCO's bulk
-    2017-2023 list covers many months at once and prints one year per page (`report_year`), so
-    there is no single alert month to record. Those 16 are the SAME 16 findings family A already
-    reports month by month, so step 7 should drop them, which removes the nulls with them. Until
-    it does, silver double-counts those vaccine batches and writes them to an
-    `alert_month=__HIVE_DEFAULT_PARTITION__` partition.
-  - `is_spurious` is read from `source_dataset`, which is CDSCO's DOCUMENT-level category, not a
-    row-level fact. 78 rows sit in documents CDSCO titles "combined NSQ/spurious". Checked: all
-    78 come from the NSQ-shaped table (6-column family D, plus 1 family C row) and every
-    failure_reason is a lab test (Assay, Dissolution, Sterility...), so none is a counterfeit
-    report and today's data is attributed correctly. But a future combined document WITH a
-    spurious section would be attributed silently, so a row-level signal is still needed.
+Still open, measured on the real archive (2026-11-13): `is_spurious` is read from
+`source_dataset`, which is CDSCO's DOCUMENT-level category, not a row-level fact. 78 rows sit in
+documents CDSCO titles "combined NSQ/spurious". Checked: all 78 come from the NSQ-shaped table
+(6-column family D, plus 1 family C row) and every failure_reason is a lab test (Assay,
+Dissolution, Sterility...), so none is a counterfeit report and today's data is attributed
+correctly. But a future combined document WITH a spurious section would be attributed silently,
+so a row-level signal is still needed.
 
 Run (from spark/, RustFS up):
     uv run --env-file ../.env python -m drugwatch_spark.build_silver            # write silver
@@ -57,6 +52,7 @@ from pyspark.sql import functions as F
 
 from drugwatch_spark.brand_generic import add_brand_generic
 from drugwatch_spark.clean_text import normalize_whitespace
+from drugwatch_spark.deduplicate import deduplicate
 from drugwatch_spark.dosage_form import add_dosage_form
 from drugwatch_spark.failure_category import add_failure_categories
 from drugwatch_spark.fix_portal_batch import fix_combined_manufacturer_cells
@@ -87,9 +83,10 @@ RAW_KEPT = ("batch_no", "mfg_date", "expiry_date", "manufacturer")
 # What silver keeps, and where each column comes from. Nothing is invented here: every value is
 # either copied from bronze or produced by a cleaning module that was checked on its own.
 SILVER_COLUMNS = [
-    # provenance - every row can be traced to the document it came from (CLAUDE.md Section 5)
+    # provenance - every row can be traced to the document it came from (CLAUDE.md Section 5).
+    # also_reported_in holds the OTHER documents that published the same finding (step 7).
     "source_dataset", "source_key", "source_sha256", "source_url", "page", "row_index",
-    "alert_month", "extraction_method",
+    "alert_month", "extraction_method", "also_reported_in",
     # the batch this alert is about
     "batch_no", "batch_no_raw",
     # dates, as printed and as parsed
@@ -227,7 +224,8 @@ def build_silver(pdf: DataFrame, portal: DataFrame) -> DataFrame:
     )
     categorised = add_failure_categories(rows)
     clustered = add_canonical_manufacturer(categorised, F.col("manufacturer_name"))
-    return clustered.select(SILVER_COLUMNS)
+    # Dedup runs LAST: its key uses manufacturer_canonical, which clustering is what produces.
+    return deduplicate(clustered).select(SILVER_COLUMNS)
 
 
 def main() -> None:

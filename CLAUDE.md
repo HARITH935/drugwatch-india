@@ -182,6 +182,7 @@ uv run --env-file ../.env python -m drugwatch_spark.manufacturer_cluster  # Rapi
 uv run --env-file ../.env python -m drugwatch_spark.manufacturer_review --batches  # accept the 100 mechanical pairs
 uv run --env-file ../.env python -m drugwatch_spark.manufacturer_review   # decide the 160 borderline ones (y/n/q)
 uv run --env-file ../.env python -m drugwatch_spark.failure_category  # failure reasons -> categories (ADR 0009)
+uv run --env-file ../.env python -m drugwatch_spark.deduplicate    # one row per finding; proves dedup is idempotent
 uv run --env-file ../.env python -m drugwatch_spark.build_silver   # every step together: bronze -> silver (--dry-run)
 ```
 

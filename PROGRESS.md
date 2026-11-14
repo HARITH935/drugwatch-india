@@ -499,7 +499,8 @@ Approved 2026-11-12. Plan: `DRUGWATCH_PHASES.md` §9 Phase 3.
          exactly +9, nothing else moved; the cell's dates agree with the portal's own where both exist.
       Tests: 16 unit (13 carried over, 3 new). A mutation check of both fixes (taking the snapshot late; dropping
       the fallback) made exactly the matching test fail each time.
-      **Left for step 7, both measured:** `alert_month` is NULL on the **16 `nsq-bulk` rows** (CDSCO's bulk
+      **Left for step 7** (the first of these is now done - step 7 dropped the bulk file): `alert_month` is NULL
+      on the **16 `nsq-bulk` rows** (CDSCO's bulk
       2017-2023 file prints one year per page, so there is no single alert month) - they are the same 16 findings
       family A already reports monthly, so dedup drops them and the nulls with them. And `is_spurious` is read
       from `source_dataset`, CDSCO's **document-level** category: **78 rows sit in "combined NSQ/spurious"
@@ -559,7 +560,50 @@ Approved 2026-11-12. Plan: `DRUGWATCH_PHASES.md` §9 Phase 3.
       The measured distribution is in **ADR 0009**; the user-facing version belongs in
       `docs/methodology.md` when that page is written (Phase 11/12). Step 8's GE suite should assert every value is
       in this vocabulary and watch the "Other" share, which is how a change in CDSCO's wording will show up.
-- [ ] 7. Deduplicate repeated rows across central and state lists.
+- [x] 7. Deduplicate repeated rows (2026-11-14). `deduplicate.py`, joined onto the end of `build_silver`'s
+      pipeline (its key needs `manufacturer_canonical`, so it must run after the clustering). ADR 0010.
+      **The plan's premise did not match the archive, and measuring first is what showed it.** The plan says
+      "across central and state lists"; in the real data **0** groups repeat across two documents of the same
+      source and exactly **1** spans a central and a state list. The real overlap is between the two **sources**:
+      the portal is primary from 2019 (ADR 0004) and the PDFs run to Jun 2025, so **19 months carry rows from
+      both**, and **1,154 of 1,186 repeated groups were a portal row paired with a PDF row** - about 14% of silver
+      double-counted.
+      **A finding = batch number + alert month + manufacturer + product + `is_spurious`**, every part required:
+      - **The product had to be in the key.** One maker reuses batch `TST2301` across five different injections
+        (Trenbolone Acetate, Trenbolone Enanthate, Nandrolone Blend, Boldenone, Stanozolol). Keyed on batch +
+        month + maker alone, all ten rows collapse into one "duplicate" and five findings become one.
+      - **Placeholder batch numbers are excluded** (42 rows): `"not applicable"` (22), `"not mentioned"` (7),
+        `"nil"` (4), `"--"` (4), `"-"` (3), `"not given"`, `"na"`. Grouping on those merged unrelated medicines.
+        5 of the 7 were already in `manufacturer_name.py`'s `PLACEHOLDER` set, so that set is **reused** rather
+        than copied into a second list that could drift apart.
+      - **Nothing merges on a missing key part.** Spark's `groupBy` treats NULL as a value, so keying on a
+        nullable column quietly merges rows whose maker is merely *unknown* - which is how 10 spurious rows first
+        appeared to duplicate NSQ findings, both having no canonical maker. A row missing any part gets its own id
+        from `(source_key, page, row_index)`, **proven unique across all 8,322 rows** before relying on it.
+      - **`is_spurious` is in the key** so a counterfeit report can never merge into a manufacturer's own record
+        (CLAUDE.md Section 6). Since `manufacturer_canonical` is always NULL on a spurious row, the maker part
+        falls back to `name_on_pack` - the right identity for matching two reports of the same counterfeit, and
+        still attributed to nobody.
+      **Harith's decisions:** the **portal row wins** (its dates parse better on exactly these pairs, 95% vs 90%,
+      and its text is cleaner); **content columns fill gaps from the twin**, which is what keeps the 2 rows where
+      only the PDF carries text - one a firm's reply reading *"The actual manufacturer (as per label claim) has
+      informed that the impugned batch..."*, a real company stating a batch is not theirs; **provenance columns
+      are never blended**, so one document's `page` can never sit beside another document's key; the redundant
+      **bulk file is dropped**; and **exact matching only** - ~6 pairs whose product text differs
+      (`"Fem creme Bleach"` vs `"Fem cream Bleach"`) stay as two rows, because a missed merge beats a wrong one
+      and RapidFuzz would merge `Trenbolone Acetate` with `Trenbolone Enanthate`.
+      **Verified on the real archive: silver 8,322 -> 7,128 rows**, and the arithmetic closes exactly: -16 bulk,
+      -1,144 merged across 2+ documents (1,136 groups), -34 merged inside one document (31 groups). **1,136 rows
+      name another document** in `also_reported_in` (exactly the cross-document group count; the 34 within-document
+      merges leave it empty, because it records other *documents*, not other rows). Every merge was portal-won:
+      `nsq`<->`state-nsq` 627, `nsq`<->`central-nsq` 508, `nsq`<->`combined` 1. **Null `alert_month`: 0. Bulk
+      rows: 0. Re-running dedup on silver returns 7,128** - idempotent, which Phase 5's own acceptance test
+      ("re-runs don't create duplicates") depends on.
+      Tests: 22 unit. A mutation check of all 8 rules (product out of the key, placeholders allowed, the NULL
+      guard removed, provenance blended, `is_spurious` out of the key, the PDF preferred, the bulk file kept, an
+      unstable tie-break) made exactly the matching test(s) fail each time.
+      ⚠️ **Counts change meaning from here on:** a batch flagged in both a state list and the portal is now one
+      finding, not two. Earlier per-source row counts (Phase 2's included) are row counts, not finding counts.
 - [ ] 8. Great Expectations suite: required fields not null, valid dates, batch number format, category values in
       allowed set, row counts within expected range.
 - [ ] 9. **Pandas vs PySpark benchmark:** run the same cleaning job in both on the full archive; record runtime and peak
