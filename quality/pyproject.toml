@@ -1,0 +1,32 @@
+# Python project for the Phase 3 data-quality checks on silver. Managed by uv (ADR 0005).
+[project]
+name = "drugwatch-quality"
+version = "0.1.0"
+description = "Great Expectations suites that validate the silver table"
+authors = [
+    { name = "Harith", email = "181994424+HARITH935@users.noreply.github.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    # Great Expectations brings pandas with it. Silver is ~7k rows, so this reads it with
+    # pyarrow straight from RustFS instead of starting a second Spark (ADR 0008's 686 MB SDK).
+    "great-expectations>=1.3.0",
+    "pyarrow>=18.0.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.4", # lint + format rules live in the repo-root ruff.toml
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: needs the local RustFS with the real silver/ data (skipped without credentials)",
+]

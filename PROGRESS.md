@@ -604,8 +604,36 @@ Approved 2026-11-12. Plan: `DRUGWATCH_PHASES.md` §9 Phase 3.
       unstable tie-break) made exactly the matching test(s) fail each time.
       ⚠️ **Counts change meaning from here on:** a batch flagged in both a state list and the portal is now one
       finding, not two. Earlier per-source row counts (Phase 2's included) are row counts, not finding counts.
-- [ ] 8. Great Expectations suite: required fields not null, valid dates, batch number format, category values in
-      allowed set, row counts within expected range.
+- [x] 8. Great Expectations suite (2026-11-16). New `quality/` uv project (GE 1.25, pyarrow); `silver.py` reads
+      silver, `suite.py` holds the 29 expectations. **Everything in the plan's list is covered** (required fields
+      not null, valid dates, batch number format, category values in an allowed set, row counts in range), plus
+      the spurious rule and a one-row-per-finding check.
+      **Reads silver with pyarrow, not Spark** (approved stack: pandas/pyarrow). Silver is ~7,000 rows, so Spark
+      would mean a JVM and ADR 0008's 686 MB SDK bundle to read what pandas handles in **a second** - the whole
+      suite runs in ~2 s instead of ~10 min, which is what makes it usable as a gate. Silver is partitioned by
+      `source_dataset`/`alert_month`, so those two columns live in directory names, not in the files;
+      `partitioning="hive"` is what puts them back (a test proves it, since without it they are simply missing).
+      **Thresholds are measured, not guessed, and where real data legitimately breaks a rule the exception is
+      written down instead of the rule being dropped:**
+      - `dates_valid` is False on **17 rows** - genuine CDSCO typos from step 3 - so the rule allows 99%; a test
+        proves 1-in-100 passes while 50% fails, which is what catches a parser inverting dates wholesale.
+      - **7 of 7,128 batch numbers contain no letter or digit** (2 blank, rest punctuation like `"--"`): allowed
+        at 99.9%. And **no format regex beyond "has some text"**, because 22 real batch numbers carry mojibake
+        (`"T?18909"`) and 62 contain a line break - a stricter rule would fail correct rows.
+      **The vocabularies are restated in the suite, deliberately NOT imported from `drugwatch_spark`.** A check
+      that imports the thing it checks only proves the code agrees with itself; stating them independently means
+      that if someone edits the category list in the pipeline, the suite fails and a person decides which side is
+      right. That is the point of a gate.
+      **Verified: 29/29 expectations pass on the real 7,128-row silver** (`exit 0`; the report still prints
+      "batch_no 7 bad" and "dates_valid 17 bad", so the tolerated exceptions stay visible rather than hidden).
+      Exits 1 on failure, for Phase 5's Airflow to act on.
+      Tests: 36 unit + 1 integration against real RustFS. **Every test breaks one rule and asserts the suite
+      catches it** - a gate that only ever goes green is indistinguishable from no gate. That includes the
+      ethics checks: a spurious row attributed to a manufacturer, a cleaned name left on one, and a
+      `name_on_pack` on an ordinary row all fail the suite.
+      Found by writing a test: `RUSTFS_ENDPOINT` without a scheme (`"localhost:9000"`) split into scheme
+      `"localhost:9000"` and an empty host, so the client just failed to connect with nothing explaining why -
+      now rejected loudly by `endpoint_parts()`. CI: `quality` added to the `python` job matrix.
 - [ ] 9. **Pandas vs PySpark benchmark:** run the same cleaning job in both on the full archive; record runtime and peak
       memory in `docs/benchmarks.md`.
 

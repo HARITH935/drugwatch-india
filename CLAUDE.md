@@ -184,6 +184,10 @@ uv run --env-file ../.env python -m drugwatch_spark.manufacturer_review   # deci
 uv run --env-file ../.env python -m drugwatch_spark.failure_category  # failure reasons -> categories (ADR 0009)
 uv run --env-file ../.env python -m drugwatch_spark.deduplicate    # one row per finding; proves dedup is idempotent
 uv run --env-file ../.env python -m drugwatch_spark.build_silver   # every step together: bronze -> silver (--dry-run)
+
+# Data quality (from quality/, RustFS up). Reads silver with pyarrow, not Spark: no JVM, seconds.
+uv run --env-file ../.env python -m drugwatch_quality.suite    # validate silver (exit 1 = silver is wrong)
+uv run --env-file ../.env python -m drugwatch_quality.silver   # what silver holds: row count, columns, fill rates
 ```
 
 **Local service ports** (all bound to 127.0.0.1; Postgres and Redis are shifted so they don't clash with OpsPilot):
