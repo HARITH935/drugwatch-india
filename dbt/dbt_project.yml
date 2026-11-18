@@ -1,0 +1,26 @@
+# The dbt project that builds the gold layer (Phase 4). `dbt build` runs every model, then its tests.
+name: "drugwatch"
+version: "1.0.0"
+profile: "drugwatch" # which block of profiles.yml to use for the connection
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+clean-targets: ["target", "dbt_packages"] # what `dbt clean` deletes
+
+flags:
+  # dbt phones home with anonymous usage statistics unless this is off. A public-interest data
+  # project should not send telemetry it never asked its users about.
+  send_anonymous_usage_stats: false
+
+models:
+  drugwatch:
+    staging:
+      # A view, not a table: a staging model is a thin rename-and-cast over the source, so
+      # materialising it would store a second copy of silver that can go stale. Views cost
+      # nothing to build and are always current.
+      +materialized: view
+      # Real schema names, not dbt's default prefixing - see macros/generate_schema_name.sql.
+      # `dbt_staging`, NOT `staging`: `staging` is the landing schema the loader writes into
+      # (staging.silver_nsq), and dbt must never build into the schema it reads from.
+      +schema: dbt_staging

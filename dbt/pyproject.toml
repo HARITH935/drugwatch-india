@@ -1,0 +1,20 @@
+# Python environment for the dbt project (Phase 4). Managed by uv (ADR 0005).
+# There is no src/ package here: this folder IS the dbt project, and dbt is run as a command
+# (`uv run dbt build`). The file exists only so dbt's version is pinned and locked like every
+# other Python tool in the repo.
+[project]
+name = "drugwatch-dbt"
+version = "0.1.0"
+description = "dbt project that builds the gold layer in Postgres"
+authors = [
+    { name = "Harith", email = "181994424+HARITH935@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "dbt-postgres>=1.9.0", # brings dbt-core with it; the adapter that talks to Postgres
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.17.4", # lint + format rules live in the repo-root ruff.toml (no .py here yet, but CI runs it)
+]

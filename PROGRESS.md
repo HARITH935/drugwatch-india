@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 4 — Warehouse (gold). Approved 2026-11-18. Step 1 of 5 done.
-**Next:** step 2 — start the dbt project and its `staging` models on `staging.silver_nsq`.
+**Next:** step 3 — the star schema (§8.1) and the first marts (§8.2), built on `stg_nsq_sample`.
 
 ---
 
@@ -721,7 +721,7 @@ a future combined document with a spurious section would not be).
 
 ## Phase 4 — Warehouse (gold)
 
-Approved 2026-11-18. Plan: `DRUGWATCH_PHASES.md` §9 Phase 4. Goal: analytics-ready data in Postgres.
+Approved 2026-11-18. Plan: `DRUGWATCH_PHASES.md` §9 Phase 4. Goal: analytics-ready data in Postgres. Step 2 of 5 done.
 
 - [x] **Step 1 — Load silver into the Postgres `staging` schema** (2026-11-18)
       `warehouse/` is a new uv project (ADR 0011): **pyarrow + psycopg 3**, not Spark JDBC. The reason is
@@ -761,7 +761,42 @@ Approved 2026-11-18. Plan: `DRUGWATCH_PHASES.md` §9 Phase 4. Goal: analytics-re
       **24 tests pass** (22 unit + 2 against the real local Postgres, which is what proves the type adaptation:
       `text[]` comes back as a list, `date` as a date, NULL as None). Mutation-checked: dropping the list branch,
       the float→int conversion or the TRUNCATE each makes tests fail.
-- [ ] Step 2 — dbt project: `staging` → `intermediate` → `marts`
+- [x] **Step 2 — dbt project, and its first staging model** (2026-11-18)
+      `dbt/` is now a dbt project plus its own uv environment (dbt-core 1.12.7, dbt-postgres 1.11.0).
+      `dbt build` succeeds: **1 model, 0 errors.**
+    - **Schemas are named, not prefixed.** dbt's default would build a model configured `+schema: dbt_staging`
+      into `gold_dbt_staging`; `macros/generate_schema_name.sql` overrides that to use the name verbatim. The
+      layout is `staging` (the loader's landing table — dbt only *reads* it), `dbt_staging`, `dbt_intermediate`,
+      `gold`. dbt never builds into the schema it reads from.
+    - `models/staging/_silver__sources.yml` — declares `staging.silver_nsq` as a **source**, so the table name
+      lives in one place and dbt can draw the lineage. Freshness is configured off `loaded_at`
+      (warn at 45 days, error at 75: CDSCO publishes monthly), checked by `dbt source freshness` — **PASS**.
+    - `models/staging/stg_nsq_sample.sql` — a **view** (materialising it would store a second, stale copy of
+      silver). Thin on purpose: no joins, no filters, no business rules. It adds two things —
+      `sample_id`, an md5 of the provenance triple `(source_key, page, row_index)`, which is unique across all
+      7,126 rows (verified in SQL first) and stable across rebuilds; and `alert_month_start`, the alert month as
+      a real date for time axes and the future `dim_date`. `alert_month` itself stays text: 'YYYY-MM' names an
+      alert, not a day.
+      Little is renamed, and nothing is renamed for the sake of it — Phase 3 already chose good names. Listing
+      all 33 columns out is still the point: this file is the contract, so a new silver column cannot appear
+      downstream by accident and a deleted one fails here rather than deeper in the graph.
+      **Verified (2026-11-18):** `7126 rows, 7126 distinct sample_id, 0 null ids, 0 null alert_month_start`,
+      alert months `2017-07` … `2026-09`.
+    - **Telemetry off** (`send_anonymous_usage_stats: false`): dbt phones home by default, and a public-interest
+      project should not send statistics its users were never asked about.
+    - **Found while testing the password guard:** dbt-core runs `load_dotenv(find_dotenv(usecwd=True),
+      override=False)` at start-up, so running dbt anywhere inside the repo silently loads the repo-root `.env`
+      with no `--env-file`. Proved it by running dbt from outside the repo with `POSTGRES_PASSWORD` unset: the
+      connection is then refused. Consequences recorded in `profiles.yml`: a shell variable wins over `.env`
+      (`override=False`), and CI has no `.env` at all.
+    - **CI gained a `dbt` job** that runs `dbt parse` — every model's SQL and every YAML file, no database
+      needed (checked: `dbt parse` needs no credentials and opens no connection). `dbt build` needs Postgres and
+      the loaded silver, so it stays a local and Phase 5 step.
+    - **Noted for step 4's tests:** 2 pairs of rows share the Phase 3 finding key (batch + month + maker +
+      product + spurious) — the same two Covishield batches reported in both a central PDF and the portal, with
+      **no manufacturer printed**. Phase 3's dedup requires every key part to be present, so it correctly left
+      them alone ("a missed merge is better than a wrong merge"). A uniqueness test in step 4 must therefore be
+      on `sample_id`, not on the finding key.
 - [ ] Step 3 — star schema (§8.1) and marts (§8.2)
 - [ ] Step 4 — dbt tests: unique, not_null, relationships, accepted_values, plus custom (expiry after mfg)
 - [ ] Step 5 — dbt docs for lineage
@@ -873,3 +908,7 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-18 | Silver → Postgres is loaded by pyarrow + psycopg `COPY`, not Spark JDBC: Phase 3's own benchmark measured Spark at ~2 min / 2.7 GB for this table vs 1.2 s here, and dbt-postgres ships a driver anyway. New `warehouse/` uv project so `dbt/` stays a pure dbt project | Harith; ADR 0011 |
 | 2026-11-18 | The loader reads silver through `drugwatch_quality.silver`, not its own copy, so the GE gate and the load see the same rows in Phase 5's validate → load DAG | ADR 0011 |
 | 2026-11-18 | Staging keeps silver's types (`date`, `boolean`, `text[]`) and carries no constraints: those rules go in dbt tests, where a failure is a named report on queryable data, not a load-time crash | `warehouse/src/drugwatch_warehouse/schema.py` |
+| 2026-11-18 | dbt builds into named schemas (`dbt_staging`, `dbt_intermediate`, `gold`) via a `generate_schema_name` override, never into `staging`, which the loader owns | `dbt/macros/generate_schema_name.sql` |
+| 2026-11-18 | Staging models are views, and `sample_id` is an md5 of the provenance triple `(source_key, page, row_index)` — unique across all 7,126 rows and stable across rebuilds, unlike a row number | `stg_nsq_sample.sql` |
+| 2026-11-18 | dbt telemetry switched off (`send_anonymous_usage_stats: false`) | `dbt/dbt_project.yml` |
+| 2026-11-18 | dbt auto-loads the repo-root `.env` (`load_dotenv(find_dotenv(usecwd=True), override=False)`), so no `--env-file` is needed inside the repo; a shell variable still wins, and CI has none | `dbt/profiles.yml` |

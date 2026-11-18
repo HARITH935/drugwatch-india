@@ -1,0 +1,20 @@
+version: 2
+
+sources:
+  # The table warehouse/'s loader writes (ADR 0011). dbt only ever READS it: declaring it as a
+  # source rather than hardcoding "staging.silver_nsq" in the SQL is what lets dbt draw the
+  # lineage graph, and what makes the table name changeable in one place.
+  - name: silver
+    description: >
+      The Phase 3 silver table, loaded into Postgres by `warehouse/` as a full refresh.
+      One row per NSQ or spurious finding, with its provenance (ADR 0010).
+    schema: staging
+    tables:
+      - name: silver_nsq
+        description: "Silver, exactly as loaded: 32 columns plus `loaded_at`."
+        loaded_at_field: loaded_at
+        freshness:
+          # CDSCO publishes monthly, so a load older than this means the pipeline stopped.
+          # Checked by `dbt source freshness`, not by `dbt build`.
+          warn_after: { count: 45, period: day }
+          error_after: { count: 75, period: day }

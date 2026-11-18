@@ -58,3 +58,29 @@ jobs:
 
       - name: Tests
         run: uv run pytest
+
+  # dbt has no pytest suite: its check is that the project parses - every model's SQL and every
+  # YAML file - which needs no database. `dbt build` itself needs Postgres and the loaded silver,
+  # so it stays a local/Phase 5 step.
+  dbt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: dbt
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.6"
+          working-directory: dbt
+
+      - name: Install dependencies (exactly as locked)
+        run: uv sync --locked
+
+      # Checked 2026-11-18: `dbt parse` needs no credentials and opens no connection, so CI
+      # sets nothing. If a future change makes it need one, it fails here rather than silently
+      # connecting to something.
+      - name: Parse the dbt project
+        run: uv run dbt parse

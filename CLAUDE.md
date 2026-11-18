@@ -112,7 +112,7 @@ drugwatch-india/
 ├── ingestion/        # Downloaders, Airflow DAGs
 ├── extraction/       # pdfplumber + Camelot parsers, labelled eval set tools
 ├── spark/            # PySpark cleaning jobs
-├── dbt/              # dbt project (staging, intermediate, marts = gold)
+├── dbt/              # dbt project (dbt_staging, dbt_intermediate, gold marts)
 ├── quality/          # Great Expectations suites
 ├── warehouse/        # silver -> Postgres staging loader (ADR 0011)
 ├── ml/               # Feature prep, LightGBM training, SHAP, MLflow
@@ -197,6 +197,13 @@ uv run --env-file ../.env python -m drugwatch_quality.silver   # what silver hol
 uv run --env-file ../.env python -m drugwatch_warehouse.load_silver            # silver -> staging.silver_nsq
 uv run --env-file ../.env python -m drugwatch_warehouse.load_silver --dry-run  # read and check, write nothing
 docker compose exec postgres psql -U drugwatch -c "select count(*) from staging.silver_nsq"  # check it landed
+
+# dbt (from dbt/, Postgres up and silver loaded). dbt finds the repo-root .env by itself, but the
+# --env-file keeps these commands the same shape as every other one above.
+uv run --env-file ../.env dbt build            # build every model, then run its tests
+uv run --env-file ../.env dbt debug            # check the connection and the config
+uv run --env-file ../.env dbt source freshness # how old the loaded silver is (warn 45d / error 75d)
+uv run dbt parse                               # check the SQL/YAML parses; no database needed
 ```
 
 **Local service ports** (all bound to 127.0.0.1; Postgres and Redis are shifted so they don't clash with OpsPilot):

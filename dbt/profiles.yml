@@ -1,0 +1,24 @@
+# How dbt connects to Postgres. Safe to commit: every value comes from the environment, and the
+# defaults are the local docker-compose ones (host port 5433 -> container 5432).
+# dbt looks for this file in the current directory first, so run dbt from this folder.
+#
+# Where the values come from: dbt-core calls `load_dotenv(find_dotenv(usecwd=True), override=False)`
+# at start-up, and find_dotenv walks UP from the working directory - so running dbt anywhere inside
+# this repo loads the repo-root `.env` by itself, with no --env-file. Verified 2026-11-18 by running
+# dbt from outside the repo with POSTGRES_PASSWORD unset: the connection is then refused.
+# Two consequences worth knowing: `override=False` means a variable already set in the shell wins
+# over `.env`, and CI (which has no `.env`) must set these variables explicitly.
+drugwatch:
+  target: dev # which output below `dbt build` uses unless --target says otherwise
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('POSTGRES_HOST', 'localhost') }}"
+      port: "{{ env_var('POSTGRES_PORT', '5433') | int }}"
+      user: "{{ env_var('POSTGRES_USER', 'drugwatch') }}"
+      # No default on purpose: with nothing to send, Postgres refuses the connection, which is
+      # better than a plausible-looking default that silently connects to the wrong thing.
+      password: "{{ env_var('POSTGRES_PASSWORD') }}"
+      dbname: "{{ env_var('POSTGRES_DB', 'drugwatch') }}"
+      schema: gold # where models land when they don't name their own schema: the gold layer
+      threads: 4 # how many models dbt builds at once
