@@ -2,7 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 3 — Cleaning (bronze → silver) 🟨 **in progress** (approved 2026-11-12).
+**Current phase:** Phase 3 — Cleaning (bronze → silver) ✅ **done** (2026-11-18).
+**Next:** Phase 4 — Warehouse (gold), not started; needs Harith's approval before it begins.
 
 ---
 
@@ -13,7 +14,7 @@ Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWA
 | 0 | Setup | ✅ Done |
 | 1 | Source discovery | ✅ Done |
 | 2 | PDF extraction ⚠️ checkpoint | ✅ Done |
-| 3 | Cleaning (bronze → silver) | 🟨 In progress |
+| 3 | Cleaning (bronze → silver) | ✅ Done |
 | 4 | Warehouse (gold) | ⬜ Not started |
 | 5 | Automation | ⬜ Not started |
 | 6 | Analytics | ⬜ Not started |
@@ -464,12 +465,11 @@ Approved 2026-11-12. Plan: `DRUGWATCH_PHASES.md` §9 Phase 3.
         Tests: 21 unit. A first mutation run found **three tests too weak to prove their own claim**
         (the `(S)` guard, the unknown-key guard and the asking order); all three were strengthened
         until the mutation failed them.
-        **Run for real, part 1 (2026-11-18): Harith accepted both mechanical batches - 13 spacing +
-        87 common-word typo = 100 merges saved.** Verified end to end afterwards: silver rebuilt with
-        `merges accepted by review: 100`, **2,720 -> 2,670 distinct manufacturers** (exactly the figure
-        piece 4's preview predicted), 7,128 rows unchanged, 0 spurious rows attributed, and the GE suite
-        still 29/29. ⏳ **The 160 judgement calls are still Harith's to make** (worth up to ~83 further
-        merges; `manufacturer_review` with no flag, answer y/n/q, saved as you go).
+        **Run for real and COMPLETED by Harith (2026-11-18): all 260 pairs decided - 13 spacing + 87
+        common-word typo accepted as batches, and the 160 judgement calls answered one at a time:
+        95 merged, 65 kept apart.** Rejecting 41% of the judgement pairs is the round working as intended:
+        those are the pairs where a typo and a second real company look identical.
+        **Verified end to end: 195 merges applied, 2,720 -> 2,609 distinct manufacturers.**
   - [x] Piece 4, make the decisions count (2026-11-18). **Found before Harith spent an hour reviewing: nothing
         read the decisions.** Piece 3 wrote `decisions.jsonl` and exposed `merges_from_decisions()`, but
         `cluster_variants()` had no parameter for accepted pairs and neither pipeline imported it - so 260
@@ -699,20 +699,23 @@ Approved 2026-11-12. Plan: `DRUGWATCH_PHASES.md` §9 Phase 3.
 **Done when:** silver data passes all GE checks, manufacturer duplicates are resolved, and the Pandas vs PySpark
 benchmark is recorded.
 
-**Done-when check (2026-11-18): 2 of 3 met — Phase 3 is NOT finished.**
-- ✅ **Silver passes all GE checks** — 29/29 expectations on the real 7,128-row table, exit 0 (step 8).
-- 🟨 **Manufacturer duplicates resolved** — *mostly*. The automatic 98+ clustering plus **Harith's 100
-  accepted mechanical pairs** give **2,670 canonical makers** from 3,302 cleaned names, verified in a real
-  rebuild. ⏳ The **160 judgement calls remain** (`manufacturer_review`, no flag), worth up to ~83 further
-  merges (2,587 if every one were accepted). Until they are answered the conservative threshold leaves some
-  known variants apart.
-- ✅ **Benchmark recorded** — `docs/benchmarks.md` §1.
+**Done-when check (2026-11-18): all 3 met — Phase 3 is COMPLETE.**
+- ✅ **Silver passes all GE checks** — 29/29 expectations on the final 7,126-row table, exit 0 (step 8).
+- ✅ **Manufacturer duplicates resolved** — the automatic 98+ clustering plus **Harith's reviewed decisions on
+  all 260 borderline pairs** (195 merges, 65 kept apart): **3,302 cleaned names → 2,609 canonical makers.**
+- ✅ **Benchmark recorded** — `docs/benchmarks.md` §1 (pandas 6.1 s / 181 MB vs PySpark 111.4 s / 2,723 MB on
+  identical output).
 
-⏳ **To finish Phase 3:** answer the 160 judgement calls (`manufacturer_review`, no flag — the two
-mechanical batches are already accepted), then rebuild silver so the decisions reach it (`build_silver`) and
-re-run the GE suite. Also open, carried from step 5b: whether `is_spurious` needs a **row-level** signal
-rather than CDSCO's document-level category (78 rows sit in "combined NSQ/spurious" documents; today's data
-is attributed correctly, a future combined document might not be).
+**Final silver: 7,126 rows, 32 columns**, written to `s3a://silver/nsq/` partitioned by source and alert month.
+The review also removed **2 real double-counted findings**: CDSCO listed batch `DL5201` and batch `25CT0314`
+twice each in one document under two spellings of the maker (`Digital Vision ... 20 176` vs `... 176`;
+`Consern Pharna Ltd.` vs `Consern Pharma Limited`), same product and same failure reason both times. Merging the
+maker spellings is what revealed them as one finding each.
+Both engines re-checked after the merges: **identical, 7,126 rows x 32 columns agree exactly.**
+
+⏳ **Carried into Phase 4, not blocking:** whether `is_spurious` needs a **row-level** signal rather than CDSCO's
+document-level category (78 rows sit in "combined NSQ/spurious" documents; today's data is attributed correctly,
+a future combined document with a spurious section would not be).
 
 ---
 
