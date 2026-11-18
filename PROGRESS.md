@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 4 — Warehouse (gold). Approved 2026-11-18. Step 1 of 5 done.
-**Next:** step 3 — the star schema (§8.1) and the first marts (§8.2), built on `stg_nsq_sample`.
+**Next:** step 3 piece 2 — `dim_state`, the manufacturer's state/city out of the address, and `lab_type`.
 
 ---
 
@@ -721,7 +721,7 @@ a future combined document with a spurious section would not be).
 
 ## Phase 4 — Warehouse (gold)
 
-Approved 2026-11-18. Plan: `DRUGWATCH_PHASES.md` §9 Phase 4. Goal: analytics-ready data in Postgres. Step 2 of 5 done.
+Approved 2026-11-18. Plan: `DRUGWATCH_PHASES.md` §9 Phase 4. Goal: analytics-ready data in Postgres. Steps 1-2 done; step 3 in progress (piece 1 of 3).
 
 - [x] **Step 1 — Load silver into the Postgres `staging` schema** (2026-11-18)
       `warehouse/` is a new uv project (ADR 0011): **pyarrow + psycopg 3**, not Spark JDBC. The reason is
@@ -797,7 +797,45 @@ Approved 2026-11-18. Plan: `DRUGWATCH_PHASES.md` §9 Phase 4. Goal: analytics-re
       **no manufacturer printed**. Phase 3's dedup requires every key part to be present, so it correctly left
       them alone ("a missed merge is better than a wrong merge"). A uniqueness test in step 4 must therefore be
       on `sample_id`, not on the finding key.
-- [ ] Step 3 — star schema (§8.1) and marts (§8.2)
+- [ ] Step 3 — star schema (§8.1) and marts (§8.2) — split into 3 pieces, like Phase 3 step 5
+    - [x] **Piece 1 — the star schema: 3 dimensions and the fact** (2026-11-18)
+          `dbt build` → **5 models, 0 errors**: `dim_drug` 5,651 · `dim_manufacturer` 2,609 ·
+          `dim_date` 7,305 · `fact_nsq_sample` 7,126 · `stg_nsq_sample` (view). Marts are tables
+          (`+materialized: table`): gold is read by Superset, the API and the ML pipeline, which should
+          read stored rows, not re-run the whole SQL chain per page load.
+        - **`fact_nsq_sample`** — one row per finding, `sample_id` carried straight through from staging.
+          Two CLAUDE.md §6 rules are enforced here, not left to whoever queries it: a **spurious report has
+          no `manufacturer_id`** (the name on a counterfeit pack is the copied brand, kept apart in
+          `name_on_pack`), and **provenance travels into gold** (source file, page, row index, SHA-256, URL),
+          so every public view can link to the original CDSCO document. Joins to the dimensions are LEFT
+          joins: 128 rows have no manufacturer printed (77 spurious + 51 CDSCO never named), and an inner
+          join would silently under-report the archive.
+        - **`dim_manufacturer`** — 2,609 companies, with `name_variants` (every cleaned spelling that
+          resolved to it; 484 have more than one) and `latest_address`. Holds **no counts**: a dimension
+          describes a thing, the marts count. Spurious rows are excluded, so a faked name can never enter
+          the manufacturer list.
+        - **`dim_drug`** — grain is the product name as printed, which was **measured, not assumed**:
+          across all 7,126 rows no product name ever carries two different dosage forms, generic/brand names
+          or strength lists (0 exceptions). Differently-printed names for the same medicine are **not**
+          merged — that needs the same reviewed evidence Phase 3 used for manufacturers.
+        - **`dim_date`** — a row per day, range **derived from the data** (whole years from the earliest to
+          the latest date anywhere in the fact; expiry dates reach 2034), so it cannot go stale. `date_id`
+          is YYYYMMDD as an integer, the classic star key.
+        - **Verified (2026-11-18)** by query, before any dbt test exists: `7126 fact rows, 7126 distinct
+          sample_id, 0 orphan drug_id, 0 orphan manufacturer_id, 0 orphan alert_date_id, 0 spurious rows
+          attributed to a manufacturer, 0 rows missing source_url`. A real question answered through the
+          star (top reported manufacturers, joined across all three dimensions) returns sensible rows —
+          e.g. Martin & Brown Bio-Sciences, the 11-spelling cluster Phase 3 resolved.
+        - **Three §8.1 columns are deliberately absent, not forgotten:**
+          `state`/`city` on dim_manufacturer and `reported_state_id`/`lab_type` on the fact wait for piece 2
+          (the address is still one unparsed string); **`drug_class` has no source at all** — nothing in the
+          archive classifies a medicine, and inventing classes from name fragments would be a guess dressed
+          as a fact. ⏳ **Decision needed from Harith before `mart_drug_class_failures` (§8.2) can be built.**
+        - **One divergence from §8.1, already decided:** the fact keeps `failure_categories` (a list), not a
+          single `failure_category`. The plan predates ADR 0009's finding that 22.6% of rows name more than
+          one failed test.
+    - [ ] Piece 2 — `dim_state`, manufacturer state/city from the address, `lab_type`
+    - [ ] Piece 3 — the marts of §8.2
 - [ ] Step 4 — dbt tests: unique, not_null, relationships, accepted_values, plus custom (expiry after mfg)
 - [ ] Step 5 — dbt docs for lineage
 
@@ -912,3 +950,8 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-18 | Staging models are views, and `sample_id` is an md5 of the provenance triple `(source_key, page, row_index)` — unique across all 7,126 rows and stable across rebuilds, unlike a row number | `stg_nsq_sample.sql` |
 | 2026-11-18 | dbt telemetry switched off (`send_anonymous_usage_stats: false`) | `dbt/dbt_project.yml` |
 | 2026-11-18 | dbt auto-loads the repo-root `.env` (`load_dotenv(find_dotenv(usecwd=True), override=False)`), so no `--env-file` is needed inside the repo; a shell variable still wins, and CI has none | `dbt/profiles.yml` |
+| 2026-11-18 | Step 3 split into 3 pieces (star schema / state + lab_type / marts), like Phase 3 step 5 | Harith |
+| 2026-11-18 | `dim_drug`'s grain is the printed product name, measured: no product name carries two different dosage forms, generic/brand names or strength lists (0 of 7,126). Differently-printed names are NOT merged without the same reviewed evidence Phase 3 used for manufacturers | `dim_drug.sql` |
+| 2026-11-18 | The fact enforces the ethics rules itself: spurious rows carry no `manufacturer_id` (name kept in `name_on_pack`), and provenance (file, page, SHA-256, URL) travels into gold | `fact_nsq_sample.sql` |
+| 2026-11-18 | Dimensions hold no counts, and `dim_date`'s range is derived from the data rather than hardcoded | `dim_manufacturer.sql`, `dim_date.sql` |
+| 2026-11-18 | ⏳ OPEN: `drug_class` (§8.1) has no source in the archive; `mart_drug_class_failures` (§8.2) is blocked until Harith decides how (or whether) to classify medicines | — |

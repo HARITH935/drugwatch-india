@@ -24,3 +24,8 @@ models:
       # `dbt_staging`, NOT `staging`: `staging` is the landing schema the loader writes into
       # (staging.silver_nsq), and dbt must never build into the schema it reads from.
       +schema: dbt_staging
+    marts:
+      # Tables, not views: gold is what Superset, the API and the ML pipeline read, and they
+      # should read stored rows rather than re-run the whole chain of SQL on every page load.
+      +materialized: table
+      +schema: gold

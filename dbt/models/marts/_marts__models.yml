@@ -1,0 +1,57 @@
+version: 2
+
+models:
+  - name: fact_nsq_sample
+    description: >
+      One row per CDSCO finding (ADR 0010), keyed on `sample_id` and pointing at dim_drug,
+      dim_manufacturer and dim_date. A spurious report carries no `manufacturer_id` on purpose:
+      the name on a counterfeit pack is the copied brand, kept in `name_on_pack`.
+      Every row keeps the source document, page and URL. Data tests arrive in Phase 4 step 4.
+    columns:
+      - name: sample_id
+        description: "Primary key, carried through from staging. Traces back to source file + page + row."
+      - name: manufacturer_id
+        description: "FK to dim_manufacturer. Null for spurious reports and where no maker was printed."
+      - name: drug_id
+        description: "FK to dim_drug (the product name as printed)."
+      - name: alert_date_id
+        description: "FK to dim_date: the first day of the CDSCO alert month."
+      - name: is_spurious
+        description: "True = reported as spurious/counterfeit, not as a quality failure by its maker."
+      - name: source_url
+        description: "The original CDSCO document. Required on every public view of a finding."
+
+  - name: dim_manufacturer
+    description: >
+      One row per manufacturer after Phase 3's entity resolution (2,609 companies from 3,302
+      cleaned spellings). Holds no counts: dimensions describe, marts count. `state`/`city` from
+      plan §8.1 arrive with dim_state.
+    columns:
+      - name: manufacturer_id
+        description: "md5 of the canonical name."
+      - name: name_variants
+        description: "Every cleaned spelling that resolved to this company; 484 have more than one."
+      - name: latest_address
+        description: "The address as printed on the most recent alert, still unparsed."
+
+  - name: dim_drug
+    description: >
+      One row per product name as CDSCO printed it (5,651). Verified: a product name never carries
+      two different dosage forms, generic/brand names or strength lists. Differently-printed names
+      for the same medicine are NOT merged - that needs the same reviewed evidence Phase 3 used
+      for manufacturers. `drug_class` from plan §8.1 is absent: no classification source exists yet.
+    columns:
+      - name: drug_id
+        description: "md5 of the product name."
+      - name: generic_name
+        description: "Filled only where the split was unambiguous (~20%); null means 'not stated', not 'none'."
+
+  - name: dim_date
+    description: >
+      One row per calendar day, spanning whole years from the earliest to the latest date in the
+      fact (alert months, manufacture and expiry dates). Range derived from the data, not hardcoded.
+    columns:
+      - name: date_id
+        description: "YYYYMMDD as an integer: the classic star-schema date key."
+      - name: year_month
+        description: "'YYYY-MM', the same spelling the fact's `alert_month` uses."
