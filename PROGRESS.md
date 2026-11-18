@@ -463,8 +463,13 @@ Approved 2026-11-12. Plan: `DRUGWATCH_PHASES.md` §9 Phase 3.
         stops quietly instead of printing a traceback over already-saved work.
         Tests: 21 unit. A first mutation run found **three tests too weak to prove their own claim**
         (the `(S)` guard, the unknown-key guard and the asking order); all three were strengthened
-        until the mutation failed them. **Not yet run for real - the 100 batch pairs and 160
-        judgement calls are Harith's to make.**
+        until the mutation failed them.
+        **Run for real, part 1 (2026-11-18): Harith accepted both mechanical batches - 13 spacing +
+        87 common-word typo = 100 merges saved.** Verified end to end afterwards: silver rebuilt with
+        `merges accepted by review: 100`, **2,720 -> 2,670 distinct manufacturers** (exactly the figure
+        piece 4's preview predicted), 7,128 rows unchanged, 0 spurious rows attributed, and the GE suite
+        still 29/29. ⏳ **The 160 judgement calls are still Harith's to make** (worth up to ~83 further
+        merges; `manufacturer_review` with no flag, answer y/n/q, saved as you go).
   - [x] Piece 4, make the decisions count (2026-11-18). **Found before Harith spent an hour reviewing: nothing
         read the decisions.** Piece 3 wrote `decisions.jsonl` and exposed `merges_from_decisions()`, but
         `cluster_variants()` had no parameter for accepted pairs and neither pipeline imported it - so 260
@@ -696,18 +701,18 @@ benchmark is recorded.
 
 **Done-when check (2026-11-18): 2 of 3 met — Phase 3 is NOT finished.**
 - ✅ **Silver passes all GE checks** — 29/29 expectations on the real 7,128-row table, exit 0 (step 8).
-- 🟨 **Manufacturer duplicates resolved** — *partly*. The automatic 98+ clustering ran (3,302 names → 2,720
-  canonical makers) and piece 4 now feeds reviewed decisions into it, but **the review itself has never been
-  run for real**: the 100 mechanical pairs (`manufacturer_review --batches`) and the 160 borderline judgement
-  calls are Harith's to make, and until then the conservative threshold leaves known variants unmerged
-  (e.g. 3 separate "Martin & Brown" clusters). Measured upside: 2,720 → 2,670 for the mechanical pairs,
-  → at most 2,587 with every judgement call accepted.
+- 🟨 **Manufacturer duplicates resolved** — *mostly*. The automatic 98+ clustering plus **Harith's 100
+  accepted mechanical pairs** give **2,670 canonical makers** from 3,302 cleaned names, verified in a real
+  rebuild. ⏳ The **160 judgement calls remain** (`manufacturer_review`, no flag), worth up to ~83 further
+  merges (2,587 if every one were accepted). Until they are answered the conservative threshold leaves some
+  known variants apart.
 - ✅ **Benchmark recorded** — `docs/benchmarks.md` §1.
 
-⏳ **To finish Phase 3:** run `manufacturer_review --batches`, then `manufacturer_review`, then rebuild silver so
-the decisions reach it (`build_silver`) and re-run the GE suite. Also open, carried from step 5b: whether
-`is_spurious` needs a **row-level** signal rather than CDSCO's document-level category (78 rows sit in "combined
-NSQ/spurious" documents; today's data is attributed correctly, a future combined document might not be).
+⏳ **To finish Phase 3:** answer the 160 judgement calls (`manufacturer_review`, no flag — the two
+mechanical batches are already accepted), then rebuild silver so the decisions reach it (`build_silver`) and
+re-run the GE suite. Also open, carried from step 5b: whether `is_spurious` needs a **row-level** signal
+rather than CDSCO's document-level category (78 rows sit in "combined NSQ/spurious" documents; today's data
+is attributed correctly, a future combined document might not be).
 
 ---
 
