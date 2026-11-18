@@ -8,8 +8,12 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
+    # PySpark 4.2 warns that pandas >= 3 is not fully supported, and pandas 3 changed real
+    # behaviour (astype(str) keeps NA instead of producing "nan"). Stay in the supported range.
+    "pandas>=2.2,<3",
     # Pinned below 4.3: a minor release can move Spark to a new Hadoop version, and the S3A
     # connector (hadoop-aws, session.py) must match it exactly (ADR 0008).
+    "pyarrow>=18.0.0",
     "pyspark>=4.2.1,<4.3",
     "rapidfuzz>=3.14.6",
 ]

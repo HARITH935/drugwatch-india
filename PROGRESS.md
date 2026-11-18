@@ -634,11 +634,61 @@ Approved 2026-11-12. Plan: `DRUGWATCH_PHASES.md` §9 Phase 3.
       Found by writing a test: `RUSTFS_ENDPOINT` without a scheme (`"localhost:9000"`) split into scheme
       `"localhost:9000"` and an empty host, so the client just failed to connect with nothing explaining why -
       now rejected loudly by `endpoint_parts()`. CI: `quality` added to the `python` job matrix.
-- [ ] 9. **Pandas vs PySpark benchmark:** run the same cleaning job in both on the full archive; record runtime and peak
-      memory in `docs/benchmarks.md`.
+- [x] 9. **Pandas vs PySpark benchmark** (2026-11-18). `pandas_pipeline.py` (the same job in pandas),
+      `compare_engines.py` (proves both agree), `benchmark.py` (times and measures them). Written up in
+      `docs/benchmarks.md`.
+      **"The same job" is proven, not asserted.** The pandas version **imports the same logic** - the pure Python
+      functions the Spark job wraps in UDFs (`split_combined_cell`, `strengths_in`, `split_brand_generic`,
+      `clean_manufacturer_name`, `cluster_variants`), the same regex constants (`dosage_form.PATTERNS`,
+      `failure_category.CATEGORIES`) and the same `SILVER_COLUMNS`. Only what Spark expressed as `Column`
+      operations was written twice. **`compare_engines` then checks the real outputs: 7,128 rows x 32 columns
+      agree exactly.**
+      **Measured fairly:** each engine in its own subprocess (Spark's work is in a JVM the Python process cannot
+      see); peak memory sampled across the whole process tree every 100 ms (`getrusage` misses a running JVM);
+      two times reported - the pipeline itself and the total including JVM start-up and jar resolution, because a
+      monthly Airflow task pays start-up every run; both write silver to a local temp dir, which forces each
+      engine to materialise every row while keeping object-store writes out of the comparison.
+      **Result on the full archive (median of 3, Apple M2, 8 GB):**
+      | Engine | Pipeline | Total | Peak memory |
+      |---|---|---|---|
+      | **pandas** | **6.1 s** | **6.5 s** | **181 MB** |
+      | PySpark | 111.4 s | 124.1 s | 2,723 MB |
+      **~19x faster, ~15x less memory at this size.** Spark's figure is a range, not a point: 56-132 s across
+      two sessions for identical work, while pandas stayed within 0.7 s of its median - its own variance exceeds
+      pandas' entire runtime.
+      **The honest caveat is in the doc:** this pipeline is UDF-heavy, so Spark serialises every row out to a
+      Python worker and back; a Spark-native rewrite in pure SQL expressions would close much of the gap. It is a
+      fair measurement of *this* pipeline, not a general claim about the engines. Also recorded: why the project
+      still uses PySpark (the architecture and the learning goal), and that pandas would comfortably serve this
+      project's data for millions of rows yet.
+      **The benchmark improved the code it measured:** the first pandas dedup used
+      `transform(col.ffill().bfill())`; `GroupBy.first()` - which *is* "first non-null per column", the same thing
+      Spark's `first(ignorenulls=True)` does - **halved the runtime (12.3 s -> 6.1 s) and cut peak memory 2.3x**,
+      output still identical. It also removed a pandas deprecation (object-dtype downcasting).
+      Found and handled: **Java's `yy` means 2000-2099, Python's `%y` means 1969-2068**, so `"Apr-95"` is 2095 to
+      Spark (dropped by the 1990-2049 rule) and 1995 to pandas (kept) - the same input giving different output.
+      `_java_two_digit_year()` applies Java's rule; a test pins it.
+      Tests: 19 new (249 in `spark/` total), including **5 fixtures run through both engines and compared cell by
+      cell** (ordinary rows, a portal combined cell, a spurious report, one maker spelled two ways, and awkward
+      values like `29.09.2021`, `T?18909` and `"Not Applicable"`).
+      Also noted in the doc: `build_silver.main()` takes ~10 min against the ~2 min measured here for the same
+      work, because every `count()` in its report re-runs the whole UDF chain.
 
 **Done when:** silver data passes all GE checks, manufacturer duplicates are resolved, and the Pandas vs PySpark
 benchmark is recorded.
+
+**Done-when check (2026-11-18): 2 of 3 met — Phase 3 is NOT finished.**
+- ✅ **Silver passes all GE checks** — 29/29 expectations on the real 7,128-row table, exit 0 (step 8).
+- 🟨 **Manufacturer duplicates resolved** — *partly*. The automatic 98+ clustering ran (3,320 names → 2,720
+  canonical makers), but **step 5 piece 3 has never been run for real**: the 100 mechanical pairs
+  (`manufacturer_review --batches`) and the 160 borderline judgement calls are Harith's to make, and until then
+  the conservative threshold leaves known variants unmerged (e.g. 3 separate "Martin & Brown" clusters).
+- ✅ **Benchmark recorded** — `docs/benchmarks.md` §1.
+
+⏳ **To finish Phase 3:** run `manufacturer_review --batches`, then `manufacturer_review`, then rebuild silver so
+the decisions reach it (`build_silver`) and re-run the GE suite. Also open, carried from step 5b: whether
+`is_spurious` needs a **row-level** signal rather than CDSCO's document-level category (78 rows sit in "combined
+NSQ/spurious" documents; today's data is attributed correctly, a future combined document might not be).
 
 ---
 
@@ -736,3 +786,8 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-13 | `process.extract` with a score_cutoff, not `process.cdist`: identical results on the real archive, no n x n matrix, and no numpy dependency (so no new library needed approval). Found while fixing uint8 rounding, which silently auto-merged 34 pairs that should have gone to review | `manufacturer_cluster.py` |
 | 2026-11-13 | The 260 borderline pairs are sorted by what differs (spacing / misspelt common word / distinctive name) rather than reviewed as one list: 100 are mechanical and safe as batches, 160 need judgement | `manufacturer_review.py` |
 | 2026-11-13 | Review pairs are NOT grouped into clusters for one decision each: grouping chains different companies together (Apple/Apex/APT Formulations), so one "yes" would merge all three. Every judgement pair stays its own question | `manufacturer_review.py` |
+| 2026-11-16 | Spark's RPC pinned to loopback (`spark.driver.bindAddress` / `spark.driver.host` = 127.0.0.1): the Mac's hostname resolves to the *inactive* `bridge0` interface (192.168.3.1), so every driver<->executor message waited out a 10 s `NettyRpcEnv` timeout. Found by reading the benchmark log (22% CPU over 9 minutes = waiting, not working), not guessed | `session.py` |
+| 2026-11-16 | `local[4]`, not `local[*]`, plus an explicit `spark.driver.memory=2g`: on this 8 GB machine `local[*]` = 8 task slots started ~13 Python UDF workers (50-190 MB each) and peaked at 3,159 MB. In local mode the executor *is* the driver JVM, so `spark.executor.memory` is ignored and `driver.memory` is the whole heap | `session.py` |
+| 2026-11-16 | S3A reader pinned to `fs.s3a.input.stream.type=classic`: Hadoop 3.5.0 defaults to the analytics-accelerator reader, which against local RustFS took 39.5 s for a 31 KB object and hit the 60 s timeout on 8 others, while pyarrow read the same objects in 0.02 s. Key and its values (classic/prefetch/analytics) verified inside hadoop-aws-3.5.0.jar | `session.py` |
+| 2026-11-16 | The three settings together: Spark pipeline 435.9 s -> **53.2 s**, total 444.7 s -> **62.2 s**, peak 3,159 MB -> **2,450 MB**, 0 S3 timeouts, 0 RPC stalls, CPU 35% -> 102% (computing instead of waiting). pandas unchanged at 12.6 s / 423 MB. 230 tests pass. Figures move to `docs/benchmarks.md` when step 9 is finished | step 9 (in progress) |
+| 2026-11-16 | Earlier Spark runs crashed the Docker VM (all four containers `Exited (255)`) because another project's `opspilot-control-plane` held 3.41 GiB of the 5 GB Docker allowance; DrugWatch's own four services use 245 MB together. Docker Desktop's memory setting is a ceiling, not a reservation: with OpsPilot stopped the VM holds ~450 MB, so the 5 GB setting was left alone | — |
