@@ -1,0 +1,64 @@
+alias,state_name,state_type,alias_kind
+andhra pradesh,Andhra Pradesh,State,name
+arunachal pradesh,Arunachal Pradesh,State,name
+assam,Assam,State,name
+bihar,Bihar,State,name
+chhattisgarh,Chhattisgarh,State,name
+chattisgarh,Chhattisgarh,State,variant
+goa,Goa,State,name
+gujarat,Gujarat,State,name
+gujrat,Gujarat,State,variant
+haryana,Haryana,State,name
+himachal pradesh,Himachal Pradesh,State,name
+himachal,Himachal Pradesh,State,variant
+jharkhand,Jharkhand,State,name
+karnataka,Karnataka,State,name
+kerala,Kerala,State,name
+madhya pradesh,Madhya Pradesh,State,name
+maharashtra,Maharashtra,State,name
+maharastra,Maharashtra,State,variant
+manipur,Manipur,State,name
+meghalaya,Meghalaya,State,name
+mizoram,Mizoram,State,name
+nagaland,Nagaland,State,name
+odisha,Odisha,State,name
+orissa,Odisha,State,variant
+punjab,Punjab,State,name
+rajasthan,Rajasthan,State,name
+sikkim,Sikkim,State,name
+tamil nadu,Tamil Nadu,State,name
+tamilnadu,Tamil Nadu,State,variant
+tamil nadu india,Tamil Nadu,State,variant
+telangana,Telangana,State,name
+telengana,Telangana,State,variant
+tripura,Tripura,State,name
+uttar pradesh,Uttar Pradesh,State,name
+uttarpradesh,Uttar Pradesh,State,variant
+uttarakhand,Uttarakhand,State,name
+uttaranchal,Uttarakhand,State,variant
+uttrakhand,Uttarakhand,State,variant
+west bengal,West Bengal,State,name
+westbengal,West Bengal,State,variant
+andaman and nicobar islands,Andaman and Nicobar Islands,Union Territory,name
+chandigarh,Chandigarh,Union Territory,name
+dadra and nagar haveli and daman and diu,Dadra and Nagar Haveli and Daman and Diu,Union Territory,name
+dadra and nagar haveli,Dadra and Nagar Haveli and Daman and Diu,Union Territory,variant
+daman,Dadra and Nagar Haveli and Daman and Diu,Union Territory,variant
+delhi,Delhi,Union Territory,name
+new delhi,Delhi,Union Territory,variant
+jammu and kashmir,Jammu and Kashmir,Union Territory,name
+jammu & kashmir,Jammu and Kashmir,Union Territory,variant
+ladakh,Ladakh,Union Territory,name
+lakshadweep,Lakshadweep,Union Territory,name
+puducherry,Puducherry,Union Territory,name
+pondicherry,Puducherry,Union Territory,variant
+hp,Himachal Pradesh,State,abbrev
+h p,Himachal Pradesh,State,abbrev
+up,Uttar Pradesh,State,abbrev
+mp,Madhya Pradesh,State,abbrev
+ap,Andhra Pradesh,State,abbrev
+tn,Tamil Nadu,State,abbrev
+wb,West Bengal,State,abbrev
+hr,Haryana,State,abbrev
+j&k,Jammu and Kashmir,Union Territory,abbrev
+jk,Jammu and Kashmir,Union Territory,abbrev

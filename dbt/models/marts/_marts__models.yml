@@ -24,15 +24,39 @@ models:
   - name: dim_manufacturer
     description: >
       One row per manufacturer after Phase 3's entity resolution (2,609 companies from 3,302
-      cleaned spellings). Holds no counts: dimensions describe, marts count. `state`/`city` from
-      plan §8.1 arrive with dim_state.
+      cleaned spellings), plus the state read out of the address. Holds no counts: dimensions
+      describe, marts count. `city` (plan §8.1) is still absent - a city has no closed vocabulary
+      to check against the way the states do.
     columns:
       - name: manufacturer_id
         description: "md5 of the canonical name."
       - name: name_variants
         description: "Every cleaned spelling that resolved to this company; 484 have more than one."
+      - name: state_name
+        description: >
+          The manufacturing state, read out of the address against a reviewed vocabulary. Null
+          means "not stated, and not guessed" - never "no state". 66% of companies are resolved.
+      - name: state_id
+        description: "FK to dim_state. Null wherever state_name is."
+      - name: state_match_status
+        description: "matched | no_state_in_address | no_address | conflicting_states."
+      - name: state_match_evidence
+        description: "Which alias produced the answer, so any row can be audited back to the words."
       - name: latest_address
         description: "The address as printed on the most recent alert, still unparsed."
+
+  - name: dim_state
+    description: >
+      One row per Indian state and union territory, built from the vocabulary seed rather than
+      from observed values, so a state with no findings still has a row and a map shows "0" rather
+      than a gap.
+    columns:
+      - name: state_id
+        description: "md5 of the state name - the same formula dim_manufacturer uses."
+      - name: state_type
+        description: "State or Union Territory."
+      - name: alias_count
+        description: "How many spellings of this state the vocabulary recognises."
 
   - name: dim_drug
     description: >

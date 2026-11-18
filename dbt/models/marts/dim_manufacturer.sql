@@ -1,50 +1,43 @@
--- One row per manufacturer, after Phase 3's entity resolution.
+-- One row per manufacturer: Phase 3's resolved company, plus the state read out of its address.
 --
--- "Manufacturer" here means the canonical name a person either accepted or that RapidFuzz merged
--- at 98+ (Phase 3 step 5): 3,302 cleaned spellings collapsed into 2,609 companies. `name_variants`
--- keeps every spelling that maps to this row, so a user searching the name printed on their strip
--- still finds the company, and so an analyst can see exactly what was merged.
+-- The two halves are built separately on purpose - int_manufacturer aggregates the spellings,
+-- int_manufacturer_state reads the address - so that neither depends on the other and each can
+-- be checked on its own.
 --
--- Deliberately NOT in this table:
---   - any count of findings. A dimension describes a thing; counting belongs in the marts, which
---     can then change their definitions without rebuilding this.
---   - rows for spurious reports. The name on a spurious pack is the copied brand, not the maker
---     (CLAUDE.md Section 6), and silver already leaves `manufacturer_canonical` null on those 77
---     rows. Filtering on null here is what keeps a faked name out of the manufacturer list.
---   - `state` and `city` from Section 8.1: the address is still one unparsed string. Those arrive
---     with dim_state, in the next piece of this step, rather than being guessed at now.
+-- `state_name` is null wherever the address did not say so cleanly; `state_match_status` says
+-- which it was (no address at all, no state in the address, or two states matched and the row was
+-- left unresolved). Null here never means "no state" - it means "not stated, and not guessed".
+--
+-- `city` from plan Section 8.1 is still missing: a city has no closed vocabulary to check against
+-- the way the 36 states and UTs do, so it needs its own piece and its own evidence.
 
-with samples as (
+with manufacturers as (
 
-    select * from {{ ref('stg_nsq_sample') }}
-    where manufacturer_canonical is not null
+    select * from {{ ref('int_manufacturer') }}
 
 ),
 
-final as (
+located as (
 
-    select
-        -- A surrogate key from the canonical name: stable as long as the name is, and it changes
-        -- (correctly) if a later review merges this company into another one.
-        md5(manufacturer_canonical) as manufacturer_id,
-        manufacturer_canonical as canonical_name,
-
-        -- every cleaned spelling that resolved to this company, and how many there were.
-        -- 484 of the 2,609 companies have more than one.
-        array_agg(distinct manufacturer_name order by manufacturer_name) as name_variants,
-        count(distinct manufacturer_name) as name_variant_count,
-
-        -- the address exactly as printed on the most recent alert, kept so the next piece has
-        -- something to parse a state out of, and so a user can see what CDSCO actually printed
-        (array_agg(manufacturer_address order by alert_month_start desc nulls last))[1]
-            as latest_address,
-
-        min(alert_month) as first_alert_month,
-        max(alert_month) as last_alert_month
-
-    from samples
-    group by manufacturer_canonical
+    select * from {{ ref('int_manufacturer_state') }}
 
 )
 
-select * from final
+select
+    manufacturers.manufacturer_id,
+    manufacturers.canonical_name,
+    manufacturers.name_variants,
+    manufacturers.name_variant_count,
+
+    -- where it is, as far as the address can be trusted
+    located.state_name,
+    case when located.state_name is not null then md5(located.state_name) end as state_id,
+    located.state_match_status,
+    located.match_evidence as state_match_evidence,
+
+    manufacturers.latest_address,
+    manufacturers.first_alert_month,
+    manufacturers.last_alert_month
+
+from manufacturers
+left join located using (manufacturer_id)

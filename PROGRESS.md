@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 4 — Warehouse (gold). Approved 2026-11-18. Step 1 of 5 done.
-**Next:** step 3 piece 2 — `dim_state`, the manufacturer's state/city out of the address, and `lab_type`.
+**Next:** step 3 piece 2b — `lab_type` (Central/State) and the reporting lab's state out of `reported_by`.
 
 ---
 
@@ -834,7 +834,50 @@ Approved 2026-11-18. Plan: `DRUGWATCH_PHASES.md` §9 Phase 4. Goal: analytics-re
         - **One divergence from §8.1, already decided:** the fact keeps `failure_categories` (a list), not a
           single `failure_category`. The plan predates ADR 0009's finding that 22.6% of rows name more than
           one failed test.
-    - [ ] Piece 2 — `dim_state`, manufacturer state/city from the address, `lab_type`
+    - [x] **Piece 2a — `dim_state` and the manufacturer's state, read out of the address** (2026-11-18)
+          There is no state field in the archive: one address string per manufacturer, typed by whoever
+          wrote the alert. So a **reviewed vocabulary seed** (`seeds/india_state_alias.csv`, 62 spellings
+          of the 36 states and UTs: official names, real variants — Orissa, Tamilnadu, Gujrat, Uttaranchal —
+          and abbreviations HP/U.P./HR/J&K) is matched against a normalised copy of the address.
+          dbt **seeds** are CSV reference tables dbt loads into the warehouse: reviewable as a table,
+          diffable in git, and a new spelling is a one-line change with no SQL to re-read.
+        - **Three traps, each found by reading real addresses before writing the rule:**
+          1. **There is a village called Kerala — in Gujarat** ("GIDC Kerala, Bavla, Dist. Ahmedabad,
+             Gujarat"). 5 companies sit there. So a row matching two different states resolves to **null**,
+             never to the first or the longest match.
+          2. **Road names carry state names**: "14/4, Delhi-Mathura Road, Faridabad, Haryana" is in Haryana.
+             Caught by the same two-match rule.
+          3. **47 addresses contain a second company's address** after a marketer marker — often in another
+             state. Everything from the marker on is cut before matching. The markers are counted as whole
+             words, not imagined: `mrkt` 30, `marketed` 7, `mrk` 6, `mkt` 2, `markt` 1. **`market` is
+             deliberately not a marker** though it occurs 4 times — it is part of real addresses
+             ("Vasavi Pharma Market Complex"), and a prefix match would have truncated them.
+             Widening the markers from 3 spellings to 5 resolved 3 conflicts, and correctly *lost* one
+             match whose only state was the marketer's.
+        - Matching normalises first — lower case, dots dropped (`H.P.` → `hp`, `(M.P)` → `mp`), other
+          punctuation → space, `&` kept so `J&K` survives — and uses Postgres' `\m…\M` word boundaries,
+          so `hp` cannot match inside `HPSIDC`. Aliases are stored already normalised, so there is no
+          regex escaping to get wrong. Every answer keeps `state_match_evidence` (which alias produced it).
+        - **Verified (2026-11-18), 2,609 companies:** `matched 1,730 (66.3%)`, `no_state_in_address 820
+          (31.4%)`, `no_address 47 (1.8%)`, `conflicting_states 12 (0.5%)` — all 12 read and confirmed as
+          genuine ambiguities (Kerala-in-Gujarat ×5, Delhi road names, a "Works at:" second factory).
+          `0 orphan state_id`. Top states: **Himachal Pradesh 678, Uttarakhand 200, Gujarat 176, MP 81,
+          Haryana 79** — which matches India's actual pharma geography (the Baddi–Solan belt), a sanity
+          check the number would have failed if the matching were wrong.
+        - **Restructured to avoid a circular dependency:** `int_manufacturer` (the aggregation) →
+          `int_manufacturer_state` (reads the address) → `dim_manufacturer` (joins them). Intermediate
+          models are views: build steps, not something anyone queries.
+        - `dim_state` is built **from the seed, not from observed values**, so a state with no findings
+          still has a row and a map shows "0 reports" instead of a gap.
+        - ⏳ **Open, measured: 820 companies still have no state.** 653 of them (79.7%) print a PIN code,
+          so a PIN-prefix → state mapping is the largest available gain — but 2-digit prefixes are
+          ambiguous for every state that was split (UP/Uttarakhand, AP/Telangana, Bihar/Jharkhand,
+          MP/Chhattisgarh, Maharashtra/Goa, TN/Puducherry), so it needs a careful reference table and
+          Harith's OK. Others print only a city ("Jejuri, MIDC, Pune"), or an abbreviation the vocabulary
+          rejects on purpose: **`Raj.` cannot be added safely** — one real Haryana address reads
+          "Sector 38, HSIIDC, Raj, Sonipat", where `Raj` is part of a name, and normalisation drops the dot
+          that would have told them apart.
+    - [ ] Piece 2b — `lab_type` (Central/State) and the reporting lab's state from `reported_by`
     - [ ] Piece 3 — the marts of §8.2
 - [ ] Step 4 — dbt tests: unique, not_null, relationships, accepted_values, plus custom (expiry after mfg)
 - [ ] Step 5 — dbt docs for lineage
@@ -955,3 +998,7 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-18 | The fact enforces the ethics rules itself: spurious rows carry no `manufacturer_id` (name kept in `name_on_pack`), and provenance (file, page, SHA-256, URL) travels into gold | `fact_nsq_sample.sql` |
 | 2026-11-18 | Dimensions hold no counts, and `dim_date`'s range is derived from the data rather than hardcoded | `dim_manufacturer.sql`, `dim_date.sql` |
 | 2026-11-18 | ⏳ OPEN: `drug_class` (§8.1) has no source in the archive; `mart_drug_class_failures` (§8.2) is blocked until Harith decides how (or whether) to classify medicines | — |
+| 2026-11-18 | The manufacturer's state comes from a reviewed vocabulary seed matched against the address, and resolves to NULL whenever two states match (a village called Kerala sits in Gujarat; "Delhi-Mathura Road" is in Haryana) | `seeds/india_state_alias.csv`, `int_manufacturer_state.sql` |
+| 2026-11-18 | Addresses are cut at a marketer marker before matching (`mrkt`/`marketed`/`mrk`/`mkt`/`markt`, counted as whole words); `market` is excluded because it is part of real addresses | `int_manufacturer_state.sql` |
+| 2026-11-18 | `Raj.` is NOT in the state vocabulary: normalisation drops the dot, and a real Haryana address contains the word "Raj" | `india_state_alias.csv` |
+| 2026-11-18 | ⏳ OPEN: 820 of 2,609 companies have no state; 653 print a PIN code, so a PIN-prefix mapping is the next largest gain but needs a reference table and Harith's OK (2-digit prefixes are ambiguous for every split state) | — |

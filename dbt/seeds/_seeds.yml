@@ -1,0 +1,20 @@
+version: 2
+
+seeds:
+  - name: india_state_alias
+    description: >
+      Reviewed vocabulary of Indian state and union-territory names: one row per spelling that may
+      appear in a CDSCO address. `alias` is stored already normalised (lower case, no dots) because
+      int_manufacturer_state normalises the address the same way before matching.
+      `alias_kind` records what each row is - an official name, a spelling variant seen in the
+      archive (Orissa, Tamilnadu, Gujrat), or a two-letter abbreviation (HP, U.P., HR), which are
+      the riskiest and were each checked against real addresses before being added.
+    columns:
+      - name: alias
+        description: "The normalised spelling to look for. Matched on whole-word boundaries only."
+      - name: state_name
+        description: "The current official name this spelling resolves to (Orissa -> Odisha)."
+      - name: state_type
+        description: "State or Union Territory."
+      - name: alias_kind
+        description: "name | variant | abbrev."

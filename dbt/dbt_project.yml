@@ -13,6 +13,13 @@ flags:
   # project should not send telemetry it never asked its users about.
   send_anonymous_usage_stats: false
 
+# Seeds are small CSV reference tables that dbt loads into the warehouse. The state vocabulary
+# lives here rather than in SQL: it is reviewable as a table, diffable in git, and a new spelling
+# is a one-line change with no model to re-read.
+seeds:
+  drugwatch:
+    +schema: dbt_seeds
+
 models:
   drugwatch:
     staging:
@@ -24,6 +31,11 @@ models:
       # `dbt_staging`, NOT `staging`: `staging` is the landing schema the loader writes into
       # (staging.silver_nsq), and dbt must never build into the schema it reads from.
       +schema: dbt_staging
+    intermediate:
+      # Views: intermediate models are build steps on the way to gold, not something anyone
+      # queries directly, so there is no reason to store their rows.
+      +materialized: view
+      +schema: dbt_intermediate
     marts:
       # Tables, not views: gold is what Superset, the API and the ML pipeline read, and they
       # should read stored rows rather than re-run the whole chain of SQL on every page load.
