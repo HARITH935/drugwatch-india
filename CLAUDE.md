@@ -114,6 +114,7 @@ drugwatch-india/
 ├── spark/            # PySpark cleaning jobs
 ├── dbt/              # dbt project (staging, intermediate, marts = gold)
 ├── quality/          # Great Expectations suites
+├── warehouse/        # silver -> Postgres staging loader (ADR 0011)
 ├── ml/               # Feature prep, LightGBM training, SHAP, MLflow
 ├── ml-serving/       # FastAPI + ONNX Runtime service
 ├── llm/              # Hugging Face + PEFT LoRA fine-tuning and inference
@@ -191,6 +192,11 @@ uv run --env-file ../.env python -m drugwatch_spark.benchmark --repeat 3  # time
 # Data quality (from quality/, RustFS up). Reads silver with pyarrow, not Spark: no JVM, seconds.
 uv run --env-file ../.env python -m drugwatch_quality.suite    # validate silver (exit 1 = silver is wrong)
 uv run --env-file ../.env python -m drugwatch_quality.silver   # what silver holds: row count, columns, fill rates
+
+# Warehouse (from warehouse/, RustFS + Postgres up). Full refresh in one transaction; re-runnable.
+uv run --env-file ../.env python -m drugwatch_warehouse.load_silver            # silver -> staging.silver_nsq
+uv run --env-file ../.env python -m drugwatch_warehouse.load_silver --dry-run  # read and check, write nothing
+docker compose exec postgres psql -U drugwatch -c "select count(*) from staging.silver_nsq"  # check it landed
 ```
 
 **Local service ports** (all bound to 127.0.0.1; Postgres and Redis are shifted so they don't clash with OpsPilot):

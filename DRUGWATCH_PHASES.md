@@ -188,6 +188,7 @@ Approved 2026-11-03 (Python tooling 2026-11-04). Rationale is recorded in `docs/
 | RustFS (replaces MinIO) | MinIO's community edition was discontinued (no Docker images, repo unmaintained); RustFS is an S3-compatible drop-in. See ADR 0002 | 0 |
 | requests, boto3 | HTTP client for downloads; S3 client for RustFS. See ADR 0005 | 1 |
 | uv, pytest, ruff | Python environments + lockfile; test runner; lint + format (in CI). See ADR 0005 | 1 |
+| psycopg 3 (+ `warehouse/` folder) | Loads silver into the Postgres staging schema with `COPY`; dbt-postgres ships a driver anyway. See ADR 0011 | 4 |
 
 Email credentials (and every other secret) come only from environment variables.
 

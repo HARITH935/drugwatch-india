@@ -2,8 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 3 — Cleaning (bronze → silver) ✅ **done** (2026-11-18).
-**Next:** Phase 4 — Warehouse (gold), not started; needs Harith's approval before it begins.
+**Current phase:** Phase 4 — Warehouse (gold). Approved 2026-11-18. Step 1 of 5 done.
+**Next:** step 2 — start the dbt project and its `staging` models on `staging.silver_nsq`.
 
 ---
 
@@ -15,7 +15,7 @@ Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWA
 | 1 | Source discovery | ✅ Done |
 | 2 | PDF extraction ⚠️ checkpoint | ✅ Done |
 | 3 | Cleaning (bronze → silver) | ✅ Done |
-| 4 | Warehouse (gold) | ⬜ Not started |
+| 4 | Warehouse (gold) | 🟨 In progress |
 | 5 | Automation | ⬜ Not started |
 | 6 | Analytics | ⬜ Not started |
 | 7 | Data science | ⬜ Not started |
@@ -719,6 +719,57 @@ a future combined document with a spurious section would not be).
 
 ---
 
+## Phase 4 — Warehouse (gold)
+
+Approved 2026-11-18. Plan: `DRUGWATCH_PHASES.md` §9 Phase 4. Goal: analytics-ready data in Postgres.
+
+- [x] **Step 1 — Load silver into the Postgres `staging` schema** (2026-11-18)
+      `warehouse/` is a new uv project (ADR 0011): **pyarrow + psycopg 3**, not Spark JDBC. The reason is
+      Phase 3's own benchmark — Spark costs ~2 min and ~2.7 GB for exactly this table, against **1.2 s** for
+      this loader. psycopg is barely an addition: `dbt-postgres` ships a Postgres driver anyway.
+    - `schema.py` — the 32 silver columns written out in full, with their Postgres types. Silver's types are
+      **kept**, not flattened to text: `date` stays `date`, `is_spurious` stays `boolean`, the three list
+      columns (`strengths`, `failure_categories`, `also_reported_in`) stay `text[]`. No constraints and no
+      primary key: those rules belong in dbt tests (step 4), where a failure is a named report on data you can
+      query rather than a crash in the middle of a load. One extra column, `loaded_at timestamptz DEFAULT now()`,
+      so dbt and Airflow can see how fresh gold is; `COPY` never sends it.
+    - `load_silver.py` — reads silver through **`drugwatch_quality.silver.read_silver()`**, the same reader the
+      Great Expectations gate uses, so in Phase 5's *validate → load* DAG "what passed" and "what landed" are
+      provably the same rows. Loads with `COPY ... FROM STDIN` (Postgres' bulk path, one stream instead of one
+      INSERT per row).
+    - **Full refresh in one transaction:** `TRUNCATE` + `COPY` commit together. Re-running is idempotent
+      (Phase 5 requires that), no reader ever sees an empty or half-loaded table, and any failure rolls back
+      the TRUNCATE too — a failed load can never half-replace good data.
+    - Three guards, each mutation-checked: an **empty silver is refused** before the TRUNCATE (it would wipe the
+      table); a **column set that doesn't match** is refused (a Phase 3 schema change must stop the pipeline,
+      not quietly load 31 of 32 columns); the **row count is verified inside the transaction** and a mismatch
+      rolls back.
+    - Value conversion, each case from real silver: numpy scalars/arrays → plain Python; NaN / NaT / pd.NA →
+      NULL (checked *after* the list branch, or an empty `strengths` list would become NULL); `page` float64 →
+      `integer` (it is only a float because 97% of rows are NULL).
+      **Verified (2026-11-18):** `7126 rows, 32 columns` read, `loaded 7126 rows into staging.silver_nsq`
+      in **1.2 s total**, re-run leaves 7,126.
+
+      | source_dataset | rows | spurious | makers | months |
+      |---|---:|---:|---:|---|
+      | nsq | 6,917 | 0 | 2,568 | 2019-01 .. 2026-09 |
+      | combined | 77 | 0 | 65 | 2018-05 .. 2018-08 |
+      | spurious | 77 | 77 | 0 | 2024-04 .. 2026-09 |
+      | state-nsq | 30 | 0 | 26 | 2024-05 .. 2025-06 |
+      | central-nsq | 25 | 0 | 12 | 2017-07 .. 2025-06 |
+
+      **24 tests pass** (22 unit + 2 against the real local Postgres, which is what proves the type adaptation:
+      `text[]` comes back as a list, `date` as a date, NULL as None). Mutation-checked: dropping the list branch,
+      the float→int conversion or the TRUNCATE each makes tests fail.
+- [ ] Step 2 — dbt project: `staging` → `intermediate` → `marts`
+- [ ] Step 3 — star schema (§8.1) and marts (§8.2)
+- [ ] Step 4 — dbt tests: unique, not_null, relationships, accepted_values, plus custom (expiry after mfg)
+- [ ] Step 5 — dbt docs for lineage
+
+**Done when:** `dbt build` succeeds with all tests passing.
+
+---
+
 Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when each phase starts.
 
 ---
@@ -818,3 +869,7 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-16 | S3A reader pinned to `fs.s3a.input.stream.type=classic`: Hadoop 3.5.0 defaults to the analytics-accelerator reader, which against local RustFS took 39.5 s for a 31 KB object and hit the 60 s timeout on 8 others, while pyarrow read the same objects in 0.02 s. Key and its values (classic/prefetch/analytics) verified inside hadoop-aws-3.5.0.jar | `session.py` |
 | 2026-11-16 | The three settings together: Spark pipeline 435.9 s -> **53.2 s**, total 444.7 s -> **62.2 s**, peak 3,159 MB -> **2,450 MB**, 0 S3 timeouts, 0 RPC stalls, CPU 35% -> 102% (computing instead of waiting). pandas unchanged at 12.6 s / 423 MB. 230 tests pass. Figures move to `docs/benchmarks.md` when step 9 is finished | step 9 (in progress) |
 | 2026-11-16 | Earlier Spark runs crashed the Docker VM (all four containers `Exited (255)`) because another project's `opspilot-control-plane` held 3.41 GiB of the 5 GB Docker allowance; DrugWatch's own four services use 245 MB together. Docker Desktop's memory setting is a ceiling, not a reservation: with OpsPilot stopped the VM holds ~450 MB, so the 5 GB setting was left alone | — |
+| 2026-11-18 | Phase 3 closed (all 3 done-when criteria met); Phase 4 approved | Harith |
+| 2026-11-18 | Silver → Postgres is loaded by pyarrow + psycopg `COPY`, not Spark JDBC: Phase 3's own benchmark measured Spark at ~2 min / 2.7 GB for this table vs 1.2 s here, and dbt-postgres ships a driver anyway. New `warehouse/` uv project so `dbt/` stays a pure dbt project | Harith; ADR 0011 |
+| 2026-11-18 | The loader reads silver through `drugwatch_quality.silver`, not its own copy, so the GE gate and the load see the same rows in Phase 5's validate → load DAG | ADR 0011 |
+| 2026-11-18 | Staging keeps silver's types (`date`, `boolean`, `text[]`) and carries no constraints: those rules go in dbt tests, where a failure is a named report on queryable data, not a load-time crash | `warehouse/src/drugwatch_warehouse/schema.py` |

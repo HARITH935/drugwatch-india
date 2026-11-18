@@ -1,0 +1,38 @@
+# Python project for the warehouse load (Phase 4): silver Parquet -> Postgres. Managed by uv (ADR 0005).
+[project]
+name = "drugwatch-warehouse"
+version = "0.1.0"
+description = "Loads the silver table from RustFS into the Postgres staging schema (ADR 0011)"
+authors = [
+    { name = "Harith", email = "181994424+HARITH935@users.noreply.github.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    # read_silver(): the same pyarrow reader the Great Expectations gate uses, so "what passed"
+    # and "what landed" are provably the same rows (path dependency, see [tool.uv.sources]).
+    "drugwatch-quality",
+    # psycopg 3, Postgres' current Python driver. [binary] ships a prebuilt libpq, so no local
+    # Postgres install is needed to build it. ADR 0011.
+    "psycopg[binary]>=3.2.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14.0"]
+build-backend = "uv_build"
+
+# Use the quality package from this repo's folder, not from PyPI. editable = changes there are seen at once.
+[tool.uv.sources]
+drugwatch-quality = { path = "../quality", editable = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.4", # lint + format rules live in the repo-root ruff.toml
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: needs the local Postgres and the real silver/ data (skipped without credentials)",
+]

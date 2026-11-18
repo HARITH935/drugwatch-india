@@ -75,6 +75,8 @@ Per run, to show the spread:
 | pandas | 6.4 / 6.1 / 6.0 s | 7.2 / 6.5 / 6.5 s | 149 / 181 / 184 MB |
 | PySpark | 64.8 / 113.6 / 111.4 s | 77.1 / 131.6 / 124.1 s | 2,319 / 2,782 / 2,723 MB |
 
+*Row count: measured on the 7,128-row silver table of 2026-11-16. Harith's manufacturer review (195 accepted merges, 2026-11-18) later revealed two duplicate findings, so silver now holds 7,126 rows. The timings were not re-run: two rows in 7,128 cannot move them, and `compare_engines.py` still reports both engines identical at 7,126.*
+
 **At this size pandas is roughly 19x faster and uses about 15x less memory.**
 
 **Spark's figure is unstable on this machine and should be read as a range, not a point.** Across two sessions
