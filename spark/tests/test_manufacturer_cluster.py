@@ -118,3 +118,76 @@ def test_add_canonical_manufacturer_on_a_dataframe(spark):
     assert canonical["Apple Formulation Private Limited"] == "Apple Formulations Private Limited"
     assert canonical["Lone Pharma Private Limited"] == "Lone Pharma Private Limited"
     assert canonical[None] is None
+
+
+# --- piece 4: the reviewed decisions reaching the clustering -----------------------------
+
+
+def test_a_reviewed_pair_is_merged_even_though_it_scores_below_the_threshold():
+    # The whole point of piece 3: these pairs score 95-98, which is deliberately NOT enough to
+    # merge automatically. Without this, a person's 260 decisions would change nothing.
+    counts = {"Agron Remedies Private Limited": 5, "Argon Remedies Private Limited": 3}
+
+    without = cluster_variants(counts)
+    with_review = cluster_variants(counts, merges=[tuple(sorted(counts))])
+
+    assert len(set(without.values())) == 2  # left apart by the scorer
+    assert len(set(with_review.values())) == 1  # joined because a person said so
+
+
+def test_the_reviewed_merge_still_picks_the_canonical_name_by_the_usual_rules():
+    # The agreed name is the variant on the most rows, exactly as for an automatic cluster.
+    counts = {"Agron Remedies Private Limited": 5, "Argon Remedies Private Limited": 3}
+
+    mapping = cluster_variants(counts, merges=[tuple(sorted(counts))])
+
+    assert set(mapping.values()) == {"Agron Remedies Private Limited"}
+
+
+def test_a_rejected_pair_is_not_merged():
+    # Only "same company" answers are passed in; "different" needs no handling, because not
+    # merging is already what happens below the threshold.
+    counts = {"Sarv Pharma Private Limited": 4, "Solar Pharma Private Limited": 2}
+
+    mapping = cluster_variants(counts, merges=[])
+
+    assert len(set(mapping.values())) == 2
+
+
+def test_no_decisions_leaves_the_clustering_exactly_as_it_was():
+    # CI has no decisions file; the result must be identical to the automatic clustering.
+    counts = {"J.M. Laboratories": 9, "J. M. Laboratories": 2, "Unrelated Pharma Limited": 1}
+
+    assert cluster_variants(counts) == cluster_variants(counts, merges=())
+
+
+def test_a_decision_about_a_name_that_no_longer_exists_is_skipped():
+    # A cleaning rule can change between the review and the next build, so a remembered name
+    # may be gone. Skipping it is right; crashing or inventing a cluster is not.
+    counts = {"Zee Laboratories": 3}
+
+    mapping = cluster_variants(counts, merges=[("Zee Laboratories", "A Name Since Changed")])
+
+    assert mapping == {"Zee Laboratories": "Zee Laboratories"}
+
+
+def test_a_reviewed_merge_can_join_two_whole_clusters():
+    # The reviewed pair is one edge; union-find then pulls each side's automatic cluster with
+    # it. This is how "3 separate Martin & Brown clusters" become one.
+    counts = {
+        "Martin and Brown Bio-Sciences Private Limited": 6,
+        "Martin and Brown Bio-Sciences Private Limited.": 2,  # joins the first automatically
+        "Martin & Brown Bio Sciences Pvt Ltd": 3,
+    }
+
+    mapping = cluster_variants(
+        counts,
+        merges=[
+            (
+                "Martin & Brown Bio Sciences Pvt Ltd",
+                "Martin and Brown Bio-Sciences Private Limited",
+            )
+        ],
+    )
+
+    assert len(set(mapping.values())) == 1

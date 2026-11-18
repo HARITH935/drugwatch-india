@@ -58,6 +58,7 @@ from drugwatch_spark.failure_category import add_failure_categories
 from drugwatch_spark.fix_portal_batch import fix_combined_manufacturer_cells
 from drugwatch_spark.manufacturer_cluster import add_canonical_manufacturer
 from drugwatch_spark.manufacturer_name import add_clean_manufacturer_name
+from drugwatch_spark.manufacturer_review import merges_from_decisions
 from drugwatch_spark.parse_dates import parse_portal_dates
 from drugwatch_spark.parse_pdf_dates import parse_pdf_dates
 from drugwatch_spark.strength import add_strengths
@@ -223,7 +224,11 @@ def build_silver(pdf: DataFrame, portal: DataFrame) -> DataFrame:
         to_silver_columns(clean_shared(clean_portal(portal)))
     )
     categorised = add_failure_categories(rows)
-    clustered = add_canonical_manufacturer(categorised, F.col("manufacturer_name"))
+    # The reviewed pairs (step 5 piece 3) join the automatic clustering. The file is git-ignored
+    # and machine-local, so this is simply empty where nobody has reviewed anything (CI included).
+    clustered = add_canonical_manufacturer(
+        categorised, F.col("manufacturer_name"), merges=merges_from_decisions()
+    )
     # Dedup runs LAST: its key uses manufacturer_canonical, which clustering is what produces.
     return deduplicate(clustered).select(SILVER_COLUMNS)
 
@@ -260,6 +265,10 @@ def main() -> None:
         makers = silver.where("manufacturer_canonical is not null")
         distinct_makers = makers.select("manufacturer_canonical").distinct().count()
         print(f"\n  distinct manufacturers: {distinct_makers}")
+        # Say how many of those merges a person decided, so a review's effect is visible rather
+        # than having to be taken on trust. 0 means nobody has run manufacturer_review yet.
+        reviewed = merges_from_decisions()
+        print(f"  merges accepted by review: {len(reviewed)} (step 5 piece 3)")
         attributed = silver.where("is_spurious and manufacturer_canonical is not null").count()
         print(f"  spurious rows attributed to a manufacturer: {attributed} (must be 0)")
         print("\n  names kept from fake packs (not attributed to anyone):")

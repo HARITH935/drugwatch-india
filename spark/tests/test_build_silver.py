@@ -222,3 +222,32 @@ def test_row_counts_are_never_changed_by_the_pipeline(spark, dataset):
     pdf = pdf_row(spark, source_dataset=dataset)
 
     assert build_silver(pdf, portal_row(spark)).count() == 2
+
+
+def test_a_reviewed_merge_reaches_silver(spark, monkeypatch):
+    # The wiring step 5 piece 3 was missing: the review tool wrote decisions.jsonl, but nothing
+    # read it, so a person's answers changed nothing. These two names score 95-98 - deliberately
+    # below the automatic threshold - so they only merge because someone said they are one firm.
+    pdf = pdf_row(spark, manufacturer="M/s. Agron Remedies Pvt. Ltd., Plot 7, Baddi")
+    portal = portal_row(spark, manufacturer="M/s. Argon Remedies Pvt. Ltd., Baddi")
+
+    unreviewed = build_silver(pdf, portal).select("manufacturer_canonical").distinct().count()
+
+    monkeypatch.setattr(
+        "drugwatch_spark.build_silver.merges_from_decisions",
+        lambda: [("Agron Remedies Private Limited", "Argon Remedies Private Limited")],
+    )
+    reviewed = build_silver(pdf, portal).select("manufacturer_canonical").distinct().count()
+
+    assert unreviewed == 2  # the scorer leaves them apart, on purpose
+    assert reviewed == 1  # the decision is what joins them
+
+
+def test_silver_is_unchanged_when_nobody_has_reviewed_anything(spark, monkeypatch):
+    # CI and a fresh clone have no decisions file; the pipeline must behave exactly as before.
+    monkeypatch.setattr("drugwatch_spark.build_silver.merges_from_decisions", list)
+
+    silver = build_silver(pdf_row(spark), portal_row(spark))
+
+    assert silver.count() == 2
+    assert silver.where("manufacturer_canonical is not null").count() == 2

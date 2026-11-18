@@ -465,6 +465,23 @@ Approved 2026-11-12. Plan: `DRUGWATCH_PHASES.md` §9 Phase 3.
         (the `(S)` guard, the unknown-key guard and the asking order); all three were strengthened
         until the mutation failed them. **Not yet run for real - the 100 batch pairs and 160
         judgement calls are Harith's to make.**
+  - [x] Piece 4, make the decisions count (2026-11-18). **Found before Harith spent an hour reviewing: nothing
+        read the decisions.** Piece 3 wrote `decisions.jsonl` and exposed `merges_from_decisions()`, but
+        `cluster_variants()` had no parameter for accepted pairs and neither pipeline imported it - so 260
+        answers would have produced byte-identical silver. Now `cluster_variants(counts, merges=...)` adds each
+        reviewed pair as a union-find edge whatever it scored, and `build_silver` and `pandas_pipeline` both pass
+        `merges_from_decisions()` in, so the two engines stay in step.
+        Only "same company" answers are used: a rejected pair needs no handling, because the review band is
+        95-98, below the 98 auto-merge threshold, so "not the same" is already what happens. A decision naming a
+        name that no longer exists (a cleaning rule changed since) is **skipped, not guessed at**. The report now
+        prints `merges accepted by review: N`, so a review's effect is visible rather than taken on trust.
+        **Verified on the real archive with no decisions file: 7,128 rows, 2,720 manufacturers, 0 reviewed
+        merges - identical to before, so the wiring is inert until someone reviews** (which is also what CI and
+        a fresh clone see). Tests: 8 new (6 clustering + 2 pipeline). A mutation check of both halves (not
+        passing the decisions in; dropping the reviewed edges) failed exactly the matching tests.
+        **What the review is worth, measured (read-only preview, no decisions made):** 3,302 distinct cleaned
+        names → 2,720 manufacturers today; accepting the 100 mechanical pairs would give **2,670** (50 merges),
+        and accepting all 160 judgement calls too would give at most **2,587** (133 merges).
 - [x] 5b. **The cleaning pipeline: bronze -> silver** (2026-11-13). Until now every cleaning step was its own
       module printing its own report and nothing ran them together. `build_silver.py` is the job that does, and
       the Parquet it writes is Phase 3's silver deliverable (what step 8's GE suite validates, what Phase 4's dbt
@@ -679,10 +696,12 @@ benchmark is recorded.
 
 **Done-when check (2026-11-18): 2 of 3 met — Phase 3 is NOT finished.**
 - ✅ **Silver passes all GE checks** — 29/29 expectations on the real 7,128-row table, exit 0 (step 8).
-- 🟨 **Manufacturer duplicates resolved** — *partly*. The automatic 98+ clustering ran (3,320 names → 2,720
-  canonical makers), but **step 5 piece 3 has never been run for real**: the 100 mechanical pairs
-  (`manufacturer_review --batches`) and the 160 borderline judgement calls are Harith's to make, and until then
-  the conservative threshold leaves known variants unmerged (e.g. 3 separate "Martin & Brown" clusters).
+- 🟨 **Manufacturer duplicates resolved** — *partly*. The automatic 98+ clustering ran (3,302 names → 2,720
+  canonical makers) and piece 4 now feeds reviewed decisions into it, but **the review itself has never been
+  run for real**: the 100 mechanical pairs (`manufacturer_review --batches`) and the 160 borderline judgement
+  calls are Harith's to make, and until then the conservative threshold leaves known variants unmerged
+  (e.g. 3 separate "Martin & Brown" clusters). Measured upside: 2,720 → 2,670 for the mechanical pairs,
+  → at most 2,587 with every judgement call accepted.
 - ✅ **Benchmark recorded** — `docs/benchmarks.md` §1.
 
 ⏳ **To finish Phase 3:** run `manufacturer_review --batches`, then `manufacturer_review`, then rebuild silver so

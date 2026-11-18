@@ -44,6 +44,7 @@ Run (from spark/, RustFS up):
 """
 
 from collections import defaultdict
+from collections.abc import Iterable
 
 from pyspark.sql import Column, DataFrame
 from pyspark.sql import functions as F
@@ -111,12 +112,39 @@ def canonical_for(variants: list[str], counts: dict[str, int]) -> str:
     return min(variants, key=rank)
 
 
-def cluster_variants(counts: dict[str, int], threshold: int = THRESHOLD) -> dict[str, str]:
-    """Map every name to its cluster's canonical name (a name on its own maps to itself)."""
+def reviewed_edges(
+    names: list[str], merges: Iterable[tuple[str, str]]
+) -> list[tuple[int, int, float]]:
+    """Pairs a PERSON accepted, as edges, whatever they scored (piece 3's decisions).
+
+    Only "same company" answers reach here. A rejected pair needs nothing done: the review band
+    is 95-98, below the 98 auto-merge threshold, so "not the same" is already what happens.
+    A name that no longer exists (a cleaning rule changed since the decision) is skipped rather
+    than guessed at - 100.0 marks these as human-made, above any score the scorer can produce.
+    """
+    position = {name: index for index, name in enumerate(names)}
+    return [
+        (position[left], position[right], 100.0)
+        for left, right in merges
+        if left in position and right in position
+    ]
+
+
+def cluster_variants(
+    counts: dict[str, int],
+    threshold: int = THRESHOLD,
+    merges: Iterable[tuple[str, str]] = (),
+) -> dict[str, str]:
+    """Map every name to its cluster's canonical name (a name on its own maps to itself).
+
+    `merges` are the pairs reviewed and accepted by hand; they join their clusters in addition
+    to everything scoring at or above `threshold`.
+    """
     names = sorted(counts)  # sorted so the result never depends on input order
     if not names:
         return {}
-    groups = _components(len(names), pairs_scoring(names, floor=threshold))
+    edges = pairs_scoring(names, floor=threshold) + reviewed_edges(names, merges)
+    groups = _components(len(names), edges)
     mapping = {}
     for members in groups.values():
         variants = [names[i] for i in members]
@@ -142,9 +170,13 @@ def review_candidates(
     return sorted(rows, key=lambda row: (-row[2], row[0], row[1]))
 
 
-def add_canonical_manufacturer(df: DataFrame, name: Column) -> DataFrame:
+def add_canonical_manufacturer(
+    df: DataFrame, name: Column, merges: Iterable[tuple[str, str]] = ()
+) -> DataFrame:
     """Add `manufacturer_canonical`: the cluster's agreed name, or the name itself when it has no
-    variants. Null stays null (a placeholder manufacturer from piece 1)."""
+    variants. Null stays null (a placeholder manufacturer from piece 1).
+
+    `merges` are piece 3's reviewed pairs, joined in on top of the automatic clustering."""
     counts = {
         row["name"]: row["count"]
         for row in df.select(name.alias("name"))
@@ -153,7 +185,7 @@ def add_canonical_manufacturer(df: DataFrame, name: Column) -> DataFrame:
         .count()
         .collect()  # fmt: skip
     }
-    mapping = cluster_variants(counts)
+    mapping = cluster_variants(counts, merges=merges)
     if not mapping:
         return df.withColumn("manufacturer_canonical", F.lit(None).cast("string"))
     lookup = df.sparkSession.createDataFrame(
@@ -166,6 +198,7 @@ def add_canonical_manufacturer(df: DataFrame, name: Column) -> DataFrame:
 
 def main() -> None:
     from drugwatch_spark.manufacturer_name import add_clean_manufacturer_name
+    from drugwatch_spark.manufacturer_review import merges_from_decisions
     from drugwatch_spark.read_bronze import PDF, PORTAL, read_bronze
     from drugwatch_spark.session import spark_session
 
@@ -182,11 +215,13 @@ def main() -> None:
             row["manufacturer_name"]: row["count"]
             for row in named.groupBy("manufacturer_name").count().collect()
         }
-        mapping = cluster_variants(counts)
+        reviewed = merges_from_decisions()  # empty until someone runs manufacturer_review
+        mapping = cluster_variants(counts, merges=reviewed)
         merged = {name: c for name, c in mapping.items() if name != c}
         canonicals = set(mapping.values())
         print(f"{named.count()} rows, {len(counts)} distinct names")
         print(f"-> {len(canonicals)} manufacturers after merging {len(merged)} spelling variants")
+        print(f"   ({len(reviewed)} of those pairs were accepted by review, piece 3)")
 
         groups = defaultdict(list)
         for variant, canonical in mapping.items():

@@ -44,6 +44,7 @@ from drugwatch_spark.failure_category import (
 from drugwatch_spark.fix_portal_batch import SPLIT_FIELDS, split_combined_cell
 from drugwatch_spark.manufacturer_cluster import cluster_variants
 from drugwatch_spark.manufacturer_name import clean_manufacturer_name
+from drugwatch_spark.manufacturer_review import merges_from_decisions
 from drugwatch_spark.parse_dates import PLAUSIBLE_YEARS, PORTAL_DATE_FORMAT
 from drugwatch_spark.parse_pdf_dates import FORMATS
 from drugwatch_spark.strength import strengths_in
@@ -270,9 +271,10 @@ def to_silver_columns(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def add_canonical_manufacturer(frame: pd.DataFrame) -> pd.DataFrame:
-    """manufacturer_cluster.py's RapidFuzz clustering, over both sources at once."""
+    """manufacturer_cluster.py's RapidFuzz clustering, over both sources at once, with the
+    reviewed pairs (step 5 piece 3) joined in exactly as the Spark job does."""
     named = frame["manufacturer_name"].dropna()
-    mapping = cluster_variants(Counter(named))
+    mapping = cluster_variants(Counter(named), merges=merges_from_decisions())
     frame["manufacturer_canonical"] = frame["manufacturer_name"].map(
         lambda value: mapping.get(value) if isinstance(value, str) else None
     )
