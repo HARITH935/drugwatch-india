@@ -275,3 +275,21 @@ models:
       - name: pct_of_findings_comparable
         description: "Share of the archive where both states are known (75.7%); the rest cannot answer."
 
+  - name: mart_spurious_report
+    description: >
+      One row per spurious (counterfeit) finding, with batch, product, alert month and CDSCO link.
+      Built to be hard to misuse: it carries NO manufacturer_id, so nothing can join these findings
+      to a company, and the copied brand is named `name_printed_on_the_pack` rather than anything
+      resembling "manufacturer". The company on a fake pack is the victim of the counterfeit
+      (CLAUDE.md §6). 77 findings, first seen 2024-04 - a recent, small slice of the archive, and
+      not a measure of how much counterfeiting exists.
+    columns:
+      - name: sample_id
+        data_tests: [unique, not_null]
+      - name: name_printed_on_the_pack
+        description: >
+          The brand copied onto the counterfeit. Never to be shown as the manufacturer; filled on
+          17 of 77 findings.
+      - name: source_url
+        data_tests: [not_null]
+

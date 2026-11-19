@@ -2,8 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 6 — Analytics. Approved 2026-11-19. Steps 1-2 done; step 3 in progress (2 dashboards of 4).
-**Next:** step 3c needs decision B's `drug_class` vocabulary; 3d is a fourth dashboard from gold (spurious reports, or lab coverage).
+**Current phase:** Phase 6 — Analytics. Approved 2026-11-19. Steps 1-2 done; step 3 in progress (3 dashboards done, 3c blocked on decision B).
+**Next:** step 4 — anonymous read-only access, verified from a logged-out browser. (3c waits on the `drug_class` vocabulary.)
 
 ---
 
@@ -1510,7 +1510,26 @@ Approved 2026-11-19. Plan: `DRUGWATCH_PHASES.md` §9 Phase 6. Goal: public, read
           union territories including the zeros, so a state with nothing reported is visible rather than
           missing.
     - [ ] 3c — drug class (needs decision B's vocabulary)
-    - [ ] 3d — a fourth dashboard from gold (spurious reports, or central vs state coverage)
+    - [x] **3d — "Spurious (counterfeit) reports"** (2026-11-19) — 4 charts, all verified. The
+          archive's smallest slice (77 of 7,126 findings) and its most easily misread, so it is the one
+          built with the most care.
+        - **The ethics rule is structural, not editorial.** A spurious finding means the *pack* was
+          judged fake; the company printed on it is the brand somebody copied, and is the victim of the
+          counterfeit (CLAUDE.md §6). So `mart_spurious_report` **carries no `manufacturer_id` at all**
+          — verified: 0 of its columns mention a manufacturer — and nothing can attach these findings to
+          a company even by a careless join. The copied brand is named `name_printed_on_the_pack`,
+          because a column called anything like "company" would eventually be charted as one.
+        - **The scale is stated before the charts, and warns against the obvious misreading:** 77
+          findings from 2024-04 onwards, single digits in most of 24 months. That makes this a record of
+          *what CDSCO published about counterfeits*, not a measure of how much counterfeiting exists —
+          and the note asks the reader explicitly not to read the monthly chart as a trend.
+        - **Every row keeps its batch number, alert month and CDSCO link**, which is what makes a
+          finding checkable by someone holding a pack rather than merely alarming.
+        - **Verified** (exit 0): `Every spurious finding` returns **all 77 rows**, with the copied brand
+          filled on **17** of them (the alerts simply do not name one on the rest); `dbt build` 74 nodes
+          green including a `not_null` test on `source_url`, so a finding can never appear without the
+          document that reports it.
+        - **All 14 charts across the three dashboards return data.**
 - [ ] Step 4 — anonymous read-only access, verified logged out
 - [ ] Step 5 — disclaimers, source notes, freshness line, and dashboards exported as code
 
@@ -1701,3 +1720,6 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-19 | Superset provisioning helpers extracted to `dashboards.py` when the second dashboard needed them, before copies could drift | `infra/superset/dashboards.py` |
 | 2026-11-19 | A categorical x-axis must not carry a time grain (it would truncate a state name to a month), and bar charts need `x_axis_sort` or the largest states are drawn alphabetically | `dashboards.query_context()`, `build_states_dashboard.py` |
 | 2026-11-19 | Verification covers the DATA each chart returns, not its appearance: bar order and layout need a human with a browser | `infra/superset/verify_charts.py` |
+| 2026-11-19 | The spurious mart carries NO manufacturer_id and names the copied brand `name_printed_on_the_pack`, so the ethics rule is enforced by the schema rather than by wording: verified 0 columns mention a manufacturer | `dbt/models/marts/mart_spurious_report.sql` |
+| 2026-11-19 | The spurious dashboard states its own scale (77 of 7,126 findings, 2024-04 onwards) and asks the reader not to treat the monthly chart as a trend | `infra/superset/build_spurious_dashboard.py` |
+| 2026-11-19 | `source_url` is `not_null`-tested on the spurious mart: a counterfeit finding must never be shown without the CDSCO document that reports it | `_marts__models.yml` |
