@@ -8,6 +8,11 @@ macro-paths: ["macros"]
 test-paths: ["tests"]
 clean-targets: ["target", "dbt_packages"] # what `dbt clean` deletes
 
+vars:
+  # How many manufacturers must agree before a PIN prefix is trusted to mean a state.
+  # 3, chosen by holdout: 99.78% agreement on held-out rows against 99.59% at 2.
+  pin_prefix_min_observations: 3
+
 flags:
   # dbt phones home with anonymous usage statistics unless this is off. A public-interest data
   # project should not send telemetry it never asked its users about.

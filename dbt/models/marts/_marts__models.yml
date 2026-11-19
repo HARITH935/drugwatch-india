@@ -34,12 +34,20 @@ models:
         description: "Every cleaned spelling that resolved to this company; 484 have more than one."
       - name: state_name
         description: >
-          The manufacturing state, read out of the address against a reviewed vocabulary. Null
-          means "not stated, and not guessed" - never "no state". 66% of companies are resolved.
+          The manufacturing state, from two signals: the address naming it (a reviewed vocabulary
+          of 62 spellings), else a PIN prefix mapped by a table learned from the addresses that do
+          name their state. 76.9% of companies are resolved. Null means "not stated, and not
+          guessed" - never "no state".
+      - name: state_name_source
+        description: >
+          address_names_the_state (1,726) | learned_pin_prefix (280) | null. A PIN-derived state
+          agrees with a named one 99.78% of the time on held-out rows (analyses/pin_prefix_holdout.sql).
       - name: state_id
         description: "FK to dim_state. Null wherever state_name is."
-      - name: state_match_status
+      - name: name_match_status
         description: "matched | no_state_in_address | no_address | conflicting_states."
+      - name: pin_code
+        description: "The postal code read off the address, if it prints one that is not a plot number."
       - name: state_match_evidence
         description: "Which alias produced the answer, so any row can be audited back to the words."
       - name: latest_address

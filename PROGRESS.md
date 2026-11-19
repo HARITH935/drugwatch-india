@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 4 — Warehouse (gold). Approved 2026-11-18. Step 1 of 5 done.
-**Next:** step 3 piece 2b — `lab_type` (Central/State) and the reporting lab's state out of `reported_by`.
+**Next:** step 3 piece 2b — `lab_type` (Central/State) and the reporting lab's state out of `reported_by` (approved, not started).
 
 ---
 
@@ -877,6 +877,46 @@ Approved 2026-11-18. Plan: `DRUGWATCH_PHASES.md` §9 Phase 4. Goal: analytics-re
           rejects on purpose: **`Raj.` cannot be added safely** — one real Haryana address reads
           "Sector 38, HSIIDC, Raj, Sonipat", where `Raj` is part of a name, and normalisation drops the dot
           that would have told them apart.
+    - [x] **Piece 2a-ii — the rest of the states, from a PIN-prefix map learned from the data** (2026-11-19)
+          **Coverage: 1,730 → 2,006 of 2,609 companies (66.3% → 76.9%).** `dbt build`: 11 models, 0 errors.
+        - **The reference table nobody had.** The obvious way to turn a PIN into a state is a lookup table
+          of India's postal prefixes. We do not have one, and writing it out from memory would be inventing
+          reference data for a public dataset — wrong entries would be invisible and permanent. India's
+          2-digit prefixes are also genuinely ambiguous for every state that was ever split
+          (UP/Uttarakhand, AP/Telangana, Bihar/Jharkhand, MP/Chhattisgarh, Maharashtra/Goa, TN/Puducherry),
+          and `24` — the single biggest bucket, 112 companies — is exactly one of them.
+        - **So the map is learned from the data we already trust.** 1,421 companies both name their state
+          *and* print a PIN. Grouped by the first 3 digits that is evidence: `int_pin_prefix_state` keeps a
+          prefix only where every known company agrees (13 of 151 prefixes dropped — exactly the split
+          states) **and** at least 3 companies agree (`pin_prefix_min_observations`, a dbt var).
+          **59 prefixes accepted**, resolving **280** more companies.
+        - **Validated by holdout, and the first attempt at validating it was wrong.** Checking the map
+          against the rows it was learned from gave "0 disagreements" — tautological, since unanimity was
+          computed over those very rows. The real test learns from one arbitrary half (split on the md5 id)
+          and predicts the other, where the state is known independently: **99.78% agreement at threshold 3
+          (460 of 461), 99.59% at 2** — so 3 was chosen. Kept as `analyses/pin_prefix_holdout.sql` so the
+          claim can be re-run, not just asserted. The one error is prefix `244` (Moradabad UP vs Kashipur
+          Uttarakhand), which is the shape of the residual risk: always between two neighbours.
+        - **Reading the holdout's disagreements found two real bugs**, neither of which the earlier
+          checks had shown:
+          1. **Plot numbers masquerading as PINs.** Reading the PIN off the punctuation-flattened string
+             turned "Khasra No. 140-141" into 140141 and "393/394, Melli Jorethang Road" into 393394. The
+             PIN is now read from the **original** text with only whitespace allowed inside it ("247 667"
+             is a PIN, "140-141" is not) — the first now yields nothing and the second correctly finds the
+             real PIN later in the address (737121, Sikkim).
+          2. **A state name that is only a road name.** "P.O. Delhi Road, Fazilpur, Sonepat-131001" and
+             "194, Mile Stone, Ambala-Delhi Highway" are both in Haryana. 10 addresses do this, so a match
+             followed by road/highway/bypass/marg/NH is discarded. The two-match rule had not caught them
+             because the real state was never spelled out — only the PIN gave it away.
+        - Restructured again so the two signals cannot drift: `int_manufacturer_address` prepares the
+          address once (normalise, cut at the marketer, extract the PIN) and both the name matcher and the
+          PIN map read it. The PIN map learns **only** from name-derived answers, never from its own
+          output.
+        - **Verified (2026-11-19):** `address_names_the_state 1,726 (66.2%)`, `learned_pin_prefix 280
+          (10.7%)`, `unresolved 603 (23.1%)`, `conflicting_states 10` (down from 12 — the road guard fixed
+          two), `0 orphan state_id`. Top states **Himachal 717, Uttarakhand 263, Gujarat 199, MP 112,
+          Haryana 98, Maharashtra 76** — Uttarakhand gained 62 from PINs and Maharashtra 33, which is the
+          UP/Uttarakhand and Goa/Maharashtra ambiguity being resolved by evidence rather than by assumption.
     - [ ] Piece 2b — `lab_type` (Central/State) and the reporting lab's state from `reported_by`
     - [ ] Piece 3 — the marts of §8.2
 - [ ] Step 4 — dbt tests: unique, not_null, relationships, accepted_values, plus custom (expiry after mfg)
@@ -1002,3 +1042,7 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-18 | Addresses are cut at a marketer marker before matching (`mrkt`/`marketed`/`mrk`/`mkt`/`markt`, counted as whole words); `market` is excluded because it is part of real addresses | `int_manufacturer_state.sql` |
 | 2026-11-18 | `Raj.` is NOT in the state vocabulary: normalisation drops the dot, and a real Haryana address contains the word "Raj" | `india_state_alias.csv` |
 | 2026-11-18 | ⏳ OPEN: 820 of 2,609 companies have no state; 653 print a PIN code, so a PIN-prefix mapping is the next largest gain but needs a reference table and Harith's OK (2-digit prefixes are ambiguous for every split state) | — |
+| 2026-11-19 | PIN → state is a map LEARNED from the 1,421 addresses that name their state (3-digit prefix, unanimous, ≥3 companies), not a hardcoded postal table: writing India's prefixes from memory would be inventing reference data, and 2-digit prefixes are ambiguous for every split state | `int_pin_prefix_state.sql`, ADR-worthy note in PROGRESS |
+| 2026-11-19 | The PIN map is validated by holdout (learn on half the known rows, predict the other): 99.78% at ≥3 vs 99.59% at ≥2. Checking it against the rows it learned from was circular and reported a meaningless 100% | `analyses/pin_prefix_holdout.sql` |
+| 2026-11-19 | The PIN is read from the ORIGINAL address with only whitespace allowed inside it, so "Khasra No. 140-141" and "393/394" are not mistaken for postal codes | `int_manufacturer_address.sql` |
+| 2026-11-19 | A state name followed by road/highway/bypass/marg/NH is a road name, not a location ("Delhi Road, Sonepat" is Haryana): 10 addresses | `int_manufacturer_state.sql` |

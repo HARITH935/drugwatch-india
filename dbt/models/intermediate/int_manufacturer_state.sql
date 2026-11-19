@@ -1,84 +1,48 @@
--- Which state each manufacturer is in, read out of the address CDSCO printed.
+-- The state a manufacturer's address NAMES, matched against the reviewed vocabulary seed.
 --
--- There is no state field in the archive: there is one address string per manufacturer, written
--- by whoever typed the alert. So this matches a reviewed vocabulary of state names, spelling
--- variants and abbreviations (`seeds/india_state_alias.csv`) against the address, and refuses to
--- answer when the evidence is not clean. Same rule as Phase 3's manufacturer merging: a missing
--- state is better than a wrong one.
+-- This is the first of two signals (the second is int_pin_prefix_state, which is learned from
+-- this one's answers). It refuses to answer whenever the evidence is not clean - the same rule as
+-- Phase 3's manufacturer merging: a missing state is better than a wrong one.
 --
--- Three things were found by reading real addresses first, and each one shaped the SQL below:
+-- Three traps, each found by reading real addresses rather than by imagining what might go wrong:
 --
 --   1. **There is a village called Kerala - in Gujarat.** "Plot No. 401, GIDC Kerala, Bavla,
---      Dist. Ahmedabad, Gujarat" matches both Kerala and Gujarat. So a row matching two different
---      states resolves to NULL, never to "the first one" or "the longest match".
---   2. **Road names carry state names.** "14/4, Delhi-Mathura Road, Faridabad, Haryana" is in
---      Haryana, not Delhi. Caught by the same two-match rule.
---   3. **Some addresses contain a SECOND company's address**, after "Marketed By" or "Mrkt:" -
---      the marketer, who is often in another state entirely (46 addresses). Everything from that
---      marker on is cut off before matching, because the manufacturer's state is the one printed
---      first. The markers are the ones that actually occur in the data, counted as whole words,
---      not imagined: mrkt (30), marketed (7), mrk (6), mkt (2), markt (1).
---      **"market" is deliberately NOT a marker**, though it occurs 4 times: it is part of real
---      addresses like "Vasavi Pharma Market Complex, Gollapudi". Matching a prefix instead of
---      whole words would have truncated those addresses and lost their state.
+--      Dist. Ahmedabad, Gujarat" matches both Kerala and Gujarat. A row matching two different
+--      states resolves to NULL, never to the first or the longest match. 5 companies sit there.
 --
--- Matching is done on a normalised copy: lower-cased, dots removed ("H.P." -> "hp", "(M.P)" ->
--- "mp"), every other punctuation mark turned into a space, and '&' kept so "J&K" survives. The
--- aliases in the seed are stored already normalised, so there is no escaping to get wrong, and
--- `\m...\M` word boundaries stop "hp" from matching inside "HPSIDC".
+--   2. **A state name is often just a road name.** "P.O. Delhi Road, Fazilpur, Sonepat-131001" is
+--      in Haryana, and "194, Mile Stone, Ambala-Delhi Highway" is in Haryana too. 10 addresses do
+--      this, so a match immediately followed by road/highway/bypass/marg/NH is thrown away.
+--      These two were not caught by the two-match rule, because the real state was never spelled
+--      out - only the PIN gave it away. They were found by holding the PIN map out against this
+--      model's answers and reading every disagreement.
+--
+--   3. **Marketer addresses**, handled upstream in int_manufacturer_address.
+--
+-- Matching uses Postgres' `\m...\M` word boundaries on the normalised copy, so "hp" cannot match
+-- inside "HPSIDC", and the seed's aliases are stored already normalised, so there is no regex
+-- escaping to get wrong.
 
-with manufacturers as (
+-- A state name followed by any of these is part of a road's name, not a location.
+{% set road_words = 'road|highway|hwy|bypass|byepass|expressway|marg|nh' %}
 
-    select
-        manufacturer_id,
-        canonical_name,
-        latest_address
-    from {{ ref('int_manufacturer') }}
+with addresses as (
 
-),
-
-normalised as (
-
-    select
-        manufacturer_id,
-        canonical_name,
-        latest_address,
-        -- leading and trailing spaces so a state name at either end still has a word boundary
-        ' ' || regexp_replace(
-            lower(replace(coalesce(latest_address, ''), '.', '')), '[^a-z0-9&]+', ' ', 'g'
-        ) || ' ' as address_norm
-    from manufacturers
-
-),
-
-cut as (
-
-    select
-        manufacturer_id,
-        canonical_name,
-        latest_address,
-        address_norm,
-        -- Cut everything from the first marketer marker onwards. One regexp over a list of whole
-        -- words, so "market" inside a real address is left alone while "mrkt"/"mrk"/"mkt" are not.
-        regexp_replace(
-            address_norm, '\m(mrkt|mrk|marketed|markt|mktd|mkt)\M.*', ''
-        ) as own_address_norm
-    from normalised
+    select * from {{ ref('int_manufacturer_address') }}
 
 ),
 
 matches as (
 
     select
-        cut.manufacturer_id,
+        addresses.manufacturer_id,
         alias.state_name,
-        alias.alias,
-        alias.alias_kind
-    from cut
+        alias.alias
+    from addresses
     inner join {{ ref('india_state_alias') }} as alias
-        -- \m / \M are Postgres' word-boundary markers: "hp" matches " hp " and "(hp)", never
-        -- the "hp" inside "hpsidc"
-        on cut.own_address_norm ~ ('\m' || alias.alias || '\M')
+        on addresses.own_address_norm ~ ('\m' || alias.alias || '\M')
+        -- ...but not where it is only naming a road
+        and addresses.own_address_norm !~ ('\m' || alias.alias || ' ({{ road_words }})\M')
 
 ),
 
@@ -88,28 +52,34 @@ decided as (
         manufacturer_id,
         count(distinct state_name) as states_matched,
         min(state_name) as only_state_matched,
-        string_agg(distinct alias || ' -> ' || state_name, '; ' order by alias || ' -> ' || state_name)
-            as match_evidence
+        string_agg(
+            distinct alias || ' -> ' || state_name, '; ' order by alias || ' -> ' || state_name
+        ) as match_evidence
     from matches
     group by manufacturer_id
 
 )
 
 select
-    cut.manufacturer_id,
-    cut.canonical_name,
-    cut.latest_address,
-    -- the answer, or null when the evidence is not clean
-    case when decided.states_matched = 1 then decided.only_state_matched end as state_name,
+    addresses.manufacturer_id,
+    addresses.canonical_name,
+    addresses.latest_address,
+    addresses.pin_code,
+
+    -- the answer, or null when the address does not say so cleanly
     case
-        when cut.latest_address is null then 'no_address'
+        when decided.states_matched = 1 then decided.only_state_matched
+    end as state_from_name,
+
+    case
+        when addresses.latest_address is null then 'no_address'
         when decided.manufacturer_id is null then 'no_state_in_address'
         when decided.states_matched = 1 then 'matched'
-        else 'conflicting_states'  -- deliberately unresolved: see the Kerala-in-Gujarat case above
-    end as state_match_status,
-    -- kept so any answer can be audited back to the words that produced it
-    decided.match_evidence,
-    cut.own_address_norm <> cut.address_norm as address_had_marketer
+        else 'conflicting_states'  -- left unresolved on purpose: see the Kerala-in-Gujarat case
+    end as name_match_status,
 
-from cut
+    decided.match_evidence,
+    addresses.own_address_norm <> addresses.address_norm as address_had_marketer
+
+from addresses
 left join decided using (manufacturer_id)
