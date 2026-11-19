@@ -43,6 +43,7 @@ from datetime import datetime, timedelta
 
 from airflow import DAG
 
+from drugwatch_orchestration.notifications import failure_email
 from drugwatch_orchestration.pipeline import processing_chain
 from drugwatch_orchestration.tasks import uv_task
 
@@ -58,6 +59,10 @@ with DAG(
     catchup=False,  # historical reprocessing is the backfill DAG's job (step 2), not this one's
     max_active_runs=1,  # every task writes shared state: silver, Postgres, gold
     tags=["drugwatch", "pipeline"],
+    # Every task in this DAG emails on FINAL failure (retries exhausted), and says nothing when
+    # the backoff recovers on its own. Set here rather than in the task factory so a DAG cannot
+    # quietly be written without it.
+    default_args={"on_failure_callback": failure_email},
     doc_md=__doc__,
 ) as dag:
     # --- 1. download -------------------------------------------------------------------------

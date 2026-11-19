@@ -10,6 +10,7 @@ Postgres that `docker compose up` already started - database `airflow`, beside `
 `gold`, never mixed in with them.
 """
 
+import json
 import os
 from collections.abc import Mapping
 from pathlib import Path
@@ -28,6 +29,17 @@ POSTGRES_DEFAULTS = {
 }
 METADATA_DATABASE = "airflow"  # Airflow's own tables; NOT the drugwatch database
 
+# SMTP defaults match docker-compose.yml's Mailpit, which accepts any credentials and no TLS.
+# Production (Brevo) sets these in the environment: port 587 with SMTP_STARTTLS=true.
+SMTP_DEFAULTS = {
+    "SMTP_HOST": "localhost",
+    "SMTP_PORT": "1025",
+    "SMTP_USERNAME": "drugwatch",
+    "SMTP_PASSWORD": "any-value-works-with-mailpit",
+    "SMTP_FROM": "alerts@drugwatch.local",
+    "SMTP_STARTTLS": "false",
+}
+
 
 def metadata_connection(env: Mapping[str, str] = os.environ) -> str:
     """The SQLAlchemy URL for Airflow's metadata database.
@@ -42,6 +54,37 @@ def metadata_connection(env: Mapping[str, str] = os.environ) -> str:
     return (
         f"postgresql+psycopg2://{settings['POSTGRES_USER']}:{password}"
         f"@{settings['POSTGRES_HOST']}:{settings['POSTGRES_PORT']}/{METADATA_DATABASE}"
+    )
+
+
+def smtp_connection(env: Mapping[str, str] = os.environ) -> str:
+    """Airflow's `smtp_default` connection, as JSON, from the repo's own SMTP_* variables.
+
+    Airflow normally keeps connections in its metadata database, entered through the UI. Building
+    this one from the environment instead means local dev (Mailpit) and production (Brevo) differ
+    only by `.env`, and Spring Boot's watchlist emails read the very same variables (CLAUDE.md §8)
+    - one set of credentials, not two that can disagree.
+
+    `disable_ssl` is always true because neither target speaks SMTPS on these ports; `disable_tls`
+    is the inverse of SMTP_STARTTLS, so Mailpit gets a plain connection and Brevo gets STARTTLS.
+    """
+    settings = {name: env.get(name) or default for name, default in SMTP_DEFAULTS.items()}
+    starttls = settings["SMTP_STARTTLS"].strip().lower() in {"1", "true", "yes", "on"}
+    return json.dumps(
+        {
+            "conn_type": "smtp",
+            "host": settings["SMTP_HOST"],
+            "port": int(settings["SMTP_PORT"]),
+            "login": settings["SMTP_USERNAME"],
+            "password": settings["SMTP_PASSWORD"],
+            "extra": {
+                "from_email": settings["SMTP_FROM"],
+                "disable_ssl": True,
+                "disable_tls": not starttls,
+                "timeout": 30,  # never let a hung mail server hold a task open
+                "retry_limit": 3,
+            },
+        }
     )
 
 
@@ -66,4 +109,8 @@ def airflow_env(env: Mapping[str, str] = os.environ) -> dict[str, str]:
         # Bound to loopback for the same reason every compose port is (CLAUDE.md §10).
         "AIRFLOW__API__HOST": "127.0.0.1",
         "AIRFLOW__API__PORT": "8082",  # 8080/8081 are taken by Mailpit's neighbours and dbt docs
+        # The SMTP connection failure emails use, built from .env rather than stored in the
+        # metadata database. AIRFLOW_CONN_* is how Airflow reads a connection from the
+        # environment, and it takes precedence over anything saved in the database.
+        "AIRFLOW_CONN_SMTP_DEFAULT": smtp_connection(env),
     }

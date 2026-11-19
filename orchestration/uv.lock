@@ -647,6 +647,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "apache-airflow", extra = ["postgres"] },
+    { name = "apache-airflow-providers-smtp" },
 ]
 
 [package.dev-dependencies]
@@ -656,7 +657,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "apache-airflow", extras = ["postgres"], specifier = ">=3.0,<4" }]
+requires-dist = [
+    { name = "apache-airflow", extras = ["postgres"], specifier = ">=3.0,<4" },
+    { name = "apache-airflow-providers-smtp", specifier = ">=2.0" },
+]
 
 [package.metadata.requires-dev]
 dev = [

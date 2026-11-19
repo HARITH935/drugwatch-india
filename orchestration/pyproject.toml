@@ -13,6 +13,10 @@ dependencies = [
     # [postgres] adds the Postgres provider and psycopg2, which Airflow needs to talk to its
     # own metadata database (ADR 0012). Without it Airflow silently falls back to SQLite.
     "apache-airflow[postgres]>=3.0,<4",
+    # Failure emails over SMTP: Mailpit locally, Brevo in production (plan §6, CLAUDE.md §8).
+    # Airflow's own provider rather than hand-rolled smtplib, so the connection, timeouts and
+    # retries are the ones Airflow already manages.
+    "apache-airflow-providers-smtp>=2.0",
 ]
 
 [build-system]

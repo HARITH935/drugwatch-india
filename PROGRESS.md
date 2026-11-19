@@ -2,8 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 5 — Automation. Approved 2026-11-19. Steps 0-2 done (monthly + backfill DAGs run end to end).
-**Next:** step 4 — failure notifications by email over SMTP (Mailpit locally). Step 3 is already satisfied; see below.
+**Current phase:** Phase 5 — Automation. Approved 2026-11-19. Steps 0-4 done; only the run log (step 5) remains.
+**Next:** step 5 — a run log: files processed, rows added, checks passed/failed.
 
 ---
 
@@ -1231,7 +1231,43 @@ Approved 2026-11-19. Plan: `DRUGWATCH_PHASES.md` §9 Phase 5. Goal: the pipeline
       3 retries, exponential backoff from 2 min capped at 15, 1-hour timeout; validation gates 0 retries,
       dbt 1), idempotency was proven by running the monthly DAG twice with identical results and no
       duplicates (step 1), and the backoff was observed recovering real transient failures above.
-- [ ] Step 4 — failure notifications by email over SMTP (Mailpit locally, Brevo in production)
+- [x] **Step 4 — failure notifications by email** (2026-11-19)
+      **Policy (Harith's decision): one email per task that fails after its retries are exhausted, and
+      nothing else.** No mail for attempts the backoff recovers from, no success summaries.
+    - **Why that policy, with evidence:** in step 2's failed backfill, both download tasks failed three
+      times and recovered by themselves while the two extraction tasks ran out of retries. Under this
+      policy that run sends **2 emails, not 12** — so every email means something a person must act on,
+      which is the only way alerting survives contact with an inbox.
+    - **How Airflow makes it exact, not approximate:** `on_failure_callback` fires when a task instance
+      reaches `failed`; an attempt that will be retried reaches `up_for_retry` and fires nothing. So the
+      policy is the framework's own semantics rather than logic we maintain.
+    - `notifications.failure_message()` is a **pure function** returning (subject, html), so the content
+      is unit-tested — the part that normally goes untested and then arrives at 3am missing the one fact
+      someone needed. It carries the DAG, task, run id, attempts used, start time, the exception, a link
+      to the log, **and the command to reproduce it by hand** (every task is a documented command,
+      ADR 0012, which is what makes the email actionable). It also states why it was sent, so nobody
+      wonders whether retries mail them.
+    - **Credentials stay in one place.** `config.smtp_connection()` builds Airflow's `smtp_default`
+      connection from the repo's own `SMTP_*` variables and exports it as `AIRFLOW_CONN_SMTP_DEFAULT`,
+      so local dev (Mailpit) and production (Brevo) differ only by `.env`, and Spring Boot's watchlist
+      emails will read the same variables (CLAUDE.md §8) — one set of credentials, not two that can
+      disagree. Verified both shapes: Mailpit `localhost:1025 disable_tls=True`, Brevo-style
+      `smtp-relay.brevo.com:587 disable_tls=False` (the inverse of `SMTP_STARTTLS`). New optional
+      variable `ALERT_EMAIL_TO`, documented in `.env.example`.
+    - Wired through `default_args` on all three DAGs rather than in the task factory, so a DAG cannot
+      quietly be written without it.
+    - **Verified both halves of the policy by running it** (2026-11-19):
+      1. **Final failure sends one email.** A bad backfill range produced
+         `[DrugWatch] backfill_pipeline.check_month_range failed after 1 tries` in Mailpit, whose body
+         reads: `Attempts 1 of 1`, `Error the CDSCO portal starts at 2019-01 (ADR 0004); months before
+         that exist only as PDFs... Got start_month=2018-01`, plus the log link.
+      2. **A task that recovers sends nothing.** A throwaway probe DAG that fails once and then succeeds
+         went `up_for_retry → success` with **0 emails sent** (Mailpit total unchanged at 1). The probe
+         was deleted afterwards, including its metadata rows (`dags delete`, 4 records) so the UI shows
+         no phantom DAG.
+    - **7 new tests** (31 in `orchestration/` now), including that a context missing everything still
+      produces a message: a callback that raises loses the alert entirely, so it must degrade rather
+      than explode.
 - [ ] Step 5 — run log: files processed, rows added, checks passed/failed
 
 **Done when:** both DAGs run end-to-end with no manual steps and re-runs don't create duplicates.
@@ -1388,3 +1424,7 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-19 | Parameter errors are permanent, not transient: `check_month_range` runs first with `retries=0`, so a bad range fails in 11.8 s instead of 15 minutes of backoff | `pipeline.py` |
 | 2026-11-19 | `op_kwargs={"params": "{{ params }}"}` renders Jinja to a STRING: the gate failed with a TypeError instead of its own explanation. Context keys are injected by signature instead | `dags/backfill_pipeline.py` |
 | 2026-11-19 | Observed: 3 retries with backoff capped at 15 min recovers ~7-15 min of transience (the downloads did), not a sleeping laptop (the extractions did not). Hence step 4's email, and a non-sleeping VM in Phase 12 | PROGRESS Phase 5 step 2 |
+| 2026-11-19 | Alerting policy: one email per task that fails after retries are exhausted, nothing for recovered attempts and no success summaries. Step 2's failed backfill would send 2 emails, not 12 | Harith; `notifications.py` |
+| 2026-11-19 | The failure email carries the command to reproduce the task by hand, which is only possible because every task is a documented command (ADR 0012) | `notifications.failure_message()` |
+| 2026-11-19 | Airflow's SMTP connection is built from the repo's own SMTP_* variables and exported as `AIRFLOW_CONN_SMTP_DEFAULT`, so Mailpit and Brevo differ only by `.env` and Spring Boot reads the same credentials | `config.smtp_connection()` |
+| 2026-11-19 | Verified by running it: final failure -> 1 email with the real error in the body; a task that fails then succeeds -> 0 emails | PROGRESS Phase 5 step 4 |

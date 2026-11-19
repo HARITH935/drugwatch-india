@@ -20,6 +20,7 @@ from datetime import datetime
 
 from airflow import DAG
 
+from drugwatch_orchestration.notifications import failure_email
 from drugwatch_orchestration.tasks import uv_task
 
 with DAG(
@@ -31,6 +32,8 @@ with DAG(
     schedule=None,  # triggered by hand; the monthly schedule lives on the pipeline DAG
     catchup=False,  # never backfill this: it checks the archive as it is now, not as it was
     tags=["drugwatch", "data-quality"],
+    # A raw/ checksum mismatch is exactly the kind of thing nobody notices in a UI.
+    default_args={"on_failure_callback": failure_email},
     doc_md=__doc__,
 ) as dag:
     uv_task(

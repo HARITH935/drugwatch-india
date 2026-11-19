@@ -39,6 +39,7 @@ from airflow import DAG
 from airflow.models.param import Param
 from airflow.providers.standard.operators.python import PythonOperator
 
+from drugwatch_orchestration.notifications import failure_email
 from drugwatch_orchestration.pipeline import check_month_range, month_arguments, processing_chain
 from drugwatch_orchestration.tasks import uv_task
 
@@ -57,6 +58,10 @@ with DAG(
     catchup=False,
     max_active_runs=1,  # shares silver, Postgres and gold with the monthly DAG
     tags=["drugwatch", "pipeline", "backfill"],
+    # Every task in this DAG emails on FINAL failure (retries exhausted), and says nothing when
+    # the backoff recovers on its own. Set here rather than in the task factory so a DAG cannot
+    # quietly be written without it.
+    default_args={"on_failure_callback": failure_email},
     params={
         "start_month": Param(
             "2019-01",
