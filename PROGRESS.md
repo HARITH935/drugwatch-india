@@ -2,8 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 4 — Warehouse (gold). Approved 2026-11-18. Step 1 of 5 done.
-**Next:** Phase 4's done-when criteria are all met — needs Harith's sign-off to close, then Phase 5 (Automation).
+**Current phase:** Phase 4 — Warehouse (gold) ✅ **done** (2026-11-19, approved by Harith).
+**Next:** Phase 5 — Automation (monthly Airflow DAG), not started; needs Harith's approval before it begins.
 
 ---
 
@@ -15,7 +15,7 @@ Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWA
 | 1 | Source discovery | ✅ Done |
 | 2 | PDF extraction ⚠️ checkpoint | ✅ Done |
 | 3 | Cleaning (bronze → silver) | ✅ Done |
-| 4 | Warehouse (gold) | 🟨 In progress |
+| 4 | Warehouse (gold) | ✅ Done |
 | 5 | Automation | ⬜ Not started |
 | 6 | Analytics | ⬜ Not started |
 | 7 | Data science | ⬜ Not started |
@@ -1053,7 +1053,7 @@ Approved 2026-11-18. Plan: `DRUGWATCH_PHASES.md` §9 Phase 4. Goal: analytics-re
 
 **Done when:** `dbt build` succeeds with all tests passing.
 
-**Done-when check (2026-11-19): met.**
+**Done-when check (2026-11-19): met — Phase 4 is COMPLETE (closed by Harith, 2026-11-19).**
 - ✅ **`dbt build` succeeds with every test passing** — `PASS=63 WARN=0 ERROR=0 SKIP=0`: 3 seeds,
   16 models, 44 data tests. Each test class is mutation-checked (step 4), so "passing" means the tests
   can fail, not just that they did not.
@@ -1209,3 +1209,4 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-19 | dbt tests gate the pipeline, not CI: they need Postgres plus the loaded silver, so CI runs only `dbt parse` and `dbt build` stays a local/Phase 5 step | `.github/workflows/lint.yml` |
 | 2026-11-19 | dbt docs generated from the model descriptions; lineage is derived from `ref()`/`source()` so it cannot disagree with the code. 19/19 models and seeds documented, 31% of columns (passthrough columns left undescribed on purpose) | `dbt docs generate`, `_intermediate__models.yml` |
 | 2026-11-19 | Phase 4 done-when met: `dbt build` = 63 nodes, 0 errors (3 seeds, 16 models, 44 tests). Two §8.2 marts deferred with reasons (§8.2 calls its list "examples") | PROGRESS Phase 4 |
+| 2026-11-19 | Phase 4 closed (approved by Harith) | — |
