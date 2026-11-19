@@ -2,8 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 6 — Analytics. Approved 2026-11-19. Step 1 of 5 done (exploration notebook).
-**Next:** step 2 — Superset running in Docker, connected to gold through a read-only Postgres role.
+**Current phase:** Phase 6 — Analytics. Approved 2026-11-19. Steps 1-2 of 5 done (notebook, Superset connected).
+**Next:** step 3 — the dashboards, one per slice, starting with manufacturer trends.
 
 ---
 
@@ -1388,7 +1388,51 @@ Approved 2026-11-19. Plan: `DRUGWATCH_PHASES.md` §9 Phase 6. Goal: public, read
     - 6 tests (3 unit, 3 integration); `analytics` added to the CI matrix; `ruff.toml` gained a
       notebook rule (E501 only — SQL literals and plotting calls read worse wrapped at 100 characters,
       while unused imports and undefined names are still caught).
-- [ ] Step 2 — Superset running, connected to gold through a read-only role
+- [x] **Step 2 — Superset running, connected to gold through a read-only role** (2026-11-19)
+      `apache/superset:6.1.0` in Docker Compose (unlike Airflow, ADR 0012: it is a plain web app with no
+      Spark beside it, and it is the one service Phase 12 exposes to the internet). Metadata in a new
+      `superset` database beside `drugwatch` and `airflow`; Redis for its four caches; UI on
+      **127.0.0.1:8088**, healthy in 18 s.
+    - **"Superset reads gold only" is now a Postgres grant, not a convention.** `superset_reader` has
+      `SELECT` on `gold` and nothing else (`infra/postgres/superset_reader.sql`, idempotent). Two payoffs:
+      a chart accidentally built on `staging.silver_nsq` (pre-quality-gate data) or `ops.pipeline_run`
+      (operational internals) **fails** instead of quietly publishing, and a Superset compromise — the
+      service most exposed in Phase 12 — cannot write a row or reach the `airflow` database.
+    - **`ALTER DEFAULT PRIVILEGES` is the subtle part:** dbt drops and recreates gold tables on every
+      build, and a new table carries no grants. Without it Superset would lose access to a mart the next
+      time the pipeline ran — an empty dashboard at the worst possible moment.
+    - **Verified through Superset itself, not just psql** (`infra/superset/smoke_test.sh`, 6 expectations,
+      exit 0): `gold.fact_nsq_sample` → 7,126 · `gold.dim_manufacturer` → 2,609 · `staging` refused ·
+      `ops` refused · `dbt_staging` refused · writing to gold refused. A grant only ever checked with
+      psql proves nothing about the app: Superset could have been pointed at the `drugwatch` superuser
+      and every dashboard would still have worked. The write attempt is refused **twice over** —
+      Superset's own "no DML" guard catches it before Postgres is even asked.
+    - **The official image ships no Postgres driver at all** — not psycopg2, psycopg, pg8000 or asyncpg
+      (checked, not assumed), because Superset speaks to thirty-odd engines and bundling every driver
+      would make it enormous. `superset db upgrade` failed with `ModuleNotFoundError: psycopg2`. Fixed
+      with `infra/superset/Dockerfile`, and it hides a second trap: **`python` in that image is
+      `/app/.venv/bin/python` while `pip` on PATH is the system one**, so a plain
+      `pip install psycopg2-binary` would report success and install into a Python Superset never runs.
+      The install is aimed at the venv's interpreter with the `uv` already in the image, as root, then
+      the user drops back to `superset` — a service exposed to the internet should not run as root.
+    - **Connection and verification are scripted, not clicked:** `register_gold_database.sh` (idempotent)
+      and `smoke_test.sh`. A connection that exists only because someone filled in a form cannot be
+      rebuilt after `docker compose down -v`, and cannot be reviewed. The reader password reaches the
+      container through an env var that the container's own shell expands, so it never lands in the
+      host's argv where `ps` could see it.
+    - **Memory, measured rather than estimated.** RustFS was holding **2.1 GB for 170 MB of stored data**
+      — accumulated cache from the many Phase 5 runs; a restart reclaimed it to 153 MB with all 331 raw
+      files and 7,126 findings intact. Superset then settled at **213 MB**, far under the 1–1.5 GB I had
+      budgeted; all five services together use ~650 MB of the 4.8 GB VM. No memory limits added: an
+      untested limit turns a slow service into a crashing one.
+    - **Two obligations recorded for Phase 12**, not silenced: `TALISMAN_ENABLED = False` (HTTPS-only
+      headers would break the login cookie on localhost) means Superset logs a missing-CSP warning on
+      every start — the warning is deliberately left visible, and Phase 12 must set Talisman with a
+      Content Security Policy before this is public. `EMBEDDED_SUPERSET` is **off**: a feature flag
+      switched on "ready for later" is a feature nobody has tested.
+    - Fixed a false positive in `repo-checks.sh`: it could not tell Compose's escaped variable form
+      (meaning "leave this for the container's shell") from a real one, so it demanded `.env.example`
+      entries for variables that only exist inside the superset-init container.
 - [ ] Step 3 — the dashboards (manufacturer trends · states · drug class after decision B · a fourth from gold)
 - [ ] Step 4 — anonymous read-only access, verified logged out
 - [ ] Step 5 — disclaimers, source notes, freshness line, and dashboards exported as code
@@ -1565,3 +1609,8 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-19 | Finding: NSQ findings track TESTING EFFORT (findings vs reporting labs r = 0.964 by year), so no dashboard may show a bare findings-per-month line | `docs/analytics-findings.md` §1 |
 | 2026-11-19 | Finding: 58% of manufacturers appear exactly once (median 1 finding), so a top-N chart describes 10 of 2,609 companies | `docs/analytics-findings.md` §2 |
 | 2026-11-19 | Finding: lab state differs from manufacturer state in 92.7% of findings where both are known — two charts, never one map | `docs/analytics-findings.md` §4 |
+| 2026-11-19 | Superset runs in Docker (unlike Airflow): a plain web app with no Spark beside it, and the one service Phase 12 exposes to the internet | `docker-compose.yml` |
+| 2026-11-19 | "Superset reads gold only" is enforced by the `superset_reader` grant, including ALTER DEFAULT PRIVILEGES because dbt recreates gold tables on every build; proven through Superset's own API, not just psql | `infra/postgres/superset_reader.sql`, `infra/superset/smoke_test.sh` |
+| 2026-11-19 | apache/superset:6.1.0 ships NO Postgres driver; and its `pip` is the system one while `python` is /app/.venv/bin/python, so the driver must be installed at the venv's interpreter | `infra/superset/Dockerfile` |
+| 2026-11-19 | RustFS had grown to 2.1 GB of cache for 170 MB of data (restart reclaims it); Superset settled at 213 MB, so all five services use ~650 MB of the 4.8 GB VM | PROGRESS Phase 6 step 2 |
+| 2026-11-19 | ⏳ Phase 12 must enable TALISMAN_ENABLED with a CSP before Superset is public; the missing-CSP warning is left unsilenced as the reminder | `infra/superset/superset_config.py` |

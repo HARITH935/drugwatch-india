@@ -19,8 +19,11 @@ else
 fi
 
 echo "== 2. Every \${VAR} used in docker-compose.yml is listed in .env.example =="
-# Skip comment lines/trailing comments so example text like \${VAR} in comments isn't counted
-vars=$(grep -v '^[[:space:]]*#' docker-compose.yml | sed 's/ #.*//' | grep -o '\${[A-Z_][A-Z0-9_]*' | tr -d '${' | sort -u)
+# Skip comment lines/trailing comments so example text like \${VAR} in comments isn't counted.
+# Also drop $$-escaped references first: in Compose, $${VAR} means "leave this for the
+# container's own shell", so it is NOT something .env has to provide. Without this the check
+# demanded ADMIN_USERNAME/ADMIN_PASSWORD, which only exist inside the superset-init container.
+vars=$(grep -v '^[[:space:]]*#' docker-compose.yml | sed 's/ #.*//' | sed 's/[$][$]{[A-Z_][A-Z0-9_]*}//g' | grep -o '\${[A-Z_][A-Z0-9_]*' | tr -d '${' | sort -u)
 for v in $vars; do
   if grep -q "^$v=" .env.example; then
     echo "ok       $v"

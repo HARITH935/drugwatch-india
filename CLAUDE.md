@@ -229,6 +229,15 @@ uv run --env-file ../.env jupyter lab                     # open the notebook an
 uv run --env-file ../.env jupyter nbconvert --execute --to notebook --stdout notebooks/01-explore-gold.ipynb >/dev/null  # does it still run?
 uv run jupyter nbconvert --clear-output --inplace notebooks/01-explore-gold.ipynb   # before committing
 uv run --env-file ../.env pytest           # the gold reader, incl. that writes are refused
+
+# Superset dashboards (from the repo root, stack up). Reads gold ONLY, as the superset_reader role.
+docker compose run --rm superset-init          # first run only: migrate metadata + create the admin
+docker compose up -d superset                  # UI: http://localhost:8088 (login from .env)
+bash infra/superset/register_gold_database.sh  # register/re-point the 'DrugWatch gold' connection
+bash infra/superset/smoke_test.sh              # proves gold is readable and staging/ops are refused
+# First run only: create Superset's own database and its read-only role
+docker compose exec postgres psql -U drugwatch -c "CREATE DATABASE superset"
+set -a && . ./.env && set +a && docker compose exec -T postgres psql -U drugwatch -v ON_ERROR_STOP=1 -v reader_password="$SUPERSET_READER_PASSWORD" -f - < infra/postgres/superset_reader.sql
 # First time only: create Airflow's own database beside drugwatch's
 docker compose exec postgres psql -U drugwatch -c "CREATE DATABASE airflow"
 ```
@@ -244,6 +253,7 @@ docker compose exec postgres psql -U drugwatch -c "CREATE DATABASE airflow"
 | Mailpit SMTP | `localhost:1025` | `mailpit:1025` |
 | Mailpit inbox | http://localhost:8025 | — |
 | Airflow UI | http://localhost:8082 | — (runs on the host, not in Docker) |
+| Superset | http://localhost:8088 | `superset:8088` |
 
 S3 clients talking to RustFS must use **path-style addressing** (see ADR 0002).
 If S3 calls fail with `RequestTimeTooSkewed` after the Mac has slept, Docker's VM clock has drifted more than

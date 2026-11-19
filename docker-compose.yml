@@ -90,6 +90,70 @@ services:
       - "127.0.0.1:1025:1025" # SMTP: apps send mail here
       - "127.0.0.1:8025:8025" # web inbox: http://localhost:8025
 
+  # --- Superset: the dashboards (Phase 6). Reads the gold layer as `superset_reader`. ---
+  # In Docker, unlike Airflow (ADR 0012): it is a plain web app with no Spark beside it, and it is
+  # the one service Phase 12 exposes to the internet, so it belongs in the same compose file as the
+  # database it reads.
+  superset:
+    # Built from infra/superset/Dockerfile: the official image ships no Postgres driver at all.
+    build:
+      context: .
+      dockerfile: infra/superset/Dockerfile
+    image: drugwatch/superset:6.1.0 # the built image, shared by both services below
+    depends_on:
+      postgres:
+        condition: service_healthy # Superset's metadata lives in Postgres; starting first is a crash
+      redis:
+        condition: service_started
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:?Set SUPERSET_SECRET_KEY in .env}
+      POSTGRES_USER: ${POSTGRES_USER:-drugwatch}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py # where it looks for the mounted config
+    volumes:
+      # Read-only: the container has no business editing its own configuration.
+      - ./infra/superset/superset_config.py:/app/pythonpath/superset_config.py:ro
+    ports:
+      - "127.0.0.1:8088:8088" # reachable only from this Mac, like every other service here
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s # first boot loads a lot of Python before it answers anything
+
+  # --- superset-init: one-shot setup job. Migrates Superset's metadata and creates the admin. ---
+  # Run it yourself:  docker compose run --rm superset-init
+  # Idempotent, like rustfs-init: `db upgrade` is a no-op when already current, and the admin is
+  # only created if missing. Re-run after `docker compose down -v`, or to reset the admin password.
+  superset-init:
+    # Built from infra/superset/Dockerfile: the official image ships no Postgres driver at all.
+    build:
+      context: .
+      dockerfile: infra/superset/Dockerfile
+    image: drugwatch/superset:6.1.0 # the built image, shared by both services below
+    profiles: ["init"] # kept out of `docker compose up`: a one-shot job is not a service
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:?Set SUPERSET_SECRET_KEY in .env}
+      POSTGRES_USER: ${POSTGRES_USER:-drugwatch}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py
+      ADMIN_USERNAME: ${SUPERSET_ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD:?Set SUPERSET_ADMIN_PASSWORD in .env}
+    volumes:
+      - ./infra/superset/superset_config.py:/app/pythonpath/superset_config.py:ro
+    entrypoint: ["/bin/bash", "-c"]
+    # $$ is an escaped $ for Compose, so the container's shell expands these, not Compose.
+    command:
+      - |
+        set -e
+        superset db upgrade
+        superset fab create-admin --username "$${ADMIN_USERNAME}" --firstname Admin --lastname User --email admin@drugwatch.local --password "$${ADMIN_PASSWORD}" || echo "admin already exists"
+        superset init
+
 volumes:
   postgres-data:
   rustfs-data:
