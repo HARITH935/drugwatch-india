@@ -1,0 +1,88 @@
+version: 2
+
+models:
+  - name: int_manufacturer
+    description: >
+      Phase 3's resolved manufacturers, aggregated from the findings: one row per canonical
+      company with every cleaned spelling that resolved to it. A build step, not the dimension -
+      keeping the aggregation separate from the state lookup is what stops dim_manufacturer and
+      int_manufacturer_state from depending on each other.
+    columns:
+      - name: manufacturer_id
+        data_tests: [unique, not_null]
+      - name: name_variants
+        description: "Every cleaned spelling that resolved to this company; 484 have more than one."
+
+  - name: int_manufacturer_address
+    description: >
+      Each manufacturer's address prepared once, three ways: normalised (lower case, dots dropped,
+      punctuation to spaces, `&` kept), cut at the first marketer marker, and with the postal code
+      extracted. Both readers of the address - the state-name matcher and the PIN map - use this,
+      so they cannot drift apart; and since the PIN map is learned from the matcher's answers, a
+      difference between them would quietly corrupt it.
+    columns:
+      - name: own_address_norm
+        description: >
+          The normalised address with everything from "Mrkt:"/"Marketed By" onwards removed: 47
+          addresses carry a second company's address, usually in another state.
+      - name: pin_code
+        description: >
+          The last postal code, read from the ORIGINAL text with only whitespace allowed inside
+          it, so "Khasra No. 140-141" and "393/394" are not mistaken for one.
+
+  - name: int_manufacturer_state
+    description: >
+      The state each address NAMES, matched against the reviewed vocabulary seed and refusing to
+      answer when the evidence is unclean - two different states matched (there is a village
+      called Kerala, in Gujarat), or the match is only a road name ("Delhi Road, Sonepat" is in
+      Haryana). The first of the two state signals, and the only one the PIN map learns from.
+    columns:
+      - name: state_from_name
+        description: "Null unless exactly one state matched. 1,726 of 2,609 companies."
+      - name: name_match_status
+        description: "matched | no_state_in_address | no_address | conflicting_states."
+
+  - name: int_pin_prefix_state
+    description: >
+      A postal-prefix → state map LEARNED from the 1,421 manufacturers that both name their state
+      and print a PIN: a 3-digit prefix is kept only where every known company agrees and at least
+      3 do (`pin_prefix_min_observations`). 59 prefixes accepted, resolving 280 more companies.
+      Learned rather than looked up because India's postal prefixes are not in this repo and
+      writing them from memory would be inventing reference data - 2-digit prefixes are ambiguous
+      for every state that was ever split. Validated by holdout at 99.78%
+      (`analyses/pin_prefix_holdout.sql`).
+    columns:
+      - name: pin_prefix
+        data_tests: [unique, not_null]
+      - name: observations
+        description: "How many known manufacturers agreed on this prefix. Never fewer than 3."
+
+  - name: int_reporting_lab
+    description: >
+      Who reported each finding, out of CDSCO's free-text `reported_by`: whether the laboratory is
+      one of CDSCO's own (CDL/CDTL/RDTL) or a state laboratory, and which state it sits in. The
+      lab's state is NOT the manufacturer's: 498 findings tested in West Bengal were made in
+      Himachal Pradesh.
+    columns:
+      - name: sample_id
+        data_tests: [unique, not_null]
+      - name: lab_type
+        description: "Central | State | null (424 rows name no laboratory at all)."
+      - name: reported_state_source
+        description: "reporter_names_the_state | lab_city | null."
+
+  - name: int_manufacturer_month
+    description: >
+      One row per manufacturer per month, including the empty months, from each company's first
+      finding to the last month in the archive. Shared by mart_manufacturer_trend and
+      mart_ml_features: rolling and trailing windows are only correct over a dense series, and if
+      the quiet months are missing then "reports in the last 6 months" becomes "reports in the
+      last 6 months that had reports", which is never zero. The only intermediate model
+      materialised as a table, since two marts read it.
+    columns:
+      - name: reports
+        description: "Findings in this month. 0, not null, where there were none."
+      - name: category_mentions
+        description: >
+          Category mentions, not reports: a finding naming three failed tests counts three times
+          (ADR 0009). The marts' column names keep the two units apart.

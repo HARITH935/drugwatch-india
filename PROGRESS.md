@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 4 — Warehouse (gold). Approved 2026-11-18. Step 1 of 5 done.
-**Next:** step 5 — `dbt docs` for lineage, then Phase 4's done-when check.
+**Next:** Phase 4's done-when criteria are all met — needs Harith's sign-off to close, then Phase 5 (Automation).
 
 ---
 
@@ -1033,7 +1033,43 @@ Approved 2026-11-18. Plan: `DRUGWATCH_PHASES.md` §9 Phase 4. Goal: analytics-re
     - **CI still runs only `dbt parse`.** The tests need Postgres *and* the loaded silver table, neither of
       which exists on a CI runner, so `dbt build` stays a local and Phase 5 (Airflow) step. That is the
       gap worth being honest about: these tests gate the pipeline, not the pull request.
-- [ ] Step 5 — dbt docs for lineage
+- [x] **Step 5 — dbt docs for lineage** (2026-11-19)
+      `dbt docs generate` builds the catalog from the warehouse plus every description written along the
+      way. **19 of 19 models and seeds carry a description**; 67 of the 214 columns Postgres actually holds
+      are described (31%) — the undescribed ones are passthrough columns whose meaning Phase 3 already
+      fixed, and padding them would bury the 67 that say something.
+    - Added `_intermediate__models.yml`, which is what took documentation coverage to 19/19: the six
+      intermediate models had no descriptions, and they are exactly the ones a reader needs explained (the
+      learned PIN map, the dense month grid, why the address is prepared once).
+      It also added 6 more tests — `unique`/`not_null` on `int_manufacturer`, `int_pin_prefix_state` and
+      `int_reporting_lab` — so **`dbt build` is now 63 nodes: 3 seeds, 16 models, 44 tests, 0 errors.**
+    - **The lineage is derived, not drawn.** dbt works it out from the `ref()` and `source()` calls, so it
+      cannot disagree with the code. Walked it back from the deepest mart to prove it:
+      `mart_ml_features → fact_nsq_sample → int_reporting_lab → stg_nsq_sample → source silver_nsq`,
+      with the three seeds hanging off `int_reporting_lab` and `int_manufacturer_month` joining from the
+      side. Models per schema: `dbt_staging` 1, `dbt_intermediate` 6, `gold` 9.
+    - `dbt docs serve --port 8081` browses it locally. Publishing it is a Phase 11/12 question (it exposes
+      column names and row counts, nothing from the data itself), not a Phase 4 one.
+
+**Done when:** `dbt build` succeeds with all tests passing.
+
+**Done-when check (2026-11-19): met.**
+- ✅ **`dbt build` succeeds with every test passing** — `PASS=63 WARN=0 ERROR=0 SKIP=0`: 3 seeds,
+  16 models, 44 data tests. Each test class is mutation-checked (step 4), so "passing" means the tests
+  can fail, not just that they did not.
+- ✅ **Deliverables** — dbt project (`dbt/`), star schema (`fact_nsq_sample` + 4 dimensions), marts
+  (4 of §8.2's 6 — the section calls its list "examples"), dbt docs.
+- ⏸ **Deferred, with reasons recorded:** `mart_drug_class_failures` (no classification source exists;
+  needs Harith's decision) and `mart_price_gap` (no bulk branded-price source — Phase 1 §4.6, revisit in
+  Phase 6).
+
+**Gold layer as built:** `staging.silver_nsq` (7,126 rows loaded by `warehouse/`) → `dbt_staging` →
+`dbt_intermediate` → **`gold`**: `fact_nsq_sample` 7,126 · `dim_drug` 5,651 · `dim_manufacturer` 2,609 ·
+`dim_state` 36 · `dim_date` 7,305 · `mart_manufacturer_trend` 85,924 ·
+`mart_repeat_reported_manufacturers` 500 · `mart_state_summary` 36 · `mart_ml_features` 85,924.
+
+⏳ **Still open and carried forward:** `drug_class` (blocks one mart and one §12 feature); the row-level
+`is_spurious` question from Phase 3; and `city` on dim_manufacturer (no closed vocabulary to match against).
 
 **Done when:** `dbt build` succeeds with all tests passing.
 
@@ -1171,3 +1207,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-19 | `assert_expiry_after_mfg` is a consistency check (impossible dates are allowed, but only when `dates_valid` marks them), because CDSCO really does print 17 impossible date pairs | `tests/assert_expiry_after_mfg.sql` |
 | 2026-11-19 | The category vocabulary is restated in the test, not imported: a test that reads its expectations from the code under test cannot fail | `tests/assert_failure_categories_in_vocabulary.sql` |
 | 2026-11-19 | dbt tests gate the pipeline, not CI: they need Postgres plus the loaded silver, so CI runs only `dbt parse` and `dbt build` stays a local/Phase 5 step | `.github/workflows/lint.yml` |
+| 2026-11-19 | dbt docs generated from the model descriptions; lineage is derived from `ref()`/`source()` so it cannot disagree with the code. 19/19 models and seeds documented, 31% of columns (passthrough columns left undescribed on purpose) | `dbt docs generate`, `_intermediate__models.yml` |
+| 2026-11-19 | Phase 4 done-when met: `dbt build` = 63 nodes, 0 errors (3 seeds, 16 models, 44 tests). Two §8.2 marts deferred with reasons (§8.2 calls its list "examples") | PROGRESS Phase 4 |

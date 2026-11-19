@@ -204,6 +204,8 @@ uv run --env-file ../.env dbt build            # build every model, then run its
 uv run --env-file ../.env dbt debug            # check the connection and the config
 uv run --env-file ../.env dbt source freshness # how old the loaded silver is (warn 45d / error 75d)
 uv run dbt parse                               # check the SQL/YAML parses; no database needed
+uv run --env-file ../.env dbt docs generate    # lineage graph + catalog from the model descriptions
+uv run --env-file ../.env dbt docs serve --port 8081  # browse it (Ctrl-C to stop)
 ```
 
 **Local service ports** (all bound to 127.0.0.1; Postgres and Redis are shifted so they don't clash with OpsPilot):
