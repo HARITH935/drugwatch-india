@@ -43,7 +43,8 @@ from datetime import datetime, timedelta
 
 from airflow import DAG
 
-from drugwatch_orchestration.tasks import dbt_task, uv_task
+from drugwatch_orchestration.pipeline import processing_chain
+from drugwatch_orchestration.tasks import uv_task
 
 # Airflow renders these; `data_interval_start` is a pendulum datetime, so it can do the arithmetic.
 THIS_MONTH = "{{ data_interval_start.strftime('%Y-%m') }}"
@@ -85,62 +86,10 @@ with DAG(
         execution_timeout=timedelta(hours=2),
     )
 
-    # --- 2. the gate before any processing --------------------------------------------------
-    # raw/ is the source of truth and is never modified (CLAUDE.md §5). If a stored file no
-    # longer matches its recorded SHA-256, every downstream step would silently process the
-    # wrong bytes - so this runs before extraction, not after.
-    verify_raw = uv_task(
-        task_id="verify_raw_archive",
-        project="ingestion",
-        module="drugwatch_ingestion.inventory",
-    )
-
-    # --- 3. extract to bronze ----------------------------------------------------------------
-    # Independent of each other (different sources, different output prefixes), so they run in
-    # parallel - which is also why this DAG needs LocalExecutor rather than SequentialExecutor.
-    extract_pdfs = uv_task(
-        task_id="extract_pdf_bronze",
-        project="extraction",
-        module="drugwatch_extraction.bronze",
-        arguments="--all",
-    )
-    extract_portal = uv_task(
-        task_id="extract_portal_bronze",
-        project="extraction",
-        module="drugwatch_extraction.portal_bronze",
-        arguments="--all",
-    )
-
-    # --- 4. clean to silver ------------------------------------------------------------------
-    # The heaviest task: a JVM, ~2.7 GB peak, and roughly ten minutes (docs/benchmarks.md).
-    # It runs on this machine rather than in Docker precisely because of that (ADR 0012).
-    build_silver = uv_task(
-        task_id="build_silver",
-        project="spark",
-        module="drugwatch_spark.build_silver",
-        execution_timeout=timedelta(hours=1),
-    )
-
-    # --- 5. validate before loading ----------------------------------------------------------
-    # Great Expectations exits non-zero if silver is wrong, and it sits BEFORE the load on
-    # purpose: bad data should never reach the warehouse the website reads. One retry only -
-    # a failing expectation is a data problem, and retrying it just repeats the failure.
-    validate_silver = uv_task(
-        task_id="validate_silver",
-        project="quality",
-        module="drugwatch_quality.suite",
-        retries=1,
-    )
-
-    # --- 6. load and build gold --------------------------------------------------------------
-    load_silver = uv_task(
-        task_id="load_silver_to_postgres",
-        project="warehouse",
-        module="drugwatch_warehouse.load_silver",
-    )
-    build_gold = dbt_task(task_id="dbt_build", command="build")
+    # --- 2-6. verify, extract, clean, validate, load, build gold ---------------------------
+    # The same seven tasks the backfill DAG runs, built by one shared function so the two can
+    # never drift apart (drugwatch_orchestration.pipeline).
+    processing_starts, _ = processing_chain()
 
     # --- the shape of the run ----------------------------------------------------------------
-    [download_nsq, download_spurious, download_pdfs] >> verify_raw
-    verify_raw >> [extract_pdfs, extract_portal] >> build_silver
-    build_silver >> validate_silver >> load_silver >> build_gold
+    [download_nsq, download_spurious, download_pdfs] >> processing_starts

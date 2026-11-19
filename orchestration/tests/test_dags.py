@@ -49,8 +49,27 @@ def test_every_dag_is_owned_and_documented(dagbag):
         assert dag.doc_md, f"{dag_id} has no doc_md"
 
 
-def test_tasks_retry_with_backoff(dagbag):
-    """Transient failures must not need a human (plan §9 Phase 5 step 3)."""
+# Tasks that validate parameters rather than do work. A bad month range is wrong on the first
+# millisecond and still wrong on the last, so retrying it only delays the error by 15 minutes -
+# which is exactly what happened before `check_month_range` was given a task of its own.
+VALIDATION_ONLY_TASKS = {"check_month_range"}
+
+
+def test_work_tasks_retry_and_validation_tasks_do_not(dagbag):
+    """Transient failures must not need a human (plan §9 Phase 5 step 3) - but permanent ones
+    must not be retried at all."""
     for dag_id, dag in dagbag.dags.items():
         for task in dag.tasks:
-            assert task.retries >= 1, f"{dag_id}.{task.task_id} has no retries"
+            where = f"{dag_id}.{task.task_id}"
+            if task.task_id in VALIDATION_ONLY_TASKS:
+                assert task.retries == 0, f"{where} validates parameters: it must fail fast"
+            else:
+                assert task.retries >= 1, f"{where} has no retries"
+
+
+def test_work_tasks_have_a_timeout(dagbag):
+    """A task that hangs must fail and alert, not block the DAG for ever."""
+    for dag_id, dag in dagbag.dags.items():
+        for task in dag.tasks:
+            if task.task_id not in VALIDATION_ONLY_TASKS:
+                assert task.execution_timeout, f"{dag_id}.{task.task_id} has no execution_timeout"

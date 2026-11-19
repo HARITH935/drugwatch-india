@@ -2,8 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 5 — Automation. Approved 2026-11-19. Steps 0-1 done (the monthly pipeline runs end to end).
-**Next:** step 2 — the backfill DAG (reprocess any historical range).
+**Current phase:** Phase 5 — Automation. Approved 2026-11-19. Steps 0-2 done (monthly + backfill DAGs run end to end).
+**Next:** step 4 — failure notifications by email over SMTP (Mailpit locally). Step 3 is already satisfied; see below.
 
 ---
 
@@ -1173,8 +1173,64 @@ Approved 2026-11-19. Plan: `DRUGWATCH_PHASES.md` §9 Phase 5. Goal: the pipeline
       a no-change run harmless but not free — it still spends ~4 minutes rebuilding silver and gold from
       unchanged bronze. Short-circuiting on "nothing changed" needs the download outcomes as structured
       data, which is what step 5's run log will provide; doing it by parsing stdout would be fragile.
-- [ ] Step 2 — backfill DAG: reprocess any historical range
-- [ ] Step 3 — retries with backoff; idempotent tasks (retry policy in `tasks.py`; idempotency demonstrated in step 1)
+- [x] **Step 2 — the backfill DAG** (2026-11-19)
+      `backfill_pipeline`: the same chain on months a person chooses. **Run end to end, 10/10 tasks
+      successful**; a deliberately bad range fails the whole run in **11.8 s**.
+    - **The shared chain is built once.** The monthly DAG's last seven tasks and the backfill's are the
+      same, so `pipeline.processing_chain()` builds them and both DAGs call it; `monthly_pipeline.py` was
+      refactored onto it. Copied, they would drift: a validation step added to one would silently not
+      apply to the other, and the backfill would stop reproducing what the monthly run does. **No
+      TaskGroup** — a group prefixes every task id (`process.build_silver`), which would orphan the run
+      history the monthly DAG already has.
+    - **Two parameters, and what they mean:** `refresh_downloads = false` (the default) reprocesses from
+      `raw/` after a parser or cleaning fix, asking CDSCO for nothing already stored; `true` re-fetches the
+      range to fill a gap or pick up a revision. Either way `raw/` is never modified (CLAUDE.md §5) — a
+      refresh stores a *new* snapshot beside the old one when bytes differ, nothing when they don't.
+      `start_month`/`end_month` are validated against the portal's 2019-01 start (ADR 0004), a backwards
+      range, and a 120-month cap.
+    - **There is no partial rebuild, deliberately.** `build_silver` reads all of bronze and overwrites
+      silver, so two months and five years cost the same after the download step. Rebuilding one month in
+      place would leave silver a mix of two code versions, and would compute manufacturer clustering over
+      a *subset* — which produces different canonical names than the full archive does.
+    - **The PDF downloader is absent from this DAG** on purpose: it fetches by document id, not by month,
+      and a reprocess has no reason to re-list CDSCO's website (CLAUDE.md §7).
+    - **Two bugs found by testing a deliberately bad range, neither visible from the tests:**
+      1. **A permanent error was being retried.** The range `ValueError` is raised while a task's command
+         is *rendered*, which Airflow treats like any task failure — so it retried with exponential
+         backoff, taking **15 minutes** to report a typo that is wrong on the first millisecond. Fixed with
+         a `check_month_range` gate that runs first with `retries=0`: the run now fails in **11.8 s**.
+      2. **It then failed for the wrong reason.** `op_kwargs={"params": "{{ params }}"}` renders Jinja to a
+         *string*, so the gate died on `TypeError: string indices must be integers` instead of printing the
+         explanation it exists for. Tests green, task failing fast, message useless. Fixed by letting
+         Airflow inject `params` by signature. **Only reading the actual message showed it.**
+    - That second bug also improved the tests: the blanket rule "every task has retries" was wrong, and now
+      says what was meant — **work tasks retry, validation gates must fail fast** — plus a new test that
+      every work task has an `execution_timeout`. **24 tests pass**, and the month arithmetic's four guards
+      are mutation-checked (year rollover Dec→Jan, backwards range, pre-2019, the 120-month cap).
+    - **Verified by running it** (2025-01 … 2025-06, `refresh_downloads = false`): the gate printed
+      `6 months: 2025-01 .. 2025-06` and `NOT asking CDSCO for anything already stored`, every month
+      reported **`skipped`** (no request made), then silver `7126 rows (77 spurious)`, GE `PASSED`,
+      `loaded 7126 rows`, `dbt build PASS=63 ERROR=0`.
+    - **The backfill filled 5 real gaps while proving the point.** Its first attempt stored
+      `cdsco-portal/spurious` for **2025-01 … 2025-05, each `stored, 0 rows`** — months never fetched
+      before, where CDSCO published no spurious alerts (`raw/` 326 → 331 files). So `refresh off` means
+      "don't re-ask for what's stored", not "don't ask for anything". The re-run then reported all six
+      months `skipped`, and silver stayed at 7,126 because the new snapshots are empty.
+    - ⚠️ **That first attempt also failed, environmentally, and it is worth keeping:** the Mac slept
+      mid-run (`caffeinate -i` prevents idle sleep, not a lid close), the Docker VM's clock drifted, and
+      RustFS's S3 API rejected the signed requests with `RequestTimeTooSkewed` (CLAUDE.md §10 documents
+      this). **The retry policy worked and still was not enough**: both download tasks recovered
+      (`up_for_retry` ×3 → `success`), while the two extraction tasks exhausted their retries, because 3
+      attempts with backoff capped at 15 min covers ~7–15 minutes of transience, not a laptop asleep for
+      two hours. That is the right behaviour — a DAG should not retry for hours — and it is the argument
+      for step 4's failure email: recover from the brief failures, *tell someone* about the rest. It is
+      also an argument for Phase 12 deploying to a VM that does not sleep. The VM clock resynced itself
+      (drift measured at 0 s afterwards), so nothing in the code needed changing.
+- [x] **Step 3 — retries with backoff; idempotent tasks** — satisfied by steps 0-2 rather than as separate
+      work, and demonstrated rather than claimed: the retry policy lives in one factory (`tasks.py`:
+      3 retries, exponential backoff from 2 min capped at 15, 1-hour timeout; validation gates 0 retries,
+      dbt 1), idempotency was proven by running the monthly DAG twice with identical results and no
+      duplicates (step 1), and the backoff was observed recovering real transient failures above.
 - [ ] Step 4 — failure notifications by email over SMTP (Mailpit locally, Brevo in production)
 - [ ] Step 5 — run log: files processed, rows added, checks passed/failed
 
@@ -1327,3 +1383,8 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-19 | Validation runs BEFORE the load, and `max_active_runs=1` because every task writes shared state (two runs = two Spark jobs overwriting one silver prefix) | `dags/monthly_pipeline.py` |
 | 2026-11-19 | Whole pipeline measured at 240.3 s (build_silver 152.9 s of it); `benchmarks.md`'s ~10-minute figure for `build_silver.main()` was stale (pre-`session.py` tuning) and is corrected | `docs/benchmarks.md` |
 | 2026-11-19 | ⏳ OPEN: "check for new alerts" is implicit — a no-change run still costs ~4 min. Short-circuiting needs the structured run log from step 5, not stdout parsing | PROGRESS Phase 5 step 1 |
+| 2026-11-19 | The seven processing tasks are built once in `pipeline.processing_chain()` and shared by both DAGs (no TaskGroup, which would rename task ids and orphan run history) | `orchestration/src/drugwatch_orchestration/pipeline.py` |
+| 2026-11-19 | A backfill never rebuilds part of silver: `build_silver` overwrites the whole table, and clustering manufacturers over a subset would produce different canonical names than the full archive | `dags/backfill_pipeline.py` |
+| 2026-11-19 | Parameter errors are permanent, not transient: `check_month_range` runs first with `retries=0`, so a bad range fails in 11.8 s instead of 15 minutes of backoff | `pipeline.py` |
+| 2026-11-19 | `op_kwargs={"params": "{{ params }}"}` renders Jinja to a STRING: the gate failed with a TypeError instead of its own explanation. Context keys are injected by signature instead | `dags/backfill_pipeline.py` |
+| 2026-11-19 | Observed: 3 retries with backoff capped at 15 min recovers ~7-15 min of transience (the downloads did), not a sleeping laptop (the extractions did not). Hence step 4's email, and a non-sleeping VM in Phase 12 | PROGRESS Phase 5 step 2 |
