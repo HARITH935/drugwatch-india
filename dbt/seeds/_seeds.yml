@@ -4,8 +4,8 @@ seeds:
   - name: india_state_alias
     description: >
       Reviewed vocabulary of Indian state and union-territory names: one row per spelling that may
-      appear in a CDSCO address. `alias` is stored already normalised (lower case, no dots) because
-      int_manufacturer_state normalises the address the same way before matching.
+      appear in a CDSCO address or reporter field. `alias` is stored already normalised (lower
+      case, no dots) because the models normalise the text the same way before matching.
       `alias_kind` records what each row is - an official name, a spelling variant seen in the
       archive (Orissa, Tamilnadu, Gujrat), or a two-letter abbreviation (HP, U.P., HR), which are
       the riskiest and were each checked against real addresses before being added.
@@ -18,3 +18,38 @@ seeds:
         description: "State or Union Territory."
       - name: alias_kind
         description: "name | variant | abbrev."
+
+  - name: lab_type_marker
+    description: >
+      Which laboratory abbreviations mean a central lab and which mean a state one, with each
+      abbreviation's expansion so the table can be checked by a reader who does not know them.
+      CDL, CDTL and RDTL are CDSCO's own laboratories (RDTL = Regional Drugs Testing Laboratory,
+      regional but central-government); DTL, SDTL, DCL, FDL, FDAL and the spelled-out forms are
+      state laboratories. A central marker wins over a state one, because the central phrases are
+      the more specific: "Central Drugs Testing Laboratory" contains "drugs testing laboratory".
+    columns:
+      - name: marker
+        description: "Normalised whole word or phrase to look for in `reported_by`."
+      - name: lab_type
+        description: "Central or State."
+      - name: expansion
+        description: "What the abbreviation stands for."
+
+  - name: lab_city_state
+    description: >
+      The state each drug-testing laboratory's city is in. A short reviewed list, not learned
+      reference data: it covers only the ~20 cities that actually host the laboratories CDSCO
+      names, and every row can be checked at a glance.
+      `verified_against_data` says whether the archive itself confirms the row - 9 of these cities
+      also appear in reporter strings that spell their state out ("DTL, Bengaluru, Karnataka"), and
+      `analyses/lab_city_crosscheck.sql` checks the seed against those. The remaining rows are
+      cities whose state the archive never states (Mumbai, Chennai, Jaipur, Hyderabad...).
+      Hyderabad is recorded as Telangana: the laboratory has been in Telangana since the 2014
+      split, though older alerts predate it.
+    columns:
+      - name: city
+        description: "Normalised city name as it appears in `reported_by`."
+      - name: state_name
+        description: "The state or UT that city is in."
+      - name: verified_against_data
+        description: "yes = the archive confirms it elsewhere; no = reviewed knowledge only."

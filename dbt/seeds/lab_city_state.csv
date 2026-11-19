@@ -1,0 +1,34 @@
+city,state_name,verified_against_data
+kolkata,West Bengal,yes
+guwahati,Assam,yes
+thiruvananthapuram,Kerala,yes
+bengaluru,Karnataka,yes
+bangalore,Karnataka,no
+bellary,Karnataka,yes
+ballari,Karnataka,no
+lucknow,Uttar Pradesh,yes
+srinagar,Jammu and Kashmir,yes
+bhubaneswar,Odisha,yes
+pune,Maharashtra,yes
+mumbai,Maharashtra,no
+chennai,Tamil Nadu,no
+guindy,Tamil Nadu,no
+madurai,Tamil Nadu,no
+jaipur,Rajasthan,no
+hyderabad,Telangana,no
+vadodara,Gujarat,no
+kasauli,Himachal Pradesh,no
+ghaziabad,Uttar Pradesh,no
+thrissur,Kerala,yes
+ernakulam,Kerala,yes
+ekm,Kerala,no
+tvpm,Kerala,no
+konni,Kerala,no
+indore,Madhya Pradesh,no
+bhopal,Madhya Pradesh,yes
+patna,Bihar,no
+baddi,Himachal Pradesh,yes
+kathua,Jammu and Kashmir,yes
+jodhpur,Rajasthan,no
+sambhajinagar,Maharashtra,yes
+us nagar,Uttarakhand,no

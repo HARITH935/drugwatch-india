@@ -1,0 +1,30 @@
+marker,lab_type,expansion
+cdl,Central,Central Drugs Laboratory
+cdtl,Central,Central Drugs Testing Laboratory
+rdtl,Central,Regional Drugs Testing Laboratory (run by CDSCO)
+central drugs laboratory,Central,spelled out
+central drug laboratory,Central,spelled out (singular)
+central drugs testing laboratory,Central,spelled out
+regional drugs testing laboratory,Central,spelled out
+sdtl,State,State Drugs Testing Laboratory
+sdt&rl,State,State Drug Testing & Research Laboratory
+dtl,State,Drugs Testing Laboratory (a state lab)
+dcl,State,Drugs Control Laboratory
+fdl,State,Food and Drugs Laboratory
+fdal,State,Food and Drug Administration Laboratory
+state,State,any "State ..." laboratory
+drugs testing laboratory,State,spelled out
+drug testing laboratory,State,spelled out (singular)
+drugs control laboratory,State,spelled out
+food and drugs laboratory,State,spelled out
+drugs inspector,State,a state drugs inspector reported it
+drug inspector,State,spelled out (singular)
+government analyst,State,a state government analyst reported it
+king institute,State,King Institute of Preventive Medicine & Research (Tamil Nadu)
+fdtl,State,Food and Drug Testing Laboratory
+sdftl,State,State Drug and Food Testing Laboratory
+bdcl,State,"Bihar Drugs Control Laboratory, Patna"
+fda,State,a state Food and Drug Administration laboratory
+food & drugs laboratory,State,spelled out with an ampersand
+govt analyst,State,abbreviated government analyst
+lab,State,"a bare ""... Lab"": only reached when no central marker matched, since central labs always print CDL/CDTL/RDTL"

@@ -20,6 +20,19 @@ models:
         description: "True = reported as spurious/counterfeit, not as a quality failure by its maker."
       - name: source_url
         description: "The original CDSCO document. Required on every public view of a finding."
+      - name: lab_type
+        description: >
+          Central (CDSCO's own CDL/CDTL/RDTL, which test samples drawn nationwide) or State (a
+          state laboratory, testing its own state's samples). Null where the reporter named no
+          laboratory at all (424 rows). The two are not comparable and must never be summed as
+          "reports per state".
+      - name: reported_state_id
+        description: >
+          FK to dim_state: the REPORTING LABORATORY's state, never the manufacturer's. 498
+          findings tested in West Bengal were made in Himachal Pradesh. For the manufacturing
+          state use dim_manufacturer.state_name.
+      - name: reported_state_source
+        description: "reporter_names_the_state (2,264) | lab_city (4,671) | null (191)."
 
   - name: dim_manufacturer
     description: >

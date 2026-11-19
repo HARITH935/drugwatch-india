@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 4 — Warehouse (gold). Approved 2026-11-18. Step 1 of 5 done.
-**Next:** step 3 piece 2b — `lab_type` (Central/State) and the reporting lab's state out of `reported_by` (approved, not started).
+**Next:** step 3 piece 3 — the analytical marts of §8.2 (and `drug_class` needs a decision first).
 
 ---
 
@@ -917,7 +917,43 @@ Approved 2026-11-18. Plan: `DRUGWATCH_PHASES.md` §9 Phase 4. Goal: analytics-re
           two), `0 orphan state_id`. Top states **Himachal 717, Uttarakhand 263, Gujarat 199, MP 112,
           Haryana 98, Maharashtra 76** — Uttarakhand gained 62 from PINs and Maharashtra 33, which is the
           UP/Uttarakhand and Goa/Maharashtra ambiguity being resolved by evidence rather than by assumption.
-    - [ ] Piece 2b — `lab_type` (Central/State) and the reporting lab's state from `reported_by`
+    - [x] **Piece 2b — `lab_type` and the reporting lab's state, from `reported_by`** (2026-11-19)
+          `dbt build`: **14 models, 0 errors.** `lab_type` on 6,702 of 7,126 rows (94.0%);
+          the reporting lab's state on 6,935 (97.3%); `0 orphan reported_state_id`.
+        - **Why `lab_type` matters more than it looks.** CDSCO's own laboratories (CDL, CDTL, RDTL) test
+          samples drawn nationwide; a state laboratory tests samples drawn in its own state. So the two are
+          not comparable, and the proof is in the data: **498 findings tested in West Bengal were made in
+          Himachal Pradesh**, 339 tested in Chandigarh were made in HP, 287 tested in Assam likewise.
+          Central labs cover 11 lab-states but 26 manufacturing states. Anyone grouping findings by the
+          reporting state and calling it "unsafe medicine by state" would put West Bengal on top purely
+          because CDL Kolkata does the testing. The fact therefore carries **two different state fields**:
+          `reported_state_id` (the lab) and `dim_manufacturer.state_name` (the maker), with that warning in
+          both models' comments.
+        - **Two reviewed seeds, both auditable as tables:**
+          `lab_type_marker` (29 rows) maps each abbreviation to Central or State *with its expansion*, so a
+          reader who does not know what RDTL stands for can still check the table. Central wins over State
+          where both match, because the central phrases are more specific ("Central Drugs Testing
+          Laboratory" contains "drugs testing laboratory") — though **0 rows actually matched both**, so the
+          rule is a guard, not something in use.
+          `lab_city_state` (33 rows) maps each laboratory city to its state.
+        - **The city seed is checked against the archive, not trusted.** Some reporter strings name both the
+          city and the state ("DTL, Bengaluru, Karnataka", "LUCKNOW, Uttar Pradesh"), which makes the seed
+          testable: **15 of its 33 cities are confirmed that way, with 0 disagreements** (bengaluru, bellary,
+          lucknow, kathua, srinagar, baddi, kolkata, sambhajinagar, thiruvananthapuram, ernakulam, pune,
+          thrissur, bhopal, bhubaneswar, guwahati). The rest are cities the archive never spells a state out
+          for (Mumbai, Chennai, Jaipur, Hyderabad, Indore…), and the CSV's `verified_against_data` column
+          says which is which. Kept as `analyses/lab_city_crosscheck.sql`; step 4 makes it a dbt test.
+        - **Every marker and city came from reading the unresolved tail**, then re-measuring: `FDTL`,
+          `SDFTL`, `BDCL`, `FDA`, `govt analyst`, `food & drugs laboratory` (the ampersand form my first
+          marker missed) and a bare `Lab`; cities Thrissur, Ernakulam/EKM, TVPM, Konni, Indore, Bhopal,
+          Patna, Baddi, Kathua, Jodhpur, Sambhajinagar, US Nagar. That took `lab_type` from 91.4% → 94.0%
+          and the lab's state from 93.3% → 97.3%.
+        - **Left unresolved on purpose:** `MDTL Kathua` (6 rows) — I could not establish whether a Mini Drug
+          Testing Laboratory is state-run without guessing, so it stays null. "Govt. Analyst, Haryana,
+          Chandigarh" names two states, so the unanimity rule leaves it null — correct, since the Haryana
+          analyst sits in Chandigarh. "Karnataka", "Puducherry" and "Not applicable" name no laboratory, so
+          they have no type. 100 rows have no reporter at all.
+    - [x] Piece 2 complete — `dim_state`, the manufacturer's state, `lab_type`, the lab's state
     - [ ] Piece 3 — the marts of §8.2
 - [ ] Step 4 — dbt tests: unique, not_null, relationships, accepted_values, plus custom (expiry after mfg)
 - [ ] Step 5 — dbt docs for lineage
@@ -1046,3 +1082,7 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-19 | The PIN map is validated by holdout (learn on half the known rows, predict the other): 99.78% at ≥3 vs 99.59% at ≥2. Checking it against the rows it learned from was circular and reported a meaningless 100% | `analyses/pin_prefix_holdout.sql` |
 | 2026-11-19 | The PIN is read from the ORIGINAL address with only whitespace allowed inside it, so "Khasra No. 140-141" and "393/394" are not mistaken for postal codes | `int_manufacturer_address.sql` |
 | 2026-11-19 | A state name followed by road/highway/bypass/marg/NH is a road name, not a location ("Delhi Road, Sonepat" is Haryana): 10 addresses | `int_manufacturer_state.sql` |
+| 2026-11-19 | `lab_type` (Central/State) travels on every fact row, and the lab's state is kept strictly apart from the manufacturer's: 498 findings tested in West Bengal were made in Himachal Pradesh, so grouping by the reporting state would measure testing effort, not drug quality | `int_reporting_lab.sql`, `fact_nsq_sample.sql` |
+| 2026-11-19 | Lab abbreviations live in a seed WITH their expansions (CDL/CDTL/RDTL = CDSCO's own; DTL/SDTL/DCL/FDL/FDAL/FDTL/BDCL = state), so the table can be checked by someone who does not know them | `seeds/lab_type_marker.csv` |
+| 2026-11-19 | The reviewed lab-city seed is cross-checked against reporter strings that name both city and state: 15 of 33 cities confirmed, 0 disagreements; the CSV records which rows the archive can confirm | `analyses/lab_city_crosscheck.sql` |
+| 2026-11-19 | `MDTL` left unclassified (6 rows): whether a Mini Drug Testing Laboratory is state-run could not be established without guessing | `lab_type_marker.csv` |
