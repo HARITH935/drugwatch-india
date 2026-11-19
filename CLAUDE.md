@@ -235,6 +235,9 @@ docker compose run --rm superset-init          # first run only: migrate metadat
 docker compose up -d superset                  # UI: http://localhost:8088 (login from .env)
 bash infra/superset/register_gold_database.sh  # register/re-point the 'DrugWatch gold' connection
 bash infra/superset/smoke_test.sh              # proves gold is readable and staging/ops are refused
+# Dashboards are provisioned from code, never clicked (idempotent: re-running updates in place)
+set -a && . ./.env && set +a && python3 infra/superset/build_manufacturer_dashboard.py
+set -a && . ./.env && set +a && python3 infra/superset/verify_charts.py  # every chart must return rows
 # First run only: create Superset's own database and its read-only role
 docker compose exec postgres psql -U drugwatch -c "CREATE DATABASE superset"
 set -a && . ./.env && set +a && docker compose exec -T postgres psql -U drugwatch -v ON_ERROR_STOP=1 -v reader_password="$SUPERSET_READER_PASSWORD" -f - < infra/postgres/superset_reader.sql

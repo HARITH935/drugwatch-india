@@ -34,8 +34,16 @@ _redis = {
 }
 CACHE_CONFIG = {**_redis, "CACHE_DEFAULT_TIMEOUT": 300, "CACHE_KEY_PREFIX": "superset_"}
 DATA_CACHE_CONFIG = {**_redis, "CACHE_DEFAULT_TIMEOUT": 3600, "CACHE_KEY_PREFIX": "superset_data_"}
-FILTER_STATE_CACHE_CONFIG = {**_redis, "CACHE_DEFAULT_TIMEOUT": 86400, "CACHE_KEY_PREFIX": "superset_filter_"}
-EXPLORE_FORM_DATA_CACHE_CONFIG = {**_redis, "CACHE_DEFAULT_TIMEOUT": 86400, "CACHE_KEY_PREFIX": "superset_form_"}
+FILTER_STATE_CACHE_CONFIG = {
+    **_redis,
+    "CACHE_DEFAULT_TIMEOUT": 86400,
+    "CACHE_KEY_PREFIX": "superset_filter_",
+}
+EXPLORE_FORM_DATA_CACHE_CONFIG = {
+    **_redis,
+    "CACHE_DEFAULT_TIMEOUT": 86400,
+    "CACHE_KEY_PREFIX": "superset_form_",
+}
 # The data cache holds query results for an hour. The warehouse is rebuilt monthly, so an hour of
 # staleness on a public dashboard is invisible, and it keeps a shared link from re-running every
 # chart's SQL for every visitor.

@@ -2,8 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 6 — Analytics. Approved 2026-11-19. Steps 1-2 of 5 done (notebook, Superset connected).
-**Next:** step 3 — the dashboards, one per slice, starting with manufacturer trends.
+**Current phase:** Phase 6 — Analytics. Approved 2026-11-19. Steps 1-2 done; step 3 in progress (dashboard 1 of 4).
+**Next:** step 3b — the states dashboard (two charts, never summed, no map).
 
 ---
 
@@ -1433,7 +1433,48 @@ Approved 2026-11-19. Plan: `DRUGWATCH_PHASES.md` §9 Phase 6. Goal: public, read
     - Fixed a false positive in `repo-checks.sh`: it could not tell Compose's escaped variable form
       (meaning "leave this for the container's shell") from a real one, so it demanded `.env.example`
       entries for variables that only exist inside the superset-init container.
-- [ ] Step 3 — the dashboards (manufacturer trends · states · drug class after decision B · a fourth from gold)
+- [ ] Step 3 — the dashboards, one per slice
+    - [x] **3a — "Manufacturer reporting"** (2026-11-19) — 6 charts, all verified returning data.
+          Provisioned **from code** (`infra/superset/build_manufacturer_dashboard.py`, idempotent): a
+          dashboard that exists only because someone filled in forms cannot be rebuilt after
+          `docker compose down -v`, reviewed in a diff, or deployed in Phase 12.
+        - **Two new dbt marts rather than SQL typed into Superset.** The dashboard needed figures gold
+          did not have, and a Superset "virtual dataset" would have hidden untested logic outside dbt,
+          outside lineage and outside git:
+          `mart_monthly_reporting` (findings per alert month **with the reporting-lab count in the same
+          mart**, deliberately — splitting them would make the misleading chart the easier one to build)
+          and `mart_manufacturer_report_counts` (how many companies have how many findings). Both
+          documented and tested; `dbt build` 6 nodes green.
+        - **Every design choice traces to a measured finding** (`docs/analytics-findings.md`):
+          the findings bar chart sits **beside** the reporting-laboratories line, because the two
+          correlate at r = 0.964 and a findings-only chart reads as falling quality · the ranking is by
+          **separate alert months**, not a total or a score, because ten findings in one alert is one
+          inspection sweep · the **long-tail distribution sits next to the ranking**, because 58% of
+          companies appear exactly once and a top-20 table otherwise reads as "the worst 20".
+        - **The disclaimer is on the dashboard now, not deferred to step 5:** a markdown tile carries
+          "Not medical advice. Data from CDSCO public alerts.", the one-batch scope, "reporting history,
+          not quality", the r = 0.964 explanation, and "not found never means guaranteed safe".
+        - **Verified by asking every chart for its data** (`infra/superset/verify_charts.py`, exit 0):
+          `Batches reported` 1 row · `per alert month` **101 rows** (the 101 published months) ·
+          `laboratories per month` 101 rows · `ranking` 20 rows × 6 columns · `long tail` 15 rows.
+          Values spot-checked against the SQL: Jackson Laboratories 49 alert months / 90 reports,
+          2026-09 = 330 findings / 48 laboratories, 1,521 companies at one finding (58.3% of companies,
+          21.73% of findings).
+        - **Two Superset lessons, both found by running it:**
+          1. **A chart needs a stored `query_context`, not just `params`.** Superset's UI saves both;
+             an API-created chart with only `params` is accepted and then fails anything that asks it
+             for data server-side — which in Phase 9 would include alerts and reports. The build script
+             now writes the query context for each of the three viz shapes it uses.
+          2. **My verification was wrong before the charts were.** `GET /api/v1/chart/{id}/data/`
+             rejected them with a bare "400 Bad Request … could not understand", while POSTing the very
+             same stored context to `/api/v1/chart/data` returned the right numbers. The verifier now
+             does what a dashboard does. Chasing the GET would have meant debugging the test instead of
+             the thing under test.
+        - `infra/` Python was never linted: the CI matrix is per uv project, and these scripts belong to
+          none. CI now runs a pinned `ruff` over `infra/` via `uvx` — 10 findings fixed, all line length.
+    - [ ] 3b — states (two charts, never summed, no map)
+    - [ ] 3c — drug class (needs decision B's vocabulary)
+    - [ ] 3d — a fourth dashboard from gold (spurious reports, or central vs state coverage)
 - [ ] Step 4 — anonymous read-only access, verified logged out
 - [ ] Step 5 — disclaimers, source notes, freshness line, and dashboards exported as code
 
@@ -1614,3 +1655,8 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-19 | apache/superset:6.1.0 ships NO Postgres driver; and its `pip` is the system one while `python` is /app/.venv/bin/python, so the driver must be installed at the venv's interpreter | `infra/superset/Dockerfile` |
 | 2026-11-19 | RustFS had grown to 2.1 GB of cache for 170 MB of data (restart reclaims it); Superset settled at 213 MB, so all five services use ~650 MB of the 4.8 GB VM | PROGRESS Phase 6 step 2 |
 | 2026-11-19 | ⏳ Phase 12 must enable TALISMAN_ENABLED with a CSP before Superset is public; the missing-CSP warning is left unsilenced as the reminder | `infra/superset/superset_config.py` |
+| 2026-11-19 | Dashboards are provisioned from code over Superset's API, never clicked: one that exists only in Superset's database cannot be rebuilt, reviewed or deployed | `infra/superset/build_manufacturer_dashboard.py` |
+| 2026-11-19 | Dashboard figures that gold lacked became dbt marts, not Superset virtual datasets: `mart_monthly_reporting` keeps findings and reporting-lab counts in ONE mart so the misleading chart is not the easier one to build | `dbt/models/marts/` |
+| 2026-11-19 | A Superset chart needs a stored `query_context` as well as `params`, or anything asking it for data server-side fails (Phase 9 alerts included) | `build_manufacturer_dashboard.py` |
+| 2026-11-19 | Chart verification POSTs the stored context to /api/v1/chart/data, as a dashboard does; GET /api/v1/chart/{id}/data/ returns an unexplained 400 for API-provisioned charts | `infra/superset/verify_charts.py` |
+| 2026-11-19 | CI now lints `infra/` with a pinned ruff via uvx: those scripts belong to no uv project, so the per-project matrix never saw them | `.github/workflows/lint.yml` |

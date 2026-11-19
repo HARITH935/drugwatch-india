@@ -236,3 +236,30 @@ models:
           Share of category MENTIONS, not of reports: 22.6% of findings name more than one failed
           test (ADR 0009), so these shares do not sum to 1.
 
+  - name: mart_monthly_reporting
+    description: >
+      Findings per published alert month, with the number of reporting laboratories beside them.
+      The two series share one mart on purpose: the exploration found findings and lab counts
+      correlate at r = 0.964 across years, so a findings-only chart would read as falling quality.
+      Months CDSCO never published are absent, not zero - 101 of 111 calendar months spanned.
+    columns:
+      - name: alert_month
+        data_tests: [unique, not_null]
+      - name: reporting_labs
+        description: >
+          Distinct `reported_by` values that month. The honesty column: findings rise with this.
+      - name: findings
+        description: "Findings published in that alert month. Not a measure of drug quality."
+
+  - name: mart_manufacturer_report_counts
+    description: >
+      The archive's shape: how many companies have how many findings. 58% appear exactly once and
+      the median company has one finding, so this is what belongs beside any top-N ranking - it
+      shows how unrepresentative the top of such a list is. Spurious findings are excluded, as they
+      name no manufacturer.
+    columns:
+      - name: findings_per_manufacturer
+        data_tests: [unique, not_null]
+      - name: pct_of_findings
+        description: "Share of all attributable findings held by companies at this level."
+

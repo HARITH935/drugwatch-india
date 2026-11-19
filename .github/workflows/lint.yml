@@ -21,6 +21,15 @@ jobs:
       - name: Repo hygiene checks
         run: bash .github/scripts/repo-checks.sh
 
+      # infra/ holds Python that no uv project owns (Superset provisioning, ADR 0013-era scripts),
+      # so the per-project matrix below never sees it. uvx runs a pinned ruff without installing
+      # a project: without this step these files were linted by hand, which is to say not at all.
+      - name: Lint the infra/ scripts
+        run: |
+          curl -LsSf https://astral.sh/uv/0.13.6/install.sh | sh
+          ~/.local/bin/uvx ruff@0.17.4 check infra/
+          ~/.local/bin/uvx ruff@0.17.4 format --check infra/
+
   python:
     runs-on: ubuntu-latest
     timeout-minutes: 20 # spark/: installing PySpark (450 MB) is slow until uv's cache is warm
