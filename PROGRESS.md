@@ -1313,6 +1313,31 @@ Approved 2026-11-19. Plan: `DRUGWATCH_PHASES.md` §9 Phase 5. Goal: the pipeline
 
 **Done when:** both DAGs run end-to-end with no manual steps and re-runs don't create duplicates.
 
+**Done-when check (2026-11-19): met.**
+- ✅ **Both DAGs run end to end with no manual steps.** `monthly_pipeline` ran to completion four times
+  (10/10 tasks, ~4 minutes each); `backfill_pipeline` ran to completion once with a chosen range
+  (10/10 tasks), and fails a bad range in 11.8 s before touching CDSCO.
+- ✅ **Re-runs don't create duplicates.** Proven at every layer, not argued: `raw/` 331 files both times
+  (the downloads reporting `unchanged`/`skipped` rather than storing again), silver 7,126 rows, Postgres
+  `staging 7,126 / fact 7,126 / distinct sample_id 7,126`, `dbt build PASS=63` — and the run log itself
+  upserts, so the two runs are two rows, not four.
+- ✅ **Deliverables** — two DAGs (`monthly_pipeline`, `backfill_pipeline`, plus `raw_inventory`),
+  alerting (one email per final failure, verified in Mailpit; silence for recovered retries, verified
+  with a probe), and the run log (`ops.pipeline_run`, `ops.pipeline_task`).
+- **The delta rule, demonstrated:** the first recorded run shows blank deltas ("no previous run to
+  compare with") and the second shows `0` ("nothing changed"). Different answers, deliberately.
+
+**What one run does now:** download (portal NSQ + spurious for this month and last, with `--refresh`;
+new alert PDFs) → verify every raw/ file against its SHA-256 → extract PDF and portal rows to bronze →
+PySpark clean to silver → Great Expectations gate → load to Postgres → `dbt build` (16 models, 44 tests)
+→ record the run. **~4 minutes, unattended, idempotent.**
+
+⏳ **Open, carried forward:** a "nothing changed, skip the rebuild" short-circuit is now *possible*
+(step 5 gives it structured data) but not built — a no-change run still spends ~4 minutes. And the
+Phase 12 deployment must not inherit this machine's assumptions: ADR 0012 records that the DAGs run as
+Harith's user with `~/.m2`, `~/.cache/uv` and a JDK already in place, and step 2 showed a sleeping laptop
+is enough to exhaust a task's retries.
+
 ---
 
 Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when each phase starts.
@@ -1473,3 +1498,4 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-19 | dbt's run_results.json is rejected when older than the run that is being logged; unknown figures are stored as null, never as 0 | `run_log.dbt_node_counts()`, `added_since()` |
 | 2026-11-19 | Bug found by comparing with `inventory`: filtering out `.json` keys hid the portal's raw snapshots (213 of 331 files). The run log counts sidecars, the store's own "complete" marker | `run_log.raw_file_count()` |
 | 2026-11-19 | Bug found by reading the row: Airflow's `TaskInstanceState` enum stringifies to `TaskInstanceState.SUCCESS`, so a perfect run was logged as failed. `state_name()` stores the value, with a regression test using the real enum | `run_log.state_name()` |
+| 2026-11-19 | Phase 5 done-when met: both DAGs run end to end unattended, re-runs create no duplicates at any layer, alerting and run log in place | PROGRESS Phase 5 |
