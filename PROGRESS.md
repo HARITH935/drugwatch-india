@@ -2,8 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 5 — Automation. All 5 steps done (2026-11-19); done-when check below.
-**Next:** Phase 5 needs Harith's sign-off to close, then Phase 6 — Analytics (Superset dashboards).
+**Current phase:** Phase 5 — Automation ✅ **done** (2026-11-19, approved by Harith).
+**Next:** Phase 6 — Analytics (pandas notebook + Superset dashboards), not started; needs Harith's approval before it begins.
 
 ---
 
@@ -16,7 +16,7 @@ Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWA
 | 2 | PDF extraction ⚠️ checkpoint | ✅ Done |
 | 3 | Cleaning (bronze → silver) | ✅ Done |
 | 4 | Warehouse (gold) | ✅ Done |
-| 5 | Automation | 🟨 In progress |
+| 5 | Automation | ✅ Done |
 | 6 | Analytics | ⬜ Not started |
 | 7 | Data science | ⬜ Not started |
 | 8 | Model serving | ⬜ Not started |
@@ -1313,7 +1313,7 @@ Approved 2026-11-19. Plan: `DRUGWATCH_PHASES.md` §9 Phase 5. Goal: the pipeline
 
 **Done when:** both DAGs run end-to-end with no manual steps and re-runs don't create duplicates.
 
-**Done-when check (2026-11-19): met.**
+**Done-when check (2026-11-19): met — Phase 5 is COMPLETE (closed by Harith, 2026-11-19).**
 - ✅ **Both DAGs run end to end with no manual steps.** `monthly_pipeline` ran to completion four times
   (10/10 tasks, ~4 minutes each); `backfill_pipeline` ran to completion once with a chosen range
   (10/10 tasks), and fails a bad range in 11.8 s before touching CDSCO.
@@ -1499,3 +1499,4 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-19 | Bug found by comparing with `inventory`: filtering out `.json` keys hid the portal's raw snapshots (213 of 331 files). The run log counts sidecars, the store's own "complete" marker | `run_log.raw_file_count()` |
 | 2026-11-19 | Bug found by reading the row: Airflow's `TaskInstanceState` enum stringifies to `TaskInstanceState.SUCCESS`, so a perfect run was logged as failed. `state_name()` stores the value, with a regression test using the real enum | `run_log.state_name()` |
 | 2026-11-19 | Phase 5 done-when met: both DAGs run end to end unattended, re-runs create no duplicates at any layer, alerting and run log in place | PROGRESS Phase 5 |
+| 2026-11-19 | Phase 5 closed (approved by Harith) | — |
