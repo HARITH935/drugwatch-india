@@ -109,12 +109,13 @@ Boot API, and a Next.js website. Its main feature is the batch checker: *"Is my 
 ## 9. Repository layout
 ```
 drugwatch-india/
-├── ingestion/        # Downloaders, Airflow DAGs
+├── ingestion/        # Downloaders (the DAGs live in orchestration/, ADR 0012)
 ├── extraction/       # pdfplumber + Camelot parsers, labelled eval set tools
 ├── spark/            # PySpark cleaning jobs
 ├── dbt/              # dbt project (dbt_staging, dbt_intermediate, gold marts)
 ├── quality/          # Great Expectations suites
 ├── warehouse/        # silver -> Postgres staging loader (ADR 0011)
+├── orchestration/    # Airflow DAGs + its config wrapper (ADR 0012)
 ├── ml/               # Feature prep, LightGBM training, SHAP, MLflow
 ├── ml-serving/       # FastAPI + ONNX Runtime service
 ├── llm/              # Hugging Face + PEFT LoRA fine-tuning and inference
@@ -206,6 +207,17 @@ uv run --env-file ../.env dbt source freshness # how old the loaded silver is (w
 uv run dbt parse                               # check the SQL/YAML parses; no database needed
 uv run --env-file ../.env dbt docs generate    # lineage graph + catalog from the model descriptions
 uv run --env-file ../.env dbt docs serve --port 8081  # browse it (Ctrl-C to stop)
+
+# Airflow (from orchestration/, Postgres up). Airflow runs on your Mac, not in Docker (ADR 0012);
+# its DAG tasks shell out to the uv commands above. The wrapper applies every AIRFLOW__* setting.
+uv run --env-file ../.env python -m drugwatch_orchestration.cli standalone  # scheduler + UI on :8082
+uv run --env-file ../.env python -m drugwatch_orchestration.cli dags list   # what Airflow has parsed
+uv run --env-file ../.env python -m drugwatch_orchestration.cli dags reserialize   # re-parse dags/ now
+uv run --env-file ../.env python -m drugwatch_orchestration.cli dags test raw_inventory  # run one, for real
+uv run --env-file ../.env python -m drugwatch_orchestration.cli db migrate  # first run only (needs the airflow DB)
+uv run --env-file ../.env pytest               # DAG integrity: every DAG parses, no cycles, retries set
+# First time only: create Airflow's own database beside drugwatch's
+docker compose exec postgres psql -U drugwatch -c "CREATE DATABASE airflow"
 ```
 
 **Local service ports** (all bound to 127.0.0.1; Postgres and Redis are shifted so they don't clash with OpsPilot):
@@ -218,6 +230,7 @@ uv run --env-file ../.env dbt docs serve --port 8081  # browse it (Ctrl-C to sto
 | RustFS console | http://localhost:9001/rustfs/console/ | — |
 | Mailpit SMTP | `localhost:1025` | `mailpit:1025` |
 | Mailpit inbox | http://localhost:8025 | — |
+| Airflow UI | http://localhost:8082 | — (runs on the host, not in Docker) |
 
 S3 clients talking to RustFS must use **path-style addressing** (see ADR 0002).
 If S3 calls fail with `RequestTimeTooSkewed` after the Mac has slept, Docker's VM clock has drifted more than

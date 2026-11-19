@@ -1,0 +1,3 @@
+# Airflow's own directory: generated airflow.cfg, task logs, the dev auth manager's password.
+# Everything in it is rebuilt by `... cli db migrate`; none of it belongs in git.
+airflow_home/

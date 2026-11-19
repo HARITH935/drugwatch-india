@@ -2,8 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 4 — Warehouse (gold) ✅ **done** (2026-11-19, approved by Harith).
-**Next:** Phase 5 — Automation (monthly Airflow DAG), not started; needs Harith's approval before it begins.
+**Current phase:** Phase 5 — Automation. Approved 2026-11-19. Step 0 of 5+1 done (Airflow itself runs).
+**Next:** step 1 — the monthly pipeline DAG (check for new alerts → download → extract → clean → validate → load → dbt build).
 
 ---
 
@@ -16,7 +16,7 @@ Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWA
 | 2 | PDF extraction ⚠️ checkpoint | ✅ Done |
 | 3 | Cleaning (bronze → silver) | ✅ Done |
 | 4 | Warehouse (gold) | ✅ Done |
-| 5 | Automation | ⬜ Not started |
+| 5 | Automation | 🟨 In progress |
 | 6 | Analytics | ⬜ Not started |
 | 7 | Data science | ⬜ Not started |
 | 8 | Model serving | ⬜ Not started |
@@ -1075,6 +1075,65 @@ Approved 2026-11-18. Plan: `DRUGWATCH_PHASES.md` §9 Phase 4. Goal: analytics-re
 
 ---
 
+## Phase 5 — Automation
+
+Approved 2026-11-19. Plan: `DRUGWATCH_PHASES.md` §9 Phase 5. Goal: the pipeline runs itself every month.
+
+- [x] **Step 0 — Airflow itself** (2026-11-19) — not one of the plan's five steps, but nothing else can start
+      without it. **Airflow 3.4.0 on Python 3.13.5**, running on the host as a new `orchestration/` uv
+      project, with its metadata in a new `airflow` database inside the existing Postgres (**ADR 0012**).
+    - **Why on the host and not in Docker — decided by arithmetic, not taste.** Docker's VM allowance here
+      is 5 GB; the four compose services use 245 MB; one Spark cleaning run peaks at **2.7 GB**
+      (`docs/benchmarks.md`); Airflow 3's four components are ~1.5 GB. Airflow *and* Spark inside the same
+      VM is ~4.5 GB of 5 — it fits on paper, and in Phase 3 it already failed in practice when another
+      project's container held 3.4 GB and the Docker VM died mid-run. On the host, Spark keeps the whole
+      machine, no JDK or 686 MB jar goes into an image, and no ~2.5 GB image is built over a slow link.
+      The cost is honest and recorded: this is a deviation from "everything in compose", and Phase 12 has
+      to decide how it deploys.
+    - **A DAG task is a documented command.** `tasks.uv_task()` builds a `BashOperator` running
+      `uv run --env-file ../.env python -m <module>` in one of the repo's project folders — exactly what
+      `CLAUDE.md` §10 says — so any failing task can be reproduced by hand by copying it out of the log,
+      and **secrets never reach Airflow**: the task reads `.env` itself. Retry policy is decided once in
+      the factory (3 retries, exponential backoff from 2 min, capped at 15, 1-hour execution timeout);
+      `dbt_task()` deliberately retries only once, because a failing dbt *test* is a data problem and
+      retrying it just repeats the failure.
+    - **Config is assembled in code, not written to a file.** `config.airflow_env()` builds every
+      `AIRFLOW__*` variable from the same `.env` the rest of the repo uses, so the database password is
+      never written into `airflow.cfg`. `cli.py` applies them with `setdefault`, so a variable already
+      exported in the shell still wins. Example DAGs off, new DAGs paused at creation, LocalExecutor,
+      API bound to 127.0.0.1:8082.
+    - **First DAG: `raw_inventory`** — one task, verifying every file in `raw/` against the SHA-256
+      recorded at download. Chosen because it is the smallest *real* task: `raw/` is the source of truth
+      and is never modified (CLAUDE.md §5), so a silent change there would poison every future
+      reprocessing run, and `drugwatch_ingestion.inventory` already exits non-zero on any problem — which
+      is exactly what a task needs.
+    - **Verified by running it, not by starting it** (2026-11-19):
+      `db migrate` → `Database migration done!`; `dags reserialize` → `Creating ORM DAG for raw_inventory`;
+      **`dags test raw_inventory` → `total 322 files 153.5 MB (checked: names, sidecars and SHA-256 of
+      every file)`, `new_state=success`, DagRun `state=success` in 11.1 s.**
+      `standalone` → UI on :8082 answers **HTTP 200** and `/api/v2/monitor/health` reports metadatabase,
+      scheduler and triggerer all `healthy`. Processes stopped afterwards.
+    - **5 DAG-integrity tests** (`tests/test_dags.py`): every DAG file imports, at least one DAG exists,
+      no cycles, every DAG has a description *and* `doc_md`, and every task has retries. They need no
+      database (SQLite in a temp dir), so unlike `dbt build` and the pipeline itself **they run in CI** —
+      `orchestration` is now in the lint matrix.
+    - **Two Airflow 3.4 specifics found by running it:** `dags list` reads the database, not the folder,
+      so a new DAG needs `dags reserialize` (or a running dag-processor) before it appears; and
+      `DagBag(...)` no longer takes `include_examples` — example loading is a config setting now.
+    - **Known harmless noise:** `dags test` prints a `sqlalchemy.exc.MissingGreenlet` traceback while
+      closing an async connection at teardown. The run still reports success. Checked both drivers —
+      psycopg2 (Airflow's documented one, kept) and psycopg3 — and it appears with either, so it is an
+      Airflow 3.4 teardown quirk, not a configuration mistake. Worth knowing before it eats an hour.
+- [ ] Step 1 — monthly DAG: check for new alerts → download → extract → Spark clean → GE validate → load → dbt build
+- [ ] Step 2 — backfill DAG: reprocess any historical range
+- [ ] Step 3 — retries with backoff; idempotent tasks (partly done: the retry policy lives in `tasks.py`)
+- [ ] Step 4 — failure notifications by email over SMTP (Mailpit locally, Brevo in production)
+- [ ] Step 5 — run log: files processed, rows added, checks passed/failed
+
+**Done when:** both DAGs run end-to-end with no manual steps and re-runs don't create duplicates.
+
+---
+
 Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when each phase starts.
 
 ---
@@ -1210,3 +1269,8 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-19 | dbt docs generated from the model descriptions; lineage is derived from `ref()`/`source()` so it cannot disagree with the code. 19/19 models and seeds documented, 31% of columns (passthrough columns left undescribed on purpose) | `dbt docs generate`, `_intermediate__models.yml` |
 | 2026-11-19 | Phase 4 done-when met: `dbt build` = 63 nodes, 0 errors (3 seeds, 16 models, 44 tests). Two §8.2 marts deferred with reasons (§8.2 calls its list "examples") | PROGRESS Phase 4 |
 | 2026-11-19 | Phase 4 closed (approved by Harith) | — |
+| 2026-11-19 | Phase 5 approved | Harith |
+| 2026-11-19 | Airflow runs on the HOST as an `orchestration/` uv project, not in Docker: Airflow (~1.5 GB) plus a Spark run (2.7 GB measured) would be ~4.5 GB of Docker's 5 GB VM, which already died once in Phase 3. Metadata goes in a new `airflow` database in the existing Postgres | Harith; ADR 0012 |
+| 2026-11-19 | A DAG task is a documented `uv run --env-file ../.env` command from CLAUDE.md §10, built by one factory: reproducible by hand, and secrets reach the task from `.env` without Airflow ever holding them | `orchestration/src/drugwatch_orchestration/tasks.py` |
+| 2026-11-19 | DAGs live in `orchestration/`, not `ingestion/` as CLAUDE.md §9 said: every phase's project feeds the DAGs, so burying the orchestrator in the first one would make it depend on all the others | ADR 0012, CLAUDE.md §9 |
+| 2026-11-19 | Airflow 3.4 notes: `dags list` reads the DB (a new DAG needs `dags reserialize`), `DagBag` no longer takes `include_examples`, and `dags test` prints a harmless MissingGreenlet traceback at teardown with either Postgres driver | PROGRESS Phase 5 step 0 |

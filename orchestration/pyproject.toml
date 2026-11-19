@@ -1,0 +1,30 @@
+# Python project for Airflow orchestration (Phase 5). Managed by uv (ADR 0005, ADR 0012).
+[project]
+name = "drugwatch-orchestration"
+version = "0.1.0"
+description = "Airflow DAGs that run the monthly DrugWatch pipeline"
+authors = [
+    { name = "Harith", email = "181994424+HARITH935@users.noreply.github.com" }
+]
+# Airflow's supported Python range is narrower than the rest of the repo's; uv will fetch a
+# matching interpreter if this Mac's default is outside it.
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    # [postgres] adds the Postgres provider and psycopg2, which Airflow needs to talk to its
+    # own metadata database (ADR 0012). Without it Airflow silently falls back to SQLite.
+    "apache-airflow[postgres]>=3.0,<4",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.4", # lint + format rules live in the repo-root ruff.toml
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
