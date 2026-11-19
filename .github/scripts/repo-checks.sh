@@ -42,4 +42,27 @@ else
 fi
 rm -f "$tmp_env"
 
+echo "== 4. no notebook carries its outputs =="
+# A notebook's saved output IS the data: batch numbers, manufacturer names, lab results. ADR 0003
+# keeps real CDSCO rows out of this repo, and ADR 0013 makes that a rule a commit can break by
+# accident - so it is checked here rather than remembered.
+notebooks=$(git ls-files '*.ipynb')
+if [ -z "$notebooks" ]; then
+  echo "ok       (no notebooks tracked yet)"
+else
+  for nb in $notebooks; do
+    if python3 -c "
+import json, sys
+cells = json.load(open('$nb')).get('cells', [])
+stored = sum(1 for c in cells if c.get('outputs') or c.get('execution_count') is not None)
+sys.exit(1 if stored else 0)
+"; then
+      echo "ok       $nb"
+    else
+      echo "FAIL     $nb has stored outputs (run: uv run jupyter nbconvert --clear-output --inplace $nb)"
+      fail=1
+    fi
+  done
+fi
+
 exit "$fail"

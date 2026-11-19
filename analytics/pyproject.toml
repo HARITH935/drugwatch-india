@@ -1,0 +1,34 @@
+# Python project for exploration (Phase 6 step 1). Managed by uv (ADR 0005, ADR 0013).
+[project]
+name = "drugwatch-analytics"
+version = "0.1.0"
+description = "Exploration notebook over the gold layer, to decide what the dashboards show"
+authors = [
+    { name = "Harith", email = "181994424+HARITH935@users.noreply.github.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "pandas>=2.3,<3", # plan §6; <3 for the same reason spark/ pins it (PySpark compatibility)
+    "psycopg[binary]>=3.2.0", # reads the gold layer (same driver as warehouse/, ADR 0011)
+    "matplotlib>=3.9", # the only plotting library here, on purpose (ADR 0013)
+    "jupyterlab>=4.2", # the notebook itself
+    "nbconvert>=7.16", # runs a notebook headlessly in CI and clears its outputs
+    "ipykernel>=6.29", # the kernel nbconvert executes the notebook in
+]
+
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.4", # lint + format rules live in the repo-root ruff.toml
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: needs the local Postgres with the gold layer loaded (skipped without credentials)",
+]

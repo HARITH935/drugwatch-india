@@ -2,8 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 5 — Automation ✅ **done** (2026-11-19, approved by Harith).
-**Next:** Phase 6 — Analytics (pandas notebook + Superset dashboards), not started; needs Harith's approval before it begins.
+**Current phase:** Phase 6 — Analytics. Approved 2026-11-19. Step 1 of 5 done (exploration notebook).
+**Next:** step 2 — Superset running in Docker, connected to gold through a read-only Postgres role.
 
 ---
 
@@ -17,7 +17,7 @@ Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWA
 | 3 | Cleaning (bronze → silver) | ✅ Done |
 | 4 | Warehouse (gold) | ✅ Done |
 | 5 | Automation | ✅ Done |
-| 6 | Analytics | ⬜ Not started |
+| 6 | Analytics | 🟨 In progress |
 | 7 | Data science | ⬜ Not started |
 | 8 | Model serving | ⬜ Not started |
 | 9 | Backend | ⬜ Not started |
@@ -1340,6 +1340,66 @@ is enough to exhaust a task's retries.
 
 ---
 
+## Phase 6 — Analytics
+
+Approved 2026-11-19. Plan: `DRUGWATCH_PHASES.md` §9 Phase 6. Goal: public, read-only dashboards.
+
+**Four decisions taken at the start** (Harith, 2026-11-19 — "your recommendations"):
+- **A. The price-gap dashboard moves out of Phase 6.** It needs branded-vs-generic prices, and there is
+  **no price data anywhere downstream of `raw/`**: what exists is Jan Aushadhi's generic MRPs (14% priced
+  at 0) and 169 NPPA PDFs of *ceiling* prices (legal maximums, not market prices). Branded MRPs sit behind
+  Pharma Sahi Daam's request signing, which ADR 0003 rules out. Building it is a Phase 2–3-sized
+  extraction + salt-matching job, not analytics. A fourth dashboard will be chosen from gold instead.
+- **B. `drug_class`** gets a reviewed vocabulary for the top ~100 generic names, everything else
+  `Unclassified` — the ADR 0009 shape. (Not yet built.)
+- **C. Jupyter + matplotlib**, in a new `analytics/` project — **ADR 0013**.
+- **D. No map of India.** State views are bar charts: India's boundary depiction is legally sensitive for
+  an Indian public site, and Superset's bundled GeoJSON may predate the 2019 J&K/Ladakh split.
+
+- [x] **Step 1 — the exploration notebook** (2026-11-19)
+      `analytics/notebooks/01-explore-gold.ipynb`: 10 code cells over the gold layer, executed end to end.
+      Findings written up as aggregates in **`docs/analytics-findings.md`**.
+    - **Reads gold only, in a read-only transaction.** `drugwatch_analytics.gold.query()` sets psycopg's
+      `read_only`, so the database refuses a write from a notebook cell — verified by a test that expects
+      `ReadOnlySqlTransaction` when the notebook path tries `CREATE TABLE`. Exploration runs against a
+      warehouse that took a Spark job to build; a stray `DELETE` at midnight should be impossible, not
+      merely unlikely.
+    - **Notebooks are committed with outputs cleared, and that is enforced.** A notebook's output *is*
+      real CDSCO rows (ADR 0003). `repo-checks.sh` gained a check that fails on any tracked `.ipynb`
+      carrying outputs, with the `nbconvert --clear-output` command in the message. Mutation-checked:
+      passes clean, exits 1 on a notebook with outputs.
+    - **Four findings that change what gets built** (full numbers in `docs/analytics-findings.md`):
+      1. **The rising line is testing effort, not falling quality.** Findings and the number of distinct
+         reporting laboratories correlate at **r = 0.964** across years: 2019 had 25 labs and 404 findings,
+         2025 had 168 labs and 1,959. A bare findings-per-month chart would be read as "medicine is getting
+         worse", which this data does not support — so any time series must carry the lab count beside it.
+      2. **The archive is a long tail, not a league table.** Median company has **1** finding; **1,521 of
+         2,609 (58%) appear exactly once**; the top 10% hold 45.9%. A top-10 bar chart describes 10
+         companies out of 2,609 while inviting the verdict CLAUDE.md §6 forbids.
+      3. **The two state questions are almost never the same question.** Where both are known they differ in
+         **4,999 of 5,391 findings (92.7%)**. West Bengal tests 1,758 findings and makes 103; Himachal makes
+         2,147 and tests 104. Two charts, never one map, never summed.
+      4. **Categories are mentions, not shares.** 21.8% of findings name more than one failed test (mean
+         1.28), so a pie chart would be wrong. And `Spurious: 77 mentions, 0 manufacturers` is the ethics
+         invariant **visible in the data itself**.
+    - **Gaps the dashboards must disclose:** 101 of 111 calendar months published · 128 findings with no
+      manufacturer · 603 of 2,609 manufacturers with no resolvable state · 158 findings missing a date ·
+      the pre-portal PDF era is just 132 findings (1.9%).
+    - 6 tests (3 unit, 3 integration); `analytics` added to the CI matrix; `ruff.toml` gained a
+      notebook rule (E501 only — SQL literals and plotting calls read worse wrapped at 100 characters,
+      while unused imports and undefined names are still caught).
+- [ ] Step 2 — Superset running, connected to gold through a read-only role
+- [ ] Step 3 — the dashboards (manufacturer trends · states · drug class after decision B · a fourth from gold)
+- [ ] Step 4 — anonymous read-only access, verified logged out
+- [ ] Step 5 — disclaimers, source notes, freshness line, and dashboards exported as code
+
+**Done when:** dashboards are viewable publicly with filters working.
+⚠️ **"Publicly" is local-only until Phase 12:** `docs/permissions.md` requires CDSCO permission before the
+data appears on a live site, and **neither permission email has been sent**. Sending them is on the
+critical path and is Harith's to do.
+
+---
+
 Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when each phase starts.
 
 ---
@@ -1500,3 +1560,8 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-19 | Bug found by reading the row: Airflow's `TaskInstanceState` enum stringifies to `TaskInstanceState.SUCCESS`, so a perfect run was logged as failed. `state_name()` stores the value, with a regression test using the real enum | `run_log.state_name()` |
 | 2026-11-19 | Phase 5 done-when met: both DAGs run end to end unattended, re-runs create no duplicates at any layer, alerting and run log in place | PROGRESS Phase 5 |
 | 2026-11-19 | Phase 5 closed (approved by Harith) | — |
+| 2026-11-19 | Phase 6 approved; price-gap dashboard deferred (no price data downstream of `raw/`), `drug_class` to get a reviewed vocabulary, Jupyter+matplotlib adopted, no map of India | Harith; ADR 0013 |
+| 2026-11-19 | Exploration reads gold in a READ-ONLY transaction, proven by a test expecting `ReadOnlySqlTransaction`; notebooks are committed with outputs cleared, enforced by repo-checks.sh | `analytics/src/drugwatch_analytics/gold.py`, ADR 0013 |
+| 2026-11-19 | Finding: NSQ findings track TESTING EFFORT (findings vs reporting labs r = 0.964 by year), so no dashboard may show a bare findings-per-month line | `docs/analytics-findings.md` §1 |
+| 2026-11-19 | Finding: 58% of manufacturers appear exactly once (median 1 finding), so a top-N chart describes 10 of 2,609 companies | `docs/analytics-findings.md` §2 |
+| 2026-11-19 | Finding: lab state differs from manufacturer state in 92.7% of findings where both are known — two charts, never one map | `docs/analytics-findings.md` §4 |

@@ -116,6 +116,7 @@ drugwatch-india/
 ├── quality/          # Great Expectations suites
 ├── warehouse/        # silver -> Postgres staging loader (ADR 0011)
 ├── orchestration/    # Airflow DAGs + its config wrapper (ADR 0012)
+├── analytics/        # exploration notebook over gold (ADR 0013)
 ├── ml/               # Feature prep, LightGBM training, SHAP, MLflow
 ├── ml-serving/       # FastAPI + ONNX Runtime service
 ├── llm/              # Hugging Face + PEFT LoRA fine-tuning and inference
@@ -221,6 +222,13 @@ uv run --env-file ../.env pytest               # DAG integrity: every DAG parses
 # The run log (ops schema in Postgres): what each run processed and changed, and what failed
 docker compose exec postgres psql -U drugwatch -c "select run_id, status, raw_files, raw_files_added, silver_rows, silver_rows_added, dbt_nodes_passed, quality_check from ops.pipeline_run order by recorded_at desc limit 5"
 docker compose exec postgres psql -U drugwatch -c "select task_id, state, round(duration_seconds) s from ops.pipeline_task where run_id = (select run_id from ops.pipeline_run order by recorded_at desc limit 1) order by started_at"
+
+# Analytics (from analytics/, Postgres up with gold loaded). Reads gold ONLY, in a read-only
+# transaction. Notebooks are committed with outputs cleared - repo-checks.sh fails otherwise.
+uv run --env-file ../.env jupyter lab                     # open the notebook and explore
+uv run --env-file ../.env jupyter nbconvert --execute --to notebook --stdout notebooks/01-explore-gold.ipynb >/dev/null  # does it still run?
+uv run jupyter nbconvert --clear-output --inplace notebooks/01-explore-gold.ipynb   # before committing
+uv run --env-file ../.env pytest           # the gold reader, incl. that writes are refused
 # First time only: create Airflow's own database beside drugwatch's
 docker compose exec postgres psql -U drugwatch -c "CREATE DATABASE airflow"
 ```
