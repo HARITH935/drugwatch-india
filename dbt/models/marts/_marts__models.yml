@@ -263,3 +263,15 @@ models:
       - name: pct_of_findings
         description: "Share of all attributable findings held by companies at this level."
 
+  - name: mart_lab_vs_maker_state
+    description: >
+      One row: how often the testing laboratory's state differs from the manufacturer's. The
+      states dashboard shows this as a headline figure, computed rather than written into prose so
+      it cannot go stale. Only findings where both states are known can answer it, and that
+      denominator is a column of its own.
+    columns:
+      - name: pct_tested_in_a_different_state
+        description: "92.7% as of 2026-11-19. Why 'reports by state' is never one chart."
+      - name: pct_of_findings_comparable
+        description: "Share of the archive where both states are known (75.7%); the rest cannot answer."
+

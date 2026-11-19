@@ -2,8 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 6 — Analytics. Approved 2026-11-19. Steps 1-2 done; step 3 in progress (dashboard 1 of 4).
-**Next:** step 3b — the states dashboard (two charts, never summed, no map).
+**Current phase:** Phase 6 — Analytics. Approved 2026-11-19. Steps 1-2 done; step 3 in progress (2 dashboards of 4).
+**Next:** step 3c needs decision B's `drug_class` vocabulary; 3d is a fourth dashboard from gold (spurious reports, or lab coverage).
 
 ---
 
@@ -1472,7 +1472,43 @@ Approved 2026-11-19. Plan: `DRUGWATCH_PHASES.md` §9 Phase 6. Goal: public, read
              the thing under test.
         - `infra/` Python was never linted: the CI matrix is per uv project, and these scripts belong to
           none. CI now runs a pinned `ruff` over `infra/` via `uvx` — 10 findings fixed, all line length.
-    - [ ] 3b — states (two charts, never summed, no map)
+    - [x] **3b — "Where medicines are made and tested"** (2026-11-19) — 4 charts, all verified.
+          The dashboard is deliberately awkward, and the awkwardness is the content: it refuses to
+          answer "which state has the worst medicine", because the archive cannot.
+        - **The thesis is a live figure, not prose.** `mart_lab_vs_maker_state` computes it on every
+          `dbt build`: **4,999 of 5,391 findings where both states are known — 92.7% — were tested in a
+          different state from where they were made**, and only **75.7%** of the archive can answer the
+          question at all (603 manufacturers have no resolvable state). A number typed into dashboard
+          text is right the day it is written and silently wrong afterwards.
+        - **Two charts, never one, never summed.** "Made here" and "tested here" are separate charts with
+          separate titles, side by side and the same size, so neither can be read alone. The note says
+          adding them would double-count the few findings where maker and laboratory share a state and
+          misrepresent the other 92.7%. The table gives `state_lab_reports_tested_here` its own column:
+          a state laboratory tests its own state's samples, so that — much smaller — number is the only
+          honest answer to "what did this state's own testing find?".
+        - **No map** (decision D), with both reasons on the page: India's boundary depiction is legally
+          sensitive for a public site serving Indian users, and Superset's bundled GeoJSON may predate
+          the 2019 Jammu & Kashmir / Ladakh reorganisation and the 2020 Dadra & Nagar Haveli merger. A
+          bar chart carries the same information and makes no territorial claim.
+        - **Refactored before the duplication could set in:** the second dashboard needed the same
+          provisioning pieces as the first, so they moved into `infra/superset/dashboards.py` (datasets,
+          metrics, chart creation with its query context, and a `Layout` builder for the grid JSON).
+          Each `build_*_dashboard.py` now holds only its charts and the reasoning behind them. Same
+          argument as Phase 5's shared `processing_chain()`: copies drift.
+        - **A categorical x-axis needed a fix in the shared code:** `query_context()` was setting a time
+          grain on every axis, which on a text column (`state_name`) would ask Postgres to truncate a
+          string to a month. The grain is now only set for a date axis.
+        - **Caught by spot-checking rather than by the row count:** the bars came back in *alphabetical*
+          order. The data was right — the 15 rows really were the 15 largest states, Himachal 2,147 down
+          to Andhra 59, nothing dropped — but drawn alphabetically the chart hides the shape it exists to
+          show. Fixed with `x_axis_sort` naming the metric. **Limitation stated plainly: I verified the
+          data each chart returns, not the pixels** — bar order and layout need a human with a browser,
+          which is Harith's check.
+        - **Verified** (`infra/superset/verify_charts.py`, exit 0): all **10 charts across both
+          dashboards** return data. States: made-here top value Himachal 2,147 · tested-here top Assam
+          946 / Chandigarh 751 (central laboratories) · the side-by-side table carries all 36 states and
+          union territories including the zeros, so a state with nothing reported is visible rather than
+          missing.
     - [ ] 3c — drug class (needs decision B's vocabulary)
     - [ ] 3d — a fourth dashboard from gold (spurious reports, or central vs state coverage)
 - [ ] Step 4 — anonymous read-only access, verified logged out
@@ -1660,3 +1696,8 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-19 | A Superset chart needs a stored `query_context` as well as `params`, or anything asking it for data server-side fails (Phase 9 alerts included) | `build_manufacturer_dashboard.py` |
 | 2026-11-19 | Chart verification POSTs the stored context to /api/v1/chart/data, as a dashboard does; GET /api/v1/chart/{id}/data/ returns an unexplained 400 for API-provisioned charts | `infra/superset/verify_charts.py` |
 | 2026-11-19 | CI now lints `infra/` with a pinned ruff via uvx: those scripts belong to no uv project, so the per-project matrix never saw them | `.github/workflows/lint.yml` |
+| 2026-11-19 | The states dashboard's headline (92.7% tested in a different state) is a dbt mart, not dashboard prose: a number written into text is right the day it is written and silently wrong after | `dbt/models/marts/mart_lab_vs_maker_state.sql` |
+| 2026-11-19 | "Made here" and "tested here" are separate, equal-sized charts that must never be summed, and the state-laboratory subset gets its own column as the honest answer to "what did this state's own testing find" | `infra/superset/build_states_dashboard.py` |
+| 2026-11-19 | Superset provisioning helpers extracted to `dashboards.py` when the second dashboard needed them, before copies could drift | `infra/superset/dashboards.py` |
+| 2026-11-19 | A categorical x-axis must not carry a time grain (it would truncate a state name to a month), and bar charts need `x_axis_sort` or the largest states are drawn alphabetically | `dashboards.query_context()`, `build_states_dashboard.py` |
+| 2026-11-19 | Verification covers the DATA each chart returns, not its appearance: bar order and layout need a human with a browser | `infra/superset/verify_charts.py` |

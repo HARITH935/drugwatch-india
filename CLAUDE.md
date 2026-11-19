@@ -237,6 +237,7 @@ bash infra/superset/register_gold_database.sh  # register/re-point the 'DrugWatc
 bash infra/superset/smoke_test.sh              # proves gold is readable and staging/ops are refused
 # Dashboards are provisioned from code, never clicked (idempotent: re-running updates in place)
 set -a && . ./.env && set +a && python3 infra/superset/build_manufacturer_dashboard.py
+set -a && . ./.env && set +a && python3 infra/superset/build_states_dashboard.py
 set -a && . ./.env && set +a && python3 infra/superset/verify_charts.py  # every chart must return rows
 # First run only: create Superset's own database and its read-only role
 docker compose exec postgres psql -U drugwatch -c "CREATE DATABASE superset"
