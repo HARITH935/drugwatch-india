@@ -2,8 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 5 — Automation. Approved 2026-11-19. Step 0 of 5+1 done (Airflow itself runs).
-**Next:** step 1 — the monthly pipeline DAG (check for new alerts → download → extract → clean → validate → load → dbt build).
+**Current phase:** Phase 5 — Automation. Approved 2026-11-19. Steps 0-1 done (the monthly pipeline runs end to end).
+**Next:** step 2 — the backfill DAG (reprocess any historical range).
 
 ---
 
@@ -1124,9 +1124,57 @@ Approved 2026-11-19. Plan: `DRUGWATCH_PHASES.md` §9 Phase 5. Goal: the pipeline
       closing an async connection at teardown. The run still reports success. Checked both drivers —
       psycopg2 (Airflow's documented one, kept) and psycopg3 — and it appears with either, so it is an
       Airflow 3.4 teardown quirk, not a configuration mistake. Worth knowing before it eats an hour.
-- [ ] Step 1 — monthly DAG: check for new alerts → download → extract → Spark clean → GE validate → load → dbt build
+- [x] **Step 1 — the monthly pipeline DAG** (2026-11-19)
+      `monthly_pipeline`: 10 tasks, CDSCO to gold. **Run end to end twice, both times 10/10 tasks
+      successful**, the whole project in **4 minutes 0 seconds**.
+    - **Shape of the run:** the three downloads in parallel → `verify_raw_archive` → the two bronze
+      extractions in parallel → `build_silver` → `validate_silver` → `load_silver_to_postgres` →
+      `dbt_build`. Validation sits **before** the load on purpose: bad data must never reach the
+      warehouse the website reads.
+    - **Two facts checked in the code before any wiring**, because getting either wrong would corrupt the
+      archive on a schedule:
+      1. `build_silver` writes `mode("overwrite")` — silver is replaced wholesale, never appended to.
+         A DAG on top of an appending step would double the warehouse every month.
+      2. The portal downloader **skips a stored month without even making a request** unless
+         `--refresh`, and its own comment says why that matters: *state labs report late*, so a month's
+         JSON keeps changing after the month ends. So the DAG asks for the interval's month **and the one
+         before**, with `--refresh`. Unchanged bytes are never re-stored, so asking twice is free.
+    - **Schedule `0 3 10 * *`** — the 10th at 03:00, not the 1st. CDSCO publishes a month's alerts
+      *during* the following month, so a run on the 1st would mostly ask for a month nobody has published.
+      Verified with `tasks render`: the command comes out as
+      `--tab nsq --refresh --month 2026-11 --month 2026-10`.
+    - `max_active_runs=1`: every task writes shared state, and two runs would mean two Spark jobs
+      overwriting the same silver prefix. `catchup=False`: historical reprocessing is step 2's DAG.
+    - **Per-task timings** (from the DAG run's own start/end markers):
+      downloads 6.2 / 7.7 / 3.0 s · `verify_raw_archive` 5.9 s · bronze 33.8 s (PDF) + 3.4 s (portal) ·
+      **`build_silver` 152.9 s** · `validate_silver` 5.5 s · `load_silver_to_postgres` 2.4 s ·
+      `dbt_build` 19.4 s. **Total 240.3 s.**
+    - **Idempotency demonstrated, not asserted** (the phase's done-when). Run 1 stored 4 new raw objects —
+      `nsq`/`spurious` for 2026-10 and 2026-11, each `stored, 0 rows`, because CDSCO has not published
+      those months yet; storing the empty snapshot records *"we asked and there was nothing"* instead of
+      leaving a silent gap. **Run 2 reported all four as `unchanged`**, and every downstream figure was
+      identical:
+
+      | | Run 1 | Run 2 |
+      |---|---|---|
+      | raw/ | 326 files, 153.5 MB | 326 files, 153.5 MB |
+      | silver | 7,126 rows (77 spurious) | 7,126 rows (77 spurious) |
+      | Great Expectations | PASSED | PASSED |
+      | loaded into Postgres | 7,126 | 7,126 |
+      | `dbt build` | PASS=63 ERROR=0 | PASS=63 ERROR=0 |
+
+      And in Postgres afterwards: `staging 7,126 / fact 7,126 / distinct sample_id 7,126 / makers 2,609 /
+      feature rows 85,924` — no duplicates anywhere.
+    - **A stale figure this run corrected:** `docs/benchmarks.md` said `build_silver.main()` takes ~10
+      minutes. It took **152.9 s** here. The 10-minute note predates the `session.py` tuning (loopback
+      RPC, `local[4]`, 2 GB driver) that took the Spark pipeline from 435.9 s to 53.2 s. The doc now
+      carries the new measurement and says why the old one was wrong.
+    - ⏳ **"Check for new alerts" is currently implicit**, and worth stating plainly: the hash check makes
+      a no-change run harmless but not free — it still spends ~4 minutes rebuilding silver and gold from
+      unchanged bronze. Short-circuiting on "nothing changed" needs the download outcomes as structured
+      data, which is what step 5's run log will provide; doing it by parsing stdout would be fragile.
 - [ ] Step 2 — backfill DAG: reprocess any historical range
-- [ ] Step 3 — retries with backoff; idempotent tasks (partly done: the retry policy lives in `tasks.py`)
+- [ ] Step 3 — retries with backoff; idempotent tasks (retry policy in `tasks.py`; idempotency demonstrated in step 1)
 - [ ] Step 4 — failure notifications by email over SMTP (Mailpit locally, Brevo in production)
 - [ ] Step 5 — run log: files processed, rows added, checks passed/failed
 
@@ -1274,3 +1322,8 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-19 | A DAG task is a documented `uv run --env-file ../.env` command from CLAUDE.md §10, built by one factory: reproducible by hand, and secrets reach the task from `.env` without Airflow ever holding them | `orchestration/src/drugwatch_orchestration/tasks.py` |
 | 2026-11-19 | DAGs live in `orchestration/`, not `ingestion/` as CLAUDE.md §9 said: every phase's project feeds the DAGs, so burying the orchestrator in the first one would make it depend on all the others | ADR 0012, CLAUDE.md §9 |
 | 2026-11-19 | Airflow 3.4 notes: `dags list` reads the DB (a new DAG needs `dags reserialize`), `DagBag` no longer takes `include_examples`, and `dags test` prints a harmless MissingGreenlet traceback at teardown with either Postgres driver | PROGRESS Phase 5 step 0 |
+| 2026-11-19 | The monthly DAG asks the portal for the interval's month AND the previous one with `--refresh`, because state labs report late and a month's JSON keeps changing; unchanged bytes are never re-stored, so the second ask is free | `dags/monthly_pipeline.py` |
+| 2026-11-19 | Schedule is the 10th at 03:00, not the 1st: CDSCO publishes a month's alerts during the following month | `dags/monthly_pipeline.py` |
+| 2026-11-19 | Validation runs BEFORE the load, and `max_active_runs=1` because every task writes shared state (two runs = two Spark jobs overwriting one silver prefix) | `dags/monthly_pipeline.py` |
+| 2026-11-19 | Whole pipeline measured at 240.3 s (build_silver 152.9 s of it); `benchmarks.md`'s ~10-minute figure for `build_silver.main()` was stale (pre-`session.py` tuning) and is corrected | `docs/benchmarks.md` |
+| 2026-11-19 | ⏳ OPEN: "check for new alerts" is implicit — a no-change run still costs ~4 min. Short-circuiting needs the structured run log from step 5, not stdout parsing | PROGRESS Phase 5 step 1 |

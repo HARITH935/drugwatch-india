@@ -214,6 +214,8 @@ uv run --env-file ../.env python -m drugwatch_orchestration.cli standalone  # sc
 uv run --env-file ../.env python -m drugwatch_orchestration.cli dags list   # what Airflow has parsed
 uv run --env-file ../.env python -m drugwatch_orchestration.cli dags reserialize   # re-parse dags/ now
 uv run --env-file ../.env python -m drugwatch_orchestration.cli dags test raw_inventory  # run one, for real
+uv run --env-file ../.env python -m drugwatch_orchestration.cli dags test monthly_pipeline  # the whole pipeline (~20 min)
+uv run --env-file ../.env python -m drugwatch_orchestration.cli tasks render monthly_pipeline download_portal_nsq 2026-11-10  # see a templated command
 uv run --env-file ../.env python -m drugwatch_orchestration.cli db migrate  # first run only (needs the airflow DB)
 uv run --env-file ../.env pytest               # DAG integrity: every DAG parses, no cycles, retries set
 # First time only: create Airflow's own database beside drugwatch's

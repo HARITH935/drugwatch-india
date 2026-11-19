@@ -133,6 +133,13 @@ tool. The Spark side almost certainly has similar headroom — see the UDF cavea
 
 `build_silver.main()` takes around 10 minutes against the ~2 minutes measured here, on the same work. The difference is
 its report: each `count()` and fill-rate figure re-evaluates the pipeline, and the UDF chain is re-run every time.
+
+**Update (2026-11-19):** running `main()` as an Airflow task took **152.9 s**, not ~10 minutes — measured from the
+task's own start and end markers in the DAG run log (Phase 5 step 1). The ~10-minute figure above was recorded
+*before* `session.py` was tuned (loopback RPC, `local[4]`, `driver.memory=2g`), which is the same fix that took the
+Spark pipeline from 435.9 s to 53.2 s. So the "report costs 5x the work" observation still holds in shape — `main()`
+is ~3x the pipeline-only measurement — but the absolute figure was stale and is corrected here rather than left to
+mislead.
 Worth knowing before trusting a wall-clock number taken from a job that also prints a report — and a hint that
 `main()` should cache more aggressively if it is ever run on a schedule.
 
