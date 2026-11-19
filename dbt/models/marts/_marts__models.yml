@@ -6,32 +6,69 @@ models:
       One row per CDSCO finding (ADR 0010), keyed on `sample_id` and pointing at dim_drug,
       dim_manufacturer and dim_date. A spurious report carries no `manufacturer_id` on purpose:
       the name on a counterfeit pack is the copied brand, kept in `name_on_pack`.
-      Every row keeps the source document, page and URL. Data tests arrive in Phase 4 step 4.
+      Every row keeps the source document, page and URL.
     columns:
       - name: sample_id
+        data_tests:
+          - unique
+          - not_null
         description: "Primary key, carried through from staging. Traces back to source file + page + row."
       - name: manufacturer_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: "ref('dim_manufacturer')"
+                field: "manufacturer_id"
         description: "FK to dim_manufacturer. Null for spurious reports and where no maker was printed."
       - name: drug_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: "ref('dim_drug')"
+                field: "drug_id"
         description: "FK to dim_drug (the product name as printed)."
       - name: alert_date_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: "ref('dim_date')"
+                field: "date_id"
         description: "FK to dim_date: the first day of the CDSCO alert month."
       - name: is_spurious
+        data_tests:
+          - not_null
         description: "True = reported as spurious/counterfeit, not as a quality failure by its maker."
       - name: source_url
+        data_tests:
+          - not_null
         description: "The original CDSCO document. Required on every public view of a finding."
       - name: lab_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Central", "State"]
         description: >
           Central (CDSCO's own CDL/CDTL/RDTL, which test samples drawn nationwide) or State (a
           state laboratory, testing its own state's samples). Null where the reporter named no
           laboratory at all (424 rows). The two are not comparable and must never be summed as
           "reports per state".
       - name: reported_state_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: "ref('dim_state')"
+                field: "state_id"
         description: >
           FK to dim_state: the REPORTING LABORATORY's state, never the manufacturer's. 498
           findings tested in West Bengal were made in Himachal Pradesh. For the manufacturing
           state use dim_manufacturer.state_name.
       - name: reported_state_source
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["reporter_names_the_state", "lab_city"]
         description: "reporter_names_the_state (2,264) | lab_city (4,671) | null (191)."
 
   - name: dim_manufacturer
@@ -42,6 +79,9 @@ models:
       to check against the way the states do.
     columns:
       - name: manufacturer_id
+        data_tests:
+          - unique
+          - not_null
         description: "md5 of the canonical name."
       - name: name_variants
         description: "Every cleaned spelling that resolved to this company; 484 have more than one."
@@ -52,12 +92,25 @@ models:
           name their state. 76.9% of companies are resolved. Null means "not stated, and not
           guessed" - never "no state".
       - name: state_name_source
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["address_names_the_state", "learned_pin_prefix"]
         description: >
           address_names_the_state (1,726) | learned_pin_prefix (280) | null. A PIN-derived state
           agrees with a named one 99.78% of the time on held-out rows (analyses/pin_prefix_holdout.sql).
       - name: state_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: "ref('dim_state')"
+                field: "state_id"
         description: "FK to dim_state. Null wherever state_name is."
       - name: name_match_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["matched", "no_state_in_address", "no_address", "conflicting_states"]
         description: "matched | no_state_in_address | no_address | conflicting_states."
       - name: pin_code
         description: "The postal code read off the address, if it prints one that is not a plot number."
@@ -73,8 +126,15 @@ models:
       than a gap.
     columns:
       - name: state_id
+        data_tests:
+          - unique
+          - not_null
         description: "md5 of the state name - the same formula dim_manufacturer uses."
       - name: state_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["State", "Union Territory"]
         description: "State or Union Territory."
       - name: alias_count
         description: "How many spellings of this state the vocabulary recognises."
@@ -87,6 +147,9 @@ models:
       for manufacturers. `drug_class` from plan §8.1 is absent: no classification source exists yet.
     columns:
       - name: drug_id
+        data_tests:
+          - unique
+          - not_null
         description: "md5 of the product name."
       - name: generic_name
         description: "Filled only where the split was unambiguous (~20%); null means 'not stated', not 'none'."
@@ -97,6 +160,9 @@ models:
       fact (alert months, manufacture and expiry dates). Range derived from the data, not hardcoded.
     columns:
       - name: date_id
+        data_tests:
+          - unique
+          - not_null
         description: "YYYYMMDD as an integer: the classic star-schema date key."
       - name: year_month
         description: "'YYYY-MM', the same spelling the fact's `alert_month` uses."
@@ -155,6 +221,8 @@ models:
       these are reported failures from a non-random sample - reporting history, not true quality.
     columns:
       - name: as_of_month
+        data_tests:
+          - not_null
         description: "The cutoff. Every feature uses only data up to and including this month."
       - name: label_reported_next_6m
         description: >

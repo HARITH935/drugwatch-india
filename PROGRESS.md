@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 4 — Warehouse (gold). Approved 2026-11-18. Step 1 of 5 done.
-**Next:** step 4 — dbt tests (unique, not_null, relationships, accepted_values, plus custom ones).
+**Next:** step 5 — `dbt docs` for lineage, then Phase 4's done-when check.
 
 ---
 
@@ -993,7 +993,46 @@ Approved 2026-11-18. Plan: `DRUGWATCH_PHASES.md` §9 Phase 4. Goal: analytics-re
         - **Two §8.2 marts not built:** `mart_drug_class_failures` (blocked on the `drug_class` decision)
           and `mart_price_gap` (needs NPPA/Jan Aushadhi price data; Phase 1 found no bulk source for
           branded prices — a Phase 6 problem, not a Phase 4 one).
-- [ ] Step 4 — dbt tests: unique, not_null, relationships, accepted_values, plus custom (expiry after mfg)
+- [x] **Step 4 — dbt tests** (2026-11-19)
+      `dbt build`: **57 nodes, 0 errors — 3 seeds, 16 models, 38 data tests.**
+    - **31 generic tests** in the model YAML: `unique` + `not_null` on all five surrogate keys
+      (sample_id, drug_id, manufacturer_id, state_id, date_id); `relationships` on all four foreign keys
+      (fact → dim_drug, dim_manufacturer, dim_date, dim_state); `accepted_values` on `lab_type`,
+      `reported_state_source`, `name_match_status`, `state_name_source` and `state_type`; `not_null` on
+      `source_url`, `is_spurious`, `batch_no` and the alert month.
+      Written in dbt 1.12's current form (test parameters under `arguments:`), so the build raises
+      **0 deprecation warnings**.
+    - **7 custom (singular) tests** — a singular test is a query selecting the rows that must not exist:
+      - `assert_expiry_after_mfg` — the plan's own example, written as a **consistency** check rather than
+        a flat rule: the archive really does contain impossible dates (17 CDSCO typos), and Phase 3's
+        `dates_valid` flag is how they are marked. What must never happen is a typo passing itself off as
+        valid.
+      - `assert_no_spurious_attributed_to_manufacturer` — the CLAUDE.md §6 invariant. It holds by
+        construction in three separate places; this is what notices if any one of them changes.
+      - `assert_failure_categories_in_vocabulary` — ADR 0009's 15 values, **restated not imported** (a test
+        that reads its expectations from the code under test cannot fail), unnesting the array because
+        `accepted_values` compares a column to a list, not a list to a list.
+      - `assert_fact_covers_every_staging_row` — a full outer join, not two counts: equal counts can hide
+        an equal number of additions and losses.
+      - `assert_mart_grains_are_unique` — all four marts' grains in one test. Break a grain and nothing
+        errors; the numbers simply double.
+      - `assert_ml_features_have_no_label_leakage` — step 3's manual check, promoted. Recomputes
+        `reports_6m`, `reports_12m` and the label by date-range joins with no window functions at all, and
+        fails on any disagreement.
+      - `assert_lab_city_seed_agrees_with_the_archive` — the cross-check promoted from an analysis.
+    - **Mutation-checked: every test proven able to fail**, not just to pass.
+
+      | Mutation | Caught by | Rows |
+      |---|---|---:|
+      | fact attributes a spurious pack to the copied company | `assert_no_spurious_attributed_to_manufacturer` + `relationships` on manufacturer_id | 17 + 7 |
+      | label window includes the cutoff month (leakage) | `assert_ml_features_have_no_label_leakage` | 3,110 |
+      | fact quietly drops the 77 spurious findings | `assert_fact_covers_every_staging_row` | 77 |
+      | dim_state stops collapsing its aliases | `unique_dim_state_state_id` | 17 |
+      | every feature row duplicated | `assert_mart_grains_are_unique` | 85,924 |
+      | a join key forgotten in mart_ml_features | **Postgres itself** rejected the SQL — honest to note that this one is caught by the database, not by a test | — |
+    - **CI still runs only `dbt parse`.** The tests need Postgres *and* the loaded silver table, neither of
+      which exists on a CI runner, so `dbt build` stays a local and Phase 5 (Airflow) step. That is the
+      gap worth being honest about: these tests gate the pipeline, not the pull request.
 - [ ] Step 5 — dbt docs for lineage
 
 **Done when:** `dbt build` succeeds with all tests passing.
@@ -1128,3 +1167,7 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-19 | All rolling/trailing windows are RANGE windows over dates, not ROWS: CDSCO published in 101 of the 111 months spanned, and a ROWS window differs on 209 of 85,924 rows | `mart_manufacturer_trend.sql`, `mart_ml_features.sql` |
 | 2026-11-19 | `mart_ml_features` verified by recomputing every one of its 85,924 rows independently of the model's own windows: 0 wrong features, 0 wrong labels, 0 leaked labels. Last trainable cutoff 2026-03; 14.2% positive | `mart_ml_features.sql` |
 | 2026-11-19 | §12's "spurious association" feature cannot exist by design (spurious findings carry no manufacturer_id), and "share by drug class" waits on the drug_class decision | `mart_ml_features.sql` |
+| 2026-11-19 | 38 dbt tests (31 generic + 7 singular), each mutation-checked: a deliberately broken model is shown to fail the specific test meant to catch it, including label leakage (3,110 rows) and spurious attribution (17 rows) | `dbt/tests/`, `_marts__models.yml` |
+| 2026-11-19 | `assert_expiry_after_mfg` is a consistency check (impossible dates are allowed, but only when `dates_valid` marks them), because CDSCO really does print 17 impossible date pairs | `tests/assert_expiry_after_mfg.sql` |
+| 2026-11-19 | The category vocabulary is restated in the test, not imported: a test that reads its expectations from the code under test cannot fail | `tests/assert_failure_categories_in_vocabulary.sql` |
+| 2026-11-19 | dbt tests gate the pipeline, not CI: they need Postgres plus the loaded silver, so CI runs only `dbt parse` and `dbt build` stays a local/Phase 5 step | `.github/workflows/lint.yml` |

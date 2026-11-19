@@ -5,23 +5,34 @@ models:
     description: >
       One row per CDSCO finding (NSQ or spurious), straight from silver. Adds `sample_id`
       (a stable surrogate key) and `alert_month_start` (the alert month as a date). No filtering,
-      no joins, no business rules - those belong downstream. Data tests arrive in Phase 4 step 4.
+      no joins, no business rules - those belong downstream.
     columns:
       - name: sample_id
+        data_tests:
+          - unique
+          - not_null
         description: "md5 of (source_key, page, row_index): stable across rebuilds."
       - name: source_url
         description: "Link to the original CDSCO document. Shown wherever a finding is shown."
       - name: alert_month
+        data_tests:
+          - not_null
         description: "The CDSCO alert month as published, 'YYYY-MM'. Text: it names an alert, not a day."
       - name: alert_month_start
+        data_tests:
+          - not_null
         description: "The same month as a date (first of the month), for time axes and dim_date."
       - name: batch_no
+        data_tests:
+          - not_null
         description: "The batch the finding is about. An NSQ result applies to THIS batch only."
       - name: manufacturer_canonical
         description: >
           The manufacturer after entity resolution (Phase 3 step 5). Null where no manufacturer
           was printed. For a spurious report this is NOT the maker - see `is_spurious`.
       - name: is_spurious
+        data_tests:
+          - not_null
         description: >
           True = CDSCO reported the pack as spurious/counterfeit. The name on such a pack is the
           copied brand, not the maker, so these rows must never be counted against that company.
