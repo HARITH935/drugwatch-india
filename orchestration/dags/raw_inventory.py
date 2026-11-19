@@ -21,6 +21,7 @@ from datetime import datetime
 from airflow import DAG
 
 from drugwatch_orchestration.notifications import failure_email
+from drugwatch_orchestration.run_log import record_task
 from drugwatch_orchestration.tasks import uv_task
 
 with DAG(
@@ -33,7 +34,13 @@ with DAG(
     catchup=False,  # never backfill this: it checks the archive as it is now, not as it was
     tags=["drugwatch", "data-quality"],
     # A raw/ checksum mismatch is exactly the kind of thing nobody notices in a UI.
-    default_args={"on_failure_callback": failure_email},
+    default_args={
+        # Each task records its own outcome in ops.pipeline_task as it finishes, and a
+        # final failure also emails. Recording from the task itself avoids reaching into
+        # Airflow's metadata database, which Airflow 3 does not want tasks to do.
+        "on_failure_callback": [failure_email, record_task],
+        "on_success_callback": [record_task],
+    },
     doc_md=__doc__,
 ) as dag:
     uv_task(

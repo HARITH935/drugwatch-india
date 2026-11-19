@@ -6,9 +6,9 @@ description = "Airflow DAGs that run the monthly DrugWatch pipeline"
 authors = [
     { name = "Harith", email = "181994424+HARITH935@users.noreply.github.com" }
 ]
-# Airflow's supported Python range is narrower than the rest of the repo's; uv will fetch a
-# matching interpreter if this Mac's default is outside it.
-requires-python = ">=3.12,<3.14"
+# 3.13 to match every other project here (ingestion is 3.13+), capped below 3.14 because that is
+# the top of Airflow 3.4's supported range. Verified: Airflow 3.4.0 runs on Python 3.13.5.
+requires-python = ">=3.13,<3.14"
 dependencies = [
     # [postgres] adds the Postgres provider and psycopg2, which Airflow needs to talk to its
     # own metadata database (ADR 0012). Without it Airflow silently falls back to SQLite.
@@ -17,11 +17,19 @@ dependencies = [
     # Airflow's own provider rather than hand-rolled smtplib, so the connection, timeouts and
     # retries are the ones Airflow already manages.
     "apache-airflow-providers-smtp>=2.0",
+    # The run log (step 5) writes to the drugwatch database and counts objects in RustFS.
+    "psycopg[binary]>=3.2.0", # same driver the warehouse loader uses (ADR 0011)
+    "drugwatch-ingestion", # RawStore.from_env(): one S3 client, one set of credentials
+
 ]
 
 [build-system]
 requires = ["uv_build>=0.13.6,<0.14.0"]
 build-backend = "uv_build"
+
+# Use the ingestion package from this repo, not PyPI (editable: changes are seen at once).
+[tool.uv.sources]
+drugwatch-ingestion = { path = "../ingestion", editable = true }
 
 [dependency-groups]
 dev = [

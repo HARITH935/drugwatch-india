@@ -41,6 +41,7 @@ from airflow.providers.standard.operators.python import PythonOperator
 
 from drugwatch_orchestration.notifications import failure_email
 from drugwatch_orchestration.pipeline import check_month_range, month_arguments, processing_chain
+from drugwatch_orchestration.run_log import record_task
 from drugwatch_orchestration.tasks import uv_task
 
 # Rendered by Jinja, so a bad range raises in the task's own log, with the reason, before the
@@ -61,7 +62,13 @@ with DAG(
     # Every task in this DAG emails on FINAL failure (retries exhausted), and says nothing when
     # the backoff recovers on its own. Set here rather than in the task factory so a DAG cannot
     # quietly be written without it.
-    default_args={"on_failure_callback": failure_email},
+    default_args={
+        # Each task records its own outcome in ops.pipeline_task as it finishes, and a
+        # final failure also emails. Recording from the task itself avoids reaching into
+        # Airflow's metadata database, which Airflow 3 does not want tasks to do.
+        "on_failure_callback": [failure_email, record_task],
+        "on_success_callback": [record_task],
+    },
     params={
         "start_month": Param(
             "2019-01",

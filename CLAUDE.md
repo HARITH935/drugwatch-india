@@ -218,6 +218,9 @@ uv run --env-file ../.env python -m drugwatch_orchestration.cli dags test monthl
 uv run --env-file ../.env python -m drugwatch_orchestration.cli tasks render monthly_pipeline download_portal_nsq 2026-11-10  # see a templated command
 uv run --env-file ../.env python -m drugwatch_orchestration.cli db migrate  # first run only (needs the airflow DB)
 uv run --env-file ../.env pytest               # DAG integrity: every DAG parses, no cycles, retries set
+# The run log (ops schema in Postgres): what each run processed and changed, and what failed
+docker compose exec postgres psql -U drugwatch -c "select run_id, status, raw_files, raw_files_added, silver_rows, silver_rows_added, dbt_nodes_passed, quality_check from ops.pipeline_run order by recorded_at desc limit 5"
+docker compose exec postgres psql -U drugwatch -c "select task_id, state, round(duration_seconds) s from ops.pipeline_task where run_id = (select run_id from ops.pipeline_run order by recorded_at desc limit 1) order by started_at"
 # First time only: create Airflow's own database beside drugwatch's
 docker compose exec postgres psql -U drugwatch -c "CREATE DATABASE airflow"
 ```

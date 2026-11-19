@@ -15,8 +15,10 @@ run history the monthly DAG already has. Flat ids, one shared builder.
 import re
 from datetime import timedelta
 
+from airflow.providers.standard.operators.python import PythonOperator
 from airflow.sdk import BaseOperator  # Airflow 3's public type; airflow.models.* is deprecated
 
+from drugwatch_orchestration.run_log import record_run
 from drugwatch_orchestration.tasks import dbt_task, uv_task
 
 MONTH_PATTERN = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
@@ -145,6 +147,19 @@ def processing_chain() -> tuple[BaseOperator, BaseOperator]:
     )
     build_gold = dbt_task(task_id="dbt_build", command="build")
 
+    # The run log (step 5). `trigger_rule="all_done"` is the whole point: it runs whatever
+    # happened upstream, because a run log that only records successes cannot answer "which
+    # checks failed" - which is half of what the step asks for. It is a PythonOperator rather
+    # than a command because it reads from Postgres, RustFS and dbt's artifact and writes one
+    # row; there is no CLI for that, and inventing one to keep the pattern pure would be worse.
+    summarise = PythonOperator(
+        task_id="record_run_log",
+        python_callable=record_run,
+        trigger_rule="all_done",
+        retries=1,
+        execution_timeout=timedelta(minutes=10),
+    )
+
     verify_raw >> [extract_pdfs, extract_portal] >> build_silver
-    build_silver >> validate_silver >> load_silver >> build_gold
-    return verify_raw, build_gold
+    build_silver >> validate_silver >> load_silver >> build_gold >> summarise
+    return verify_raw, summarise

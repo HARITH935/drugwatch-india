@@ -2,8 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 5 — Automation. Approved 2026-11-19. Steps 0-4 done; only the run log (step 5) remains.
-**Next:** step 5 — a run log: files processed, rows added, checks passed/failed.
+**Current phase:** Phase 5 — Automation. All 5 steps done (2026-11-19); done-when check below.
+**Next:** Phase 5 needs Harith's sign-off to close, then Phase 6 — Analytics (Superset dashboards).
 
 ---
 
@@ -1268,7 +1268,48 @@ Approved 2026-11-19. Plan: `DRUGWATCH_PHASES.md` §9 Phase 5. Goal: the pipeline
     - **7 new tests** (31 in `orchestration/` now), including that a context missing everything still
       produces a message: a callback that raises loses the alert entirely, so it must degrade rather
       than explode.
-- [ ] Step 5 — run log: files processed, rows added, checks passed/failed
+- [x] **Step 5 — the run log** (2026-11-19)
+      Two tables in a new `ops` schema: `ops.pipeline_run` (one row per run) and `ops.pipeline_task`
+      (one row per task). Written by a final `record_run_log` task plus a callback on every task.
+    - **Every number comes from a structured source, never from scraped stdout** — the open question
+      step 1 left. Parsing logs would have been the fragile answer: a reworded `print` would silently
+      turn the run log into fiction. Instead: files from **RustFS itself** (through the downloaders'
+      own `RawStore`), rows from **Postgres** (the warehouse's own answer, not a task's claim about
+      it), dbt results from **`dbt/target/run_results.json`** (the artifact dbt writes for exactly
+      this), and task states recorded by **each task as it finishes**.
+    - **Tasks record themselves** rather than the summary querying Airflow's metadata database:
+      Airflow 3 runs tasks in a subprocess that talks to the API server, so reaching into its
+      database from inside a task is the kind of coupling that breaks on upgrade.
+    - **dbt's artifact is checked for staleness.** dbt rewrites `run_results.json` on every
+      invocation, so its `generated_at` is compared with this run's start; a file from an earlier run
+      would otherwise be reported as this run's result — a lie that looks like data. Missing,
+      unreadable and stale all store **nulls**, and `added_since()` returns null rather than 0 when
+      either side is unknown, because "we do not know" and "nothing changed" are different answers.
+    - **`trigger_rule="all_done"`** on the summary task, so a failed run is logged too: a run log that
+      only records successes cannot answer "which checks failed", which is half of what the step asks.
+      Both tables are keyed on (dag_id, run_id) and upserted, so re-running a run corrects its row
+      instead of adding a second.
+    - **Two bugs, both found by comparing output against a number already known — not by the tests:**
+      1. **The raw-file count hid a third of the archive.** The first filter skipped `.json` keys,
+         assuming sidecars were the only JSON — but **the portal's raw snapshots are JSON too**, so it
+         reported 213 files where `inventory` says 331. Fixed by counting **sidecars**, which is
+         strictly better: the sidecar is written second and is the store's own "this file is complete"
+         marker, so a half-written file is not counted. Now reports 331, matching `inventory` exactly.
+      2. **A perfect run was recorded as `failed`.** Airflow hands callbacks a `TaskInstanceState`
+         *enum*; `str()` on it gives `TaskInstanceState.SUCCESS`, so the lookup for `'success'` matched
+         nothing and all 10 tasks counted as failures. The tests passed plain strings and never saw a
+         real enum. Fixed with `state_name()`, plus a regression test that imports the real enum. The
+         one wrong row and its 10 task rows were deleted rather than left as a false record.
+    - **Verified by running the pipeline** (2026-11-19): `status success · 10 tasks ok / 0 failed ·
+      quality_check success · raw_files 331 · silver_rows 7,126 · gold_fact_rows 7,126 · dbt 63/63 ·
+      189 s`, with all 11 task rows and their durations (`build_silver` 111 s, `extract_pdf_bronze`
+      34 s, `dbt_build` 19 s).
+    - **16 new tests** (46 in `orchestration/`), covering the delta rules (including that a *shrinking*
+      count is reported as negative — silver really did shrink by 2 in Phase 3 when duplicate findings
+      collapsed) and every way dbt's artifact can fail to be trustworthy.
+    - ✅ **This also closes step 1's open question:** the download outcomes and row deltas now exist as
+      structured data, so a future short-circuit ("nothing changed, skip the rebuild") has something
+      reliable to read instead of stdout.
 
 **Done when:** both DAGs run end-to-end with no manual steps and re-runs don't create duplicates.
 
@@ -1428,3 +1469,7 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-19 | The failure email carries the command to reproduce the task by hand, which is only possible because every task is a documented command (ADR 0012) | `notifications.failure_message()` |
 | 2026-11-19 | Airflow's SMTP connection is built from the repo's own SMTP_* variables and exported as `AIRFLOW_CONN_SMTP_DEFAULT`, so Mailpit and Brevo differ only by `.env` and Spring Boot reads the same credentials | `config.smtp_connection()` |
 | 2026-11-19 | Verified by running it: final failure -> 1 email with the real error in the body; a task that fails then succeeds -> 0 emails | PROGRESS Phase 5 step 4 |
+| 2026-11-19 | The run log reads every figure from a structured source — RustFS, Postgres, dbt's run_results.json, and each task recording itself — never from scraped stdout | `orchestration/src/drugwatch_orchestration/run_log.py` |
+| 2026-11-19 | dbt's run_results.json is rejected when older than the run that is being logged; unknown figures are stored as null, never as 0 | `run_log.dbt_node_counts()`, `added_since()` |
+| 2026-11-19 | Bug found by comparing with `inventory`: filtering out `.json` keys hid the portal's raw snapshots (213 of 331 files). The run log counts sidecars, the store's own "complete" marker | `run_log.raw_file_count()` |
+| 2026-11-19 | Bug found by reading the row: Airflow's `TaskInstanceState` enum stringifies to `TaskInstanceState.SUCCESS`, so a perfect run was logged as failed. `state_name()` stores the value, with a regression test using the real enum | `run_log.state_name()` |
