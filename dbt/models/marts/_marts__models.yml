@@ -100,3 +100,71 @@ models:
         description: "YYYYMMDD as an integer: the classic star-schema date key."
       - name: year_month
         description: "'YYYY-MM', the same spelling the fact's `alert_month` uses."
+
+  - name: mart_manufacturer_trend
+    description: >
+      Reports per manufacturer per month, with rolling 6- and 12-month counts, over a dense month
+      grid so quiet months count as zero. Neutral by construction: every column counts reports,
+      which is reporting history, never a judgement about a company.
+    columns:
+      - name: reports_rolling_6m
+        description: >
+          A RANGE window over dates, not a ROWS window over rows: CDSCO published in 101 of the
+          111 months the archive spans, so "the previous 5 rows" is not "the previous 5 months".
+      - name: months_since_previous_report
+        description: "Null in a month with no report; otherwise the gap back to the previous one."
+
+  - name: mart_repeat_reported_manufacturers
+    description: >
+      Manufacturers reported in 3 or more separate CDSCO alert months (500 of 2,609). Plan §8.2
+      calls this mart `mart_repeat_offenders`; renamed, because "offender" is a verdict and
+      CLAUDE.md §6 forbids it - what this holds is a count of alert months. Alert months, not
+      reports: ten findings in one alert is one inspection sweep, one finding in each of ten
+      months is a pattern.
+    columns:
+      - name: alert_months_reported
+        description: "How many separate CDSCO alert months named this company."
+      - name: rank_by_alert_months
+        description: >
+          DENSE_RANK, so tied companies share a rank and no rank is skipped - a public list must
+          not imply an order the data does not support.
+      - name: longest_gap_months
+        description: "The longest quiet stretch between two consecutive alert months."
+
+  - name: mart_state_summary
+    description: >
+      Reports per state counted two ways that must never be confused, side by side, with every
+      state and UT present (dim_state is the spine) so a map shows 0 rather than a gap.
+    columns:
+      - name: reports_made_here
+        description: "Findings whose MANUFACTURER is in this state."
+      - name: reports_tested_here
+        description: >
+          Findings whose REPORTING LABORATORY is in this state. Not a measure of local drug
+          quality: central labs test nationwide, so 498 findings tested in West Bengal were made
+          in Himachal Pradesh.
+      - name: state_lab_reports_tested_here
+        description: "The honest subset for a 'tested in this state' question: state labs only."
+
+  - name: mart_ml_features
+    description: >
+      Phase 7's feature table: one row per manufacturer per monthly cutoff (85,924), features
+      computed only from months up to and including `as_of_month`, label from the 6 months after
+      it. Verified against an independent recomputation of every row: 0 wrong features, 0 wrong
+      labels, 0 leaked labels. Known limitation that must travel with any score built on it:
+      these are reported failures from a non-random sample - reporting history, not true quality.
+    columns:
+      - name: as_of_month
+        description: "The cutoff. Every feature uses only data up to and including this month."
+      - name: label_reported_next_6m
+        description: >
+          Plan §12's label: reported at least once in the following 6 months. Null where the
+          archive cannot answer yet (the last 6 cutoffs); `label_window_complete` says which.
+          71,354 rows are complete, 14.2% of them positive.
+      - name: central_lab_share_12m
+        description: "Null, not 0, when there were no reports to divide - absence is not 0%."
+      - name: assay_share_12m
+        description: >
+          Share of category MENTIONS, not of reports: 22.6% of findings name more than one failed
+          test (ADR 0009), so these shares do not sum to 1.
+

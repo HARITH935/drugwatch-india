@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 4 — Warehouse (gold). Approved 2026-11-18. Step 1 of 5 done.
-**Next:** step 3 piece 3 — the analytical marts of §8.2 (and `drug_class` needs a decision first).
+**Next:** step 4 — dbt tests (unique, not_null, relationships, accepted_values, plus custom ones).
 
 ---
 
@@ -954,7 +954,45 @@ Approved 2026-11-18. Plan: `DRUGWATCH_PHASES.md` §9 Phase 4. Goal: analytics-re
           analyst sits in Chandigarh. "Karnataka", "Puducherry" and "Not applicable" name no laboratory, so
           they have no type. 100 rows have no reporter at all.
     - [x] Piece 2 complete — `dim_state`, the manufacturer's state, `lab_type`, the lab's state
-    - [ ] Piece 3 — the marts of §8.2
+    - [x] **Piece 3 — four analytical marts of §8.2** (2026-11-19)
+          `dbt build`: **19 models, 0 errors.** `mart_manufacturer_trend` 85,924 ·
+          `mart_repeat_reported_manufacturers` 500 · `mart_state_summary` 36 · `mart_ml_features` 85,924.
+        - **`int_manufacturer_month`** — one shared dense manufacturer × month grid (the only intermediate
+          model materialised as a table, since two marts read it). Dense matters: rolling and trailing
+          windows are only correct over an unbroken series, and if the quiet months are simply missing then
+          "reports in the last 6 months" silently becomes "reports in the last 6 months that had reports",
+          which is never zero. The grid runs to the **archive's** last month, not each company's, because a
+          company going quiet is a real signal.
+        - **Windows are RANGE windows over dates, not ROWS windows over rows.** CDSCO published in **101 of
+          the 111 calendar months** the archive spans, so "the previous 5 rows" is not "the previous 5
+          months". Measured: a ROWS window differs on **209 of 85,924 rows (0.2%)**, over-counting by up to
+          3 — small today, concentrated in the sparse early years, and free to do correctly.
+        - **`mart_repeat_offenders` renamed to `mart_repeat_reported_manufacturers`.** CLAUDE.md §6 forbids
+          calling a manufacturer fraudulent, and "offender" is a verdict; the table holds a count of alert
+          months. It counts **alert months, not reports** — ten findings in one alert is one inspection
+          sweep, one finding in each of ten months is a pattern that persisted — and ranks with
+          **DENSE_RANK**, so tied companies share a rank (rank 4 is genuinely shared) and no public list
+          implies an order the data cannot support. Top: Jackson Laboratories 49 alert months / 90 reports,
+          Unicure India 46 / 95, Nestor Pharmaceuticals 30 / 40.
+        - **`mart_state_summary` keeps the two state meanings in separate columns** (`reports_made_here`
+          vs `reports_tested_here`, plus `state_lab_reports_tested_here` as the honest subset), with
+          dim_state as the spine so all 36 states and UTs have a row and a map shows 0, not a gap.
+        - **`mart_ml_features`** — plan §12's table: 85,924 rows, features only from months ≤ `as_of_month`,
+          label from the 6 months after. Distinct counts (drugs, reporting states) are computed by joining
+          the findings back over the window, because summing per-month distinct counts would double-count a
+          drug reported in two months. Category shares are shares of **mentions**, not reports (ADR 0009),
+          and `central_lab_share_12m` is **null, not 0**, when there was nothing to divide.
+        - **Verified by independent recomputation of all 85,924 rows** (not a sample, and not reusing the
+          model's own windows): `0 wrong reports_6m`, `0 wrong reports_12m`, `0 wrong labels`,
+          `0 leaked labels`. Cutoffs run 2017-09 … 2026-09; the last trainable one is **2026-03**, exactly
+          6 months before the archive ends. Label balance: **71,354 complete rows, 14.2% positive** — worth
+          knowing now, because that imbalance is why Phase 7 reports PR-AUC and precision@K, not accuracy.
+        - **Two §12 features cannot exist, and that is deliberate:** "any spurious-drug association" (a
+          spurious pack names the copied brand, so those findings carry no manufacturer_id at all) and
+          "share of reports by drug class" (⏳ no classification source — still open).
+        - **Two §8.2 marts not built:** `mart_drug_class_failures` (blocked on the `drug_class` decision)
+          and `mart_price_gap` (needs NPPA/Jan Aushadhi price data; Phase 1 found no bulk source for
+          branded prices — a Phase 6 problem, not a Phase 4 one).
 - [ ] Step 4 — dbt tests: unique, not_null, relationships, accepted_values, plus custom (expiry after mfg)
 - [ ] Step 5 — dbt docs for lineage
 
@@ -1086,3 +1124,7 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-19 | Lab abbreviations live in a seed WITH their expansions (CDL/CDTL/RDTL = CDSCO's own; DTL/SDTL/DCL/FDL/FDAL/FDTL/BDCL = state), so the table can be checked by someone who does not know them | `seeds/lab_type_marker.csv` |
 | 2026-11-19 | The reviewed lab-city seed is cross-checked against reporter strings that name both city and state: 15 of 33 cities confirmed, 0 disagreements; the CSV records which rows the archive can confirm | `analyses/lab_city_crosscheck.sql` |
 | 2026-11-19 | `MDTL` left unclassified (6 rows): whether a Mini Drug Testing Laboratory is state-run could not be established without guessing | `lab_type_marker.csv` |
+| 2026-11-19 | `mart_repeat_offenders` (§8.2) renamed `mart_repeat_reported_manufacturers`, counting alert MONTHS and ranked with DENSE_RANK: "offender" is a verdict and CLAUDE.md §6 forbids it | `mart_repeat_reported_manufacturers.sql` |
+| 2026-11-19 | All rolling/trailing windows are RANGE windows over dates, not ROWS: CDSCO published in 101 of the 111 months spanned, and a ROWS window differs on 209 of 85,924 rows | `mart_manufacturer_trend.sql`, `mart_ml_features.sql` |
+| 2026-11-19 | `mart_ml_features` verified by recomputing every one of its 85,924 rows independently of the model's own windows: 0 wrong features, 0 wrong labels, 0 leaked labels. Last trainable cutoff 2026-03; 14.2% positive | `mart_ml_features.sql` |
+| 2026-11-19 | §12's "spurious association" feature cannot exist by design (spurious findings carry no manufacturer_id), and "share by drug class" waits on the drug_class decision | `mart_ml_features.sql` |
