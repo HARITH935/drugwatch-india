@@ -1,0 +1,33 @@
+slice_name: Findings tested in a different state from the maker
+description: null
+certified_by: null
+certification_details: null
+viz_type: big_number_total
+params:
+  metric:
+    expressionType: SIMPLE
+    column:
+      column_name: pct_tested_in_a_different_state
+    aggregate: MAX
+    label: '% tested in another state'
+    optionName: metric_pct_tested_in_a_different_state_max
+  subheader: of the 75.7% of findings where both states are known - which is why 'made
+    here' and 'tested here' are separate charts
+  viz_type: big_number_total
+  datasource: 6__table
+query_context: '{"datasource": {"id": 6, "type": "table"}, "force": false, "queries":
+  [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
+  "annotation_layers": [], "series_limit": 0, "order_desc": true, "url_params": {},
+  "custom_params": {}, "custom_form_data": {}, "row_limit": 50000, "metrics": [{"expressionType":
+  "SIMPLE", "column": {"column_name": "pct_tested_in_a_different_state"}, "aggregate":
+  "MAX", "label": "% tested in another state", "optionName": "metric_pct_tested_in_a_different_state_max"}],
+  "columns": [], "orderby": [], "post_processing": []}], "form_data": {"metric": {"expressionType":
+  "SIMPLE", "column": {"column_name": "pct_tested_in_a_different_state"}, "aggregate":
+  "MAX", "label": "% tested in another state", "optionName": "metric_pct_tested_in_a_different_state_max"},
+  "subheader": "of the 75.7% of findings where both states are known - which is why
+  ''made here'' and ''tested here'' are separate charts", "viz_type": "big_number_total",
+  "datasource": "6__table"}, "result_format": "json", "result_type": "full"}'
+cache_timeout: null
+uuid: 7e225f3e-aca0-4ec7-ab9c-d110e14bb01e
+version: 1.0.0
+dataset_uuid: ecf8c99f-0539-4095-b0e0-13d55fd89579

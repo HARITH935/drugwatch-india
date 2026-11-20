@@ -1,0 +1,33 @@
+slice_name: Every spurious finding
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  query_mode: raw
+  all_columns:
+  - alert_month
+  - batch_no
+  - product_name
+  - name_printed_on_the_pack
+  - reported_by
+  - source_url
+  order_by_cols:
+  - '["alert_month", false]'
+  row_limit: 100
+  viz_type: table
+  datasource: 7__table
+query_context: '{"datasource": {"id": 7, "type": "table"}, "force": false, "queries":
+  [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
+  "annotation_layers": [], "series_limit": 0, "order_desc": true, "url_params": {},
+  "custom_params": {}, "custom_form_data": {}, "row_limit": 100, "columns": ["alert_month",
+  "batch_no", "product_name", "name_printed_on_the_pack", "reported_by", "source_url"],
+  "metrics": null, "orderby": [["alert_month", false]], "post_processing": []}], "form_data":
+  {"query_mode": "raw", "all_columns": ["alert_month", "batch_no", "product_name",
+  "name_printed_on_the_pack", "reported_by", "source_url"], "order_by_cols": ["[\"alert_month\",
+  false]"], "row_limit": 100, "viz_type": "table", "datasource": "7__table"}, "result_format":
+  "json", "result_type": "full"}'
+cache_timeout: null
+uuid: aff6f071-5ac4-4577-9458-812e26999d12
+version: 1.0.0
+dataset_uuid: 00afd94b-2510-4271-a3ce-1d62e3bd597d

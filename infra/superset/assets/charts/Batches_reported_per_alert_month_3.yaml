@@ -1,0 +1,44 @@
+slice_name: Batches reported per alert month
+description: null
+certified_by: null
+certification_details: null
+viz_type: echarts_timeseries_bar
+params:
+  x_axis: alert_month_start
+  time_grain_sqla: P1M
+  metrics:
+  - expressionType: SIMPLE
+    column:
+      column_name: findings
+    aggregate: SUM
+    label: Batches reported
+    optionName: metric_findings_sum
+  row_limit: 500
+  x_axis_title: CDSCO alert month
+  y_axis_title: batches reported
+  rich_tooltip: true
+  viz_type: echarts_timeseries_bar
+  datasource: 1__table
+query_context: '{"datasource": {"id": 1, "type": "table"}, "force": false, "queries":
+  [{"filters": [], "extras": {"having": "", "where": "", "time_grain_sqla": "P1M"},
+  "applied_time_extras": {}, "annotation_layers": [], "series_limit": 0, "order_desc":
+  true, "url_params": {}, "custom_params": {}, "custom_form_data": {}, "row_limit":
+  500, "columns": [{"columnType": "BASE_AXIS", "sqlExpression": "alert_month_start",
+  "label": "alert_month_start", "expressionType": "SQL", "timeGrain": "P1M"}], "metrics":
+  [{"expressionType": "SIMPLE", "column": {"column_name": "findings"}, "aggregate":
+  "SUM", "label": "Batches reported", "optionName": "metric_findings_sum"}], "orderby":
+  [[{"expressionType": "SIMPLE", "column": {"column_name": "findings"}, "aggregate":
+  "SUM", "label": "Batches reported", "optionName": "metric_findings_sum"}, false]],
+  "series_columns": [], "post_processing": [{"operation": "pivot", "options": {"index":
+  ["alert_month_start"], "columns": [], "aggregates": {"Batches reported": {"operator":
+  "mean"}}, "drop_missing_columns": false}}, {"operation": "flatten"}]}], "form_data":
+  {"x_axis": "alert_month_start", "time_grain_sqla": "P1M", "metrics": [{"expressionType":
+  "SIMPLE", "column": {"column_name": "findings"}, "aggregate": "SUM", "label": "Batches
+  reported", "optionName": "metric_findings_sum"}], "row_limit": 500, "x_axis_title":
+  "CDSCO alert month", "y_axis_title": "batches reported", "rich_tooltip": true, "viz_type":
+  "echarts_timeseries_bar", "datasource": "1__table"}, "result_format": "json", "result_type":
+  "full"}'
+cache_timeout: null
+uuid: 1fd65275-9b02-43bc-bd74-c6a45252bc52
+version: 1.0.0
+dataset_uuid: 29f9b16a-0c1d-4e80-a949-f0db9ace1499

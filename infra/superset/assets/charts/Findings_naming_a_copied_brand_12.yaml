@@ -1,0 +1,32 @@
+slice_name: Findings naming a copied brand
+description: null
+certified_by: null
+certification_details: null
+viz_type: big_number_total
+params:
+  metric:
+    expressionType: SIMPLE
+    column:
+      column_name: name_printed_on_the_pack
+    aggregate: COUNT
+    label: Copied brand recorded
+    optionName: metric_name_printed_on_the_pack_count
+  subheader: the rest name no brand at all - the alert simply did not say
+  viz_type: big_number_total
+  datasource: 7__table
+query_context: '{"datasource": {"id": 7, "type": "table"}, "force": false, "queries":
+  [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
+  "annotation_layers": [], "series_limit": 0, "order_desc": true, "url_params": {},
+  "custom_params": {}, "custom_form_data": {}, "row_limit": 50000, "metrics": [{"expressionType":
+  "SIMPLE", "column": {"column_name": "name_printed_on_the_pack"}, "aggregate": "COUNT",
+  "label": "Copied brand recorded", "optionName": "metric_name_printed_on_the_pack_count"}],
+  "columns": [], "orderby": [], "post_processing": []}], "form_data": {"metric": {"expressionType":
+  "SIMPLE", "column": {"column_name": "name_printed_on_the_pack"}, "aggregate": "COUNT",
+  "label": "Copied brand recorded", "optionName": "metric_name_printed_on_the_pack_count"},
+  "subheader": "the rest name no brand at all - the alert simply did not say", "viz_type":
+  "big_number_total", "datasource": "7__table"}, "result_format": "json", "result_type":
+  "full"}'
+cache_timeout: null
+uuid: 558945d2-37b6-4516-96d0-3ed2b2c6fa92
+version: 1.0.0
+dataset_uuid: 00afd94b-2510-4271-a3ce-1d62e3bd597d

@@ -2,8 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 6 — Analytics. Approved 2026-11-19. Steps 1, 2, 4 done; 3 has 3 of 4 dashboards (3c blocked on decision B).
-**Next:** step 5 — source notes, a freshness line from the run log, and the dashboards exported as code. (3c waits on the `drug_class` vocabulary.)
+**Current phase:** Phase 6 — Analytics. Steps 1, 2, 4, 5 done; step 3 has 3 of 4 dashboards (3c blocked on decision B).
+**Next:** Harith's call — the freshness panel needs one destructive fix (below), 3c needs the `drug_class` vocabulary, then Phase 6 can close.
 
 ---
 
@@ -1575,7 +1575,46 @@ Approved 2026-11-19. Plan: `DRUGWATCH_PHASES.md` §9 Phase 6. Goal: public, read
       before this data appears on a live site, and **neither permission email has been sent**. Phase 12
       must also enable `TALISMAN_ENABLED` with a Content Security Policy and change the admin password,
       which is currently `admin`.
-- [ ] Step 5 — disclaimers, source notes, freshness line, and dashboards exported as code
+- [x] **Step 5 — source notes and dashboards as code** (2026-11-20) — one piece parked, see below.
+    - **Source note on every dashboard, in one place.** `SOURCE_FOOTER` in `dashboards.py` is appended
+      to all three notes, so a dashboard added later cannot be missing it: it credits CDSCO, links to
+      cdscoonline.gov.in, states that the data is reproduced unaltered and that the CDSCO document is
+      authoritative, and explains how the numbers were built. The disclaimer itself went on in step 3a
+      rather than waiting for this step.
+    - **All three dashboards are now in the repo as YAML** (`infra/superset/assets/`, 26 files: 3
+      dashboards, 14 charts, 7 datasets, 1 database, metadata). Until now they existed only in the build
+      scripts and Superset's own database, neither of which is a deployable artifact.
+      `export_assets.py` **refuses to write if a real credential is in the bundle** — it searches the
+      export for `SUPERSET_READER_PASSWORD` before touching the disk. Checked: the exporter masks the
+      URI as `superset_reader:XXXXXXXXXX@postgres:5432/drugwatch`, and the real password appears 0
+      times. The top-level export directory is stripped, so a re-export is a clean diff rather than a
+      new folder.
+    - **The deployment path is tested, not assumed** (`import_assets.sh`): the committed YAML is
+      re-zipped and imported, then every chart is re-verified. **Superset's importer requires the top
+      directory the exporter adds** — without it the import dies mid-JSON-decode with no useful
+      message, which is exactly the kind of thing Phase 12 should not discover on a server. The script
+      adds it back. Round trip confirmed: export → repo YAML → import → `every chart returned data`,
+      and public access unchanged.
+    - **`mart_data_freshness` is built and tested but not yet on the dashboards.** The mart reads Phase
+      5's run log through a new dbt source (`ops`), so a dashboard can show "last updated 19 Nov 2026 ·
+      7,126 findings · 331 source files · 63/63 dbt nodes · quality gate success · 1 day ago" **without
+      Superset ever being granted the `ops` schema** — one curated row crosses the boundary instead of
+      the whole operational log. It deliberately reports the latest **successful** run: a failed run
+      leaves the previous data in place, so its timestamp would overstate freshness.
+    - ⚠️ **Blocked on a corrupt row in Superset's own metadata, and it needs Harith's OK to fix.**
+      Registering the dataset left `tables` row id 8 for `gold.mart_data_freshness` in a state where
+      **Superset's API cannot see it** — `GET /api/v1/dataset/8` returns 404 and it is absent from the
+      list — **while its uniqueness check does**, so creating it again fails with "already exists".
+      The row is structurally identical to a working one (9 columns, 1 metric, same `perm`,
+      `schema_perm`, `catalog_perm`, `database_id`); ruled out: Redis cache (flushed), in-process cache
+      (container restarted), permissions (admin has `all_datasource_access`), and the import above did
+      not repair it. The three build scripts therefore crashed, so the panel wiring was **parked with a
+      TODO and the scripts restored to working** — all three rebuild cleanly and all 14 charts verify.
+      **Options for Harith:** (a) delete that one metadata row and its dependent `table_columns` /
+      `sql_metrics` rows, then re-register — recommended, it is Superset's own catalog and the script
+      recreates it in seconds; (b) rename the mart so a fresh dataset name is used, which leaves a stale
+      `gold.mart_data_freshness` table and the orphan row behind; (c) leave the panel out and keep the
+      freshness information in the source note only.
 
 **Done when:** dashboards are viewable publicly with filters working.
 ⚠️ **"Publicly" is local-only until Phase 12:** `docs/permissions.md` requires CDSCO permission before the
@@ -1772,3 +1811,7 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-20 | "Filters working" genuinely requires `can_write on DashboardFilterStateRestApi` (Superset stores filter selections server-side); listed as an explicit exception | `configure_public_role.py` |
 | 2026-11-20 | The anonymous test must not follow redirects: urllib followed FAB's redirect to /login/ and reported that a stranger could list users | `infra/superset/public_access_test.py` |
 | 2026-11-20 | `superset init` does not reset the Public role (21 permissions before and after), so a future superset-init cannot quietly reopen the instance | PROGRESS Phase 6 step 4 |
+| 2026-11-20 | Dashboards are committed as YAML (`infra/superset/assets/`) and the import path is tested: Superset's importer needs the top-level directory its exporter adds, or the import dies mid-JSON-decode | `infra/superset/export_assets.py`, `import_assets.sh` |
+| 2026-11-20 | The export refuses to write if the real reader password appears in the bundle; Superset masks it as XXXXXXXXXX, verified 0 matches | `export_assets.py` |
+| 2026-11-20 | `mart_data_freshness` reads Phase 5's run log through a dbt `ops` source, so dashboards can show their own freshness without Superset being granted the ops schema; it reports the latest SUCCESSFUL run | `dbt/models/marts/mart_data_freshness.sql` |
+| 2026-11-20 | ⏳ OPEN: Superset holds a corrupt `tables` row (id 8) that its API 404s on while its uniqueness check sees it, blocking the freshness panel. Cache, restart, permissions and re-import all ruled out. Needs Harith's OK to delete the row | PROGRESS Phase 6 step 5 |

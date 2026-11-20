@@ -1,0 +1,45 @@
+slice_name: Batches made in each state
+description: null
+certified_by: null
+certification_details: null
+viz_type: echarts_timeseries_bar
+params:
+  x_axis: state_name
+  metrics:
+  - expressionType: SIMPLE
+    column:
+      column_name: reports_made_here
+    aggregate: SUM
+    label: Batches reported, made here
+    optionName: metric_reports_made_here_sum
+  row_limit: 15
+  x_axis_title: manufacturing state
+  y_axis_title: batches reported
+  x_axis_sort: Batches reported, made here
+  x_axis_sort_asc: false
+  rich_tooltip: true
+  viz_type: echarts_timeseries_bar
+  datasource: 5__table
+query_context: '{"datasource": {"id": 5, "type": "table"}, "force": false, "queries":
+  [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
+  "annotation_layers": [], "series_limit": 0, "order_desc": true, "url_params": {},
+  "custom_params": {}, "custom_form_data": {}, "row_limit": 15, "columns": [{"columnType":
+  "BASE_AXIS", "sqlExpression": "state_name", "label": "state_name", "expressionType":
+  "SQL"}], "metrics": [{"expressionType": "SIMPLE", "column": {"column_name": "reports_made_here"},
+  "aggregate": "SUM", "label": "Batches reported, made here", "optionName": "metric_reports_made_here_sum"}],
+  "orderby": [[{"expressionType": "SIMPLE", "column": {"column_name": "reports_made_here"},
+  "aggregate": "SUM", "label": "Batches reported, made here", "optionName": "metric_reports_made_here_sum"},
+  false]], "series_columns": [], "post_processing": [{"operation": "pivot", "options":
+  {"index": ["state_name"], "columns": [], "aggregates": {"Batches reported, made
+  here": {"operator": "mean"}}, "drop_missing_columns": false}}, {"operation": "flatten"}]}],
+  "form_data": {"x_axis": "state_name", "metrics": [{"expressionType": "SIMPLE", "column":
+  {"column_name": "reports_made_here"}, "aggregate": "SUM", "label": "Batches reported,
+  made here", "optionName": "metric_reports_made_here_sum"}], "row_limit": 15, "x_axis_title":
+  "manufacturing state", "y_axis_title": "batches reported", "x_axis_sort": "Batches
+  reported, made here", "x_axis_sort_asc": false, "rich_tooltip": true, "viz_type":
+  "echarts_timeseries_bar", "datasource": "5__table"}, "result_format": "json", "result_type":
+  "full"}'
+cache_timeout: null
+uuid: d4d8cbd8-2fb1-4696-9912-789fc749c4f3
+version: 1.0.0
+dataset_uuid: 9c267a10-7ffe-4f50-b58d-31360731f5e9

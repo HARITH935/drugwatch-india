@@ -1,0 +1,12 @@
+version: 2
+
+sources:
+  # Phase 5's run log. dbt only READS it: the pipeline writes it, and declaring it as a source is
+  # what lets a gold mart expose "when was this data last updated" without Superset ever being
+  # given access to the ops schema itself (CLAUDE.md §5 - Superset reads gold only).
+  - name: ops
+    description: "Operational bookkeeping written by the Airflow pipeline (Phase 5 step 5)."
+    schema: ops
+    tables:
+      - name: pipeline_run
+        description: "One row per pipeline run: what it processed, what changed, what failed."

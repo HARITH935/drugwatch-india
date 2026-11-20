@@ -244,6 +244,9 @@ set -a && . ./.env && set +a && python3 infra/superset/verify_charts.py  # every
 # strangers edit dashboards). Re-run after adding a dataset, so the public can see it.
 docker compose exec -T superset python - < infra/superset/configure_public_role.py
 python3 infra/superset/public_access_test.py   # what a logged-out stranger can and cannot do
+# Dashboards as code: export to infra/superset/assets/ (refuses if a real password is in the bundle)
+set -a && . ./.env && set +a && python3 infra/superset/export_assets.py
+set -a && . ./.env && set +a && bash infra/superset/import_assets.sh  # rebuild them from the repo
 # First run only: create Superset's own database and its read-only role
 docker compose exec postgres psql -U drugwatch -c "CREATE DATABASE superset"
 set -a && . ./.env && set +a && docker compose exec -T postgres psql -U drugwatch -v ON_ERROR_STOP=1 -v reader_password="$SUPERSET_READER_PASSWORD" -f - < infra/postgres/superset_reader.sql
@@ -275,3 +278,13 @@ If S3 calls fail with `RequestTimeTooSkewed` after the Mac has slept, Docker's V
 - [ ] Verified by actually running it, with output shown
 - [ ] No secrets committed; `.env.example` updated if new config was added
 - [ ] `PROGRESS.md` updated, plus an ADR if a stack or design decision changed
+
+---
+
+## 12. Token efficiency
+- Don't restate code/files back to me that I can already see.
+- No step-by-step narration between tool calls ("Now I will...").
+- Use targeted reads (grep, offset/limit) instead of reading whole files.
+- Don't re-read a file you just edited to verify - trust the edit result.
+- Batch independent tool calls into one turn.
+- Keep summaries short: what changed, where, next step only.

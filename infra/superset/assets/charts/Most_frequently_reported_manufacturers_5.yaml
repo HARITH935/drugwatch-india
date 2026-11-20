@@ -1,0 +1,33 @@
+slice_name: Most frequently reported manufacturers
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  query_mode: raw
+  all_columns:
+  - canonical_name
+  - state_name
+  - alert_months_reported
+  - reports_total
+  - first_alert_month
+  - last_alert_month
+  order_by_cols:
+  - '["alert_months_reported", false]'
+  row_limit: 20
+  viz_type: table
+  datasource: 2__table
+query_context: '{"datasource": {"id": 2, "type": "table"}, "force": false, "queries":
+  [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
+  "annotation_layers": [], "series_limit": 0, "order_desc": true, "url_params": {},
+  "custom_params": {}, "custom_form_data": {}, "row_limit": 20, "columns": ["canonical_name",
+  "state_name", "alert_months_reported", "reports_total", "first_alert_month", "last_alert_month"],
+  "metrics": null, "orderby": [["alert_months_reported", false]], "post_processing":
+  []}], "form_data": {"query_mode": "raw", "all_columns": ["canonical_name", "state_name",
+  "alert_months_reported", "reports_total", "first_alert_month", "last_alert_month"],
+  "order_by_cols": ["[\"alert_months_reported\", false]"], "row_limit": 20, "viz_type":
+  "table", "datasource": "2__table"}, "result_format": "json", "result_type": "full"}'
+cache_timeout: null
+uuid: 41dc6aa5-18c3-48bf-b07e-9514b5aa5bf7
+version: 1.0.0
+dataset_uuid: 417f0e7f-1c1d-40c9-a4e4-06ef49a4bf23

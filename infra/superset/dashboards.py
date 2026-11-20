@@ -19,6 +19,22 @@ from superset_api import Superset
 DATABASE_NAME = "DrugWatch gold"
 SCHEMA = "gold"
 
+# Appended to every dashboard's note. CLAUDE.md §6 requires the source and a link to the original
+# document wherever this data is shown, and plan §9 Phase 6 step 5 asks for source notes on every
+# dashboard - so it lives in one place and cannot be forgotten on a later dashboard.
+SOURCE_FOOTER = """
+
+---
+
+**Source:** Central Drugs Standard Control Organization (CDSCO) public drug alerts -
+[cdscoonline.gov.in](https://cdscoonline.gov.in/CDSCO/Drugs). Every finding links to the document
+that reported it. Data is reproduced for public information, unaltered, and is not an official
+record; the CDSCO document is authoritative.
+
+**How this is built:** CDSCO's monthly alerts are downloaded, extracted, cleaned and checked by an
+automated pipeline, then rebuilt into the tables these charts read. The *Data last updated* panel
+shows when that last ran and whether it passed its quality checks."""
+
 
 # --- datasets and metrics ------------------------------------------------------------------------
 
@@ -272,6 +288,34 @@ def ensure_dashboard(
         superset.put(f"/api/v1/chart/{chart_id}", {"dashboards": sorted(memberships)})
 
     return dashboard
+
+
+def ensure_freshness_chart(superset: Superset, datasets: dict[str, int]) -> tuple[str, int]:
+    """The "Data last updated" panel, identical on every dashboard.
+
+    One chart reused on all three rather than three copies: a reader comparing two dashboards must
+    not see two different freshness answers, and `ensure_dashboard` keeps a chart's existing
+    dashboard memberships so the same chart can sit on several.
+    """
+    name = "Data last updated"
+    chart_id = ensure_chart(
+        superset,
+        name,
+        datasets["mart_data_freshness"],
+        "table",
+        {
+            "query_mode": "raw",
+            "all_columns": [
+                "last_updated_on",
+                "days_since_update",
+                "findings_loaded",
+                "source_files_in_the_archive",
+                "quality_gate",
+            ],
+            "row_limit": 1,
+        },
+    )
+    return name, chart_id
 
 
 def dashboard_url(superset: Superset, slug: str) -> str:

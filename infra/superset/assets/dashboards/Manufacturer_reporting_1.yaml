@@ -1,0 +1,338 @@
+dashboard_title: Manufacturer reporting
+description: null
+css: null
+slug: manufacturer-reporting
+certified_by: null
+certification_details: null
+published: true
+uuid: 420a047a-06b9-49d6-b096-c2373ed493e5
+position:
+  DASHBOARD_VERSION_KEY: v2
+  ROOT_ID:
+    type: ROOT
+    id: ROOT_ID
+    children:
+    - GRID_ID
+  GRID_ID:
+    type: GRID
+    id: GRID_ID
+    parents:
+    - ROOT_ID
+    children:
+    - ROW-1
+    - ROW-2
+    - ROW-3
+    - ROW-4
+    - ROW-N-U07M83ZS
+  HEADER_ID:
+    type: HEADER
+    id: HEADER_ID
+    meta:
+      text: Manufacturer reporting
+  MARKDOWN-note:
+    type: MARKDOWN
+    id: MARKDOWN-note
+    children: []
+    meta:
+      code: '## Medicine quality reports from CDSCO alerts
+
+
+        **Not medical advice. Data from CDSCO public alerts.**
+
+
+        Each finding applies to **one specific batch** that a laboratory tested, not
+        to the product or the
+
+        company as a whole. These are *reported* failures from a sample that was never
+        random, so they
+
+        describe **reporting history, not quality**.
+
+
+        **Read the two charts below together.** The number of findings per month has
+        risen, but so has the
+
+        number of laboratories reporting them - across years the two track each other
+        almost exactly
+
+        (r = 0.964). What grew fastest is testing, not failure.
+
+
+        **A ranking is not a list of the worst companies.** 58% of the 2,609 manufacturers
+        in this archive
+
+        appear exactly once. The table is ordered by how many *separate alert months*
+        named a company,
+
+        because a pattern that persists across months means more than a single inspection
+        sweep.
+
+
+        "Not found" never means "guaranteed safe": a batch can be absent because nobody
+        sampled it, or
+
+        because CDSCO published no alert that month (101 of 111 months are covered).
+
+
+        ---
+
+
+        **Source:** Central Drugs Standard Control Organization (CDSCO) public drug
+        alerts -
+
+        [cdscoonline.gov.in](https://cdscoonline.gov.in/CDSCO/Drugs). Every finding
+        links to the document
+
+        that reported it. Data is reproduced for public information, unaltered, and
+        is not an official
+
+        record; the CDSCO document is authoritative.
+
+
+        **How this is built:** CDSCO''s monthly alerts are downloaded, extracted,
+        cleaned and checked by an
+
+        automated pipeline, then rebuilt into the tables these charts read. The *Data
+        last updated* panel
+
+        shows when that last ran and whether it passed its quality checks.'
+      width: 12
+      height: 60
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-1
+  ROW-1:
+    type: ROW
+    id: ROW-1
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    children:
+    - MARKDOWN-note
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-Batches reported:
+    type: CHART
+    id: CHART-Batches reported
+    children: []
+    meta:
+      chartId: 1
+      sliceName: Batches reported
+      width: 6
+      height: 30
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-2
+  CHART-Manufacturers named:
+    type: CHART
+    id: CHART-Manufacturers named
+    children: []
+    meta:
+      chartId: 2
+      sliceName: Manufacturers named
+      width: 6
+      height: 30
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-2
+  ROW-2:
+    type: ROW
+    id: ROW-2
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    children:
+    - CHART-Batches reported
+    - CHART-Manufacturers named
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-Batches reported per alert month:
+    type: CHART
+    id: CHART-Batches reported per alert month
+    children: []
+    meta:
+      chartId: 3
+      sliceName: Batches reported per alert month
+      width: 6
+      height: 60
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-3
+  CHART-Laboratories reporting per alert month:
+    type: CHART
+    id: CHART-Laboratories reporting per alert month
+    children: []
+    meta:
+      chartId: 4
+      sliceName: Laboratories reporting per alert month
+      width: 6
+      height: 60
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-3
+  ROW-3:
+    type: ROW
+    id: ROW-3
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    children:
+    - CHART-Batches reported per alert month
+    - CHART-Laboratories reporting per alert month
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-Most frequently reported manufacturers:
+    type: CHART
+    id: CHART-Most frequently reported manufacturers
+    children: []
+    meta:
+      chartId: 5
+      sliceName: Most frequently reported manufacturers
+      width: 7
+      height: 70
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-4
+  CHART-How many findings each company has:
+    type: CHART
+    id: CHART-How many findings each company has
+    children: []
+    meta:
+      chartId: 6
+      sliceName: How many findings each company has
+      width: 5
+      height: 70
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-4
+  ROW-4:
+    type: ROW
+    id: ROW-4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    children:
+    - CHART-Most frequently reported manufacturers
+    - CHART-How many findings each company has
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  ROW-N-U07M83ZS:
+    children:
+    - CHART-DCX6GMOL
+    - CHART-J92Z9EVX
+    - CHART-8QYOCUBC
+    - CHART-TA85E2R8
+    - CHART-2Y1A64IB
+    - CHART-Y8UE6SMC
+    id: ROW-N-U07M83ZS
+    meta:
+      '0': ROOT_ID
+      background: BACKGROUND_TRANSPARENT
+    type: ROW
+    parents:
+    - ROOT_ID
+    - GRID_ID
+  CHART-DCX6GMOL:
+    children: []
+    id: CHART-DCX6GMOL
+    meta:
+      chartId: 6
+      height: 50
+      sliceName: How many findings each company has
+      uuid: ff96ad77-de5d-4fda-919f-06de8b3eb5f7
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-U07M83ZS
+  CHART-J92Z9EVX:
+    children: []
+    id: CHART-J92Z9EVX
+    meta:
+      chartId: 3
+      height: 50
+      sliceName: Batches reported per alert month
+      uuid: 1fd65275-9b02-43bc-bd74-c6a45252bc52
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-U07M83ZS
+  CHART-8QYOCUBC:
+    children: []
+    id: CHART-8QYOCUBC
+    meta:
+      chartId: 1
+      height: 50
+      sliceName: Batches reported
+      uuid: 4e664bcc-3332-47f0-b068-d7a37c27ca87
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-U07M83ZS
+  CHART-TA85E2R8:
+    children: []
+    id: CHART-TA85E2R8
+    meta:
+      chartId: 5
+      height: 50
+      sliceName: Most frequently reported manufacturers
+      uuid: 41dc6aa5-18c3-48bf-b07e-9514b5aa5bf7
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-U07M83ZS
+  CHART-2Y1A64IB:
+    children: []
+    id: CHART-2Y1A64IB
+    meta:
+      chartId: 4
+      height: 50
+      sliceName: Laboratories reporting per alert month
+      uuid: c3b87e9e-b1c1-48f8-bad1-5c1f44b13451
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-U07M83ZS
+  CHART-Y8UE6SMC:
+    children: []
+    id: CHART-Y8UE6SMC
+    meta:
+      chartId: 2
+      height: 50
+      sliceName: Manufacturers named
+      uuid: b16f2ed4-8a70-4c23-a50c-6564f4bcd0f9
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-U07M83ZS
+metadata:
+  refresh_frequency: 0
+  color_scheme: supersetColors
+  chart_configuration: {}
+  timed_refresh_immune_slices: []
+  expanded_slices: {}
+  label_colors: {}
+  shared_label_colors: []
+  map_label_colors: {}
+  color_scheme_domain: []
+  cross_filters_enabled: true
+theme_uuid: null
+version: 1.0.0

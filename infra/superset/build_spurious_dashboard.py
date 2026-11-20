@@ -28,6 +28,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from dashboards import (  # noqa: E402
+    SOURCE_FOOTER,
     Layout,
     dashboard_url,
     ensure_chart,
@@ -67,7 +68,10 @@ def main() -> None:
     print(f"logged in to Superset at {superset.base_url}")
 
     print("datasets:")
-    dataset = ensure_datasets(superset, ["mart_spurious_report", "mart_monthly_reporting"])
+    dataset = ensure_datasets(
+        superset,
+        ["mart_spurious_report", "mart_monthly_reporting"],
+    )
 
     print("charts:")
     charts = {
@@ -131,7 +135,7 @@ def main() -> None:
     layout = Layout(TITLE)
     # The note comes first and is tall: on this dashboard the explanation matters more than the
     # numbers, and a reader who sees only the charts has been misinformed.
-    layout.row([(layout.markdown("note", NOTE), 12, 64)])
+    layout.row([(layout.markdown("note", NOTE + SOURCE_FOOTER), 12, 64)])
     layout.row(
         [
             (
@@ -161,6 +165,10 @@ def main() -> None:
         ]
     )
     layout.row([(layout.chart("Every spurious finding", charts["Every spurious finding"]), 12, 80)])
+    # TODO (Phase 6 step 5): the "Data last updated" panel is blocked on a corrupt dataset row in
+    # Superset's metadata - gold.mart_data_freshness exists there but its own API returns 404 for
+    # it, so it can neither be found nor re-created. Recorded in PROGRESS.md; the mart itself is
+    # built and tested, and the source note below already points at it.
     ensure_dashboard(superset, TITLE, SLUG, layout, charts)
     print(f"\n{dashboard_url(superset, SLUG)}")
 

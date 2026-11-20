@@ -1,0 +1,285 @@
+dashboard_title: Spurious (counterfeit) reports
+description: null
+css: null
+slug: spurious-reports
+certified_by: null
+certification_details: null
+published: true
+uuid: 0dffa4f3-1eb5-4fdf-9879-f38581730931
+position:
+  DASHBOARD_VERSION_KEY: v2
+  ROOT_ID:
+    type: ROOT
+    id: ROOT_ID
+    children:
+    - GRID_ID
+  GRID_ID:
+    type: GRID
+    id: GRID_ID
+    parents:
+    - ROOT_ID
+    children:
+    - ROW-1
+    - ROW-2
+    - ROW-3
+    - ROW-4
+    - ROW-N-O88KT1T8
+  HEADER_ID:
+    type: HEADER
+    id: HEADER_ID
+    meta:
+      text: Spurious (counterfeit) reports
+  MARKDOWN-note:
+    type: MARKDOWN
+    id: MARKDOWN-note
+    children: []
+    meta:
+      code: '## Packs CDSCO reported as spurious
+
+
+        **Not medical advice. Data from CDSCO public alerts.**
+
+
+        A **spurious** finding means the pack itself was judged fake. This is different
+        from a quality
+
+        failure, where a genuine manufacturer''s batch did not meet a standard.
+
+
+        **The company name printed on a counterfeit pack is the brand that was copied.**
+        That company is
+
+        the victim of the counterfeit, not its maker. Nothing on this page identifies
+        who produced a fake
+
+        pack, because the alerts do not say - so these findings are **never counted
+        against any
+
+        manufacturer**, here or anywhere else in this project.
+
+
+        **How little this is: 77 findings, from 2024-04 onwards, out of 7,126 in the
+        archive.** Spurious
+
+        reporting is recent and sparse - single digits in most months. That makes
+        this a record of *what
+
+        CDSCO published about counterfeits*, not a measure of how much counterfeiting
+        exists. Please do not
+
+        read the shape of the monthly chart as a trend.
+
+
+        Each row below keeps its **batch number**, its **alert month** and a **link
+        to the CDSCO
+
+        document**, so a specific pack can be checked against the original source.
+        "Not found" never means
+
+        "guaranteed safe".
+
+
+        ---
+
+
+        **Source:** Central Drugs Standard Control Organization (CDSCO) public drug
+        alerts -
+
+        [cdscoonline.gov.in](https://cdscoonline.gov.in/CDSCO/Drugs). Every finding
+        links to the document
+
+        that reported it. Data is reproduced for public information, unaltered, and
+        is not an official
+
+        record; the CDSCO document is authoritative.
+
+
+        **How this is built:** CDSCO''s monthly alerts are downloaded, extracted,
+        cleaned and checked by an
+
+        automated pipeline, then rebuilt into the tables these charts read. The *Data
+        last updated* panel
+
+        shows when that last ran and whether it passed its quality checks.'
+      width: 12
+      height: 64
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-1
+  ROW-1:
+    type: ROW
+    id: ROW-1
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    children:
+    - MARKDOWN-note
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-Spurious findings reported:
+    type: CHART
+    id: CHART-Spurious findings reported
+    children: []
+    meta:
+      chartId: 11
+      sliceName: Spurious findings reported
+      width: 6
+      height: 28
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-2
+  CHART-Findings naming a copied brand:
+    type: CHART
+    id: CHART-Findings naming a copied brand
+    children: []
+    meta:
+      chartId: 12
+      sliceName: Findings naming a copied brand
+      width: 6
+      height: 28
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-2
+  ROW-2:
+    type: ROW
+    id: ROW-2
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    children:
+    - CHART-Spurious findings reported
+    - CHART-Findings naming a copied brand
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-Spurious findings per alert month:
+    type: CHART
+    id: CHART-Spurious findings per alert month
+    children: []
+    meta:
+      chartId: 13
+      sliceName: Spurious findings per alert month
+      width: 12
+      height: 50
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-3
+  ROW-3:
+    type: ROW
+    id: ROW-3
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    children:
+    - CHART-Spurious findings per alert month
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-Every spurious finding:
+    type: CHART
+    id: CHART-Every spurious finding
+    children: []
+    meta:
+      chartId: 14
+      sliceName: Every spurious finding
+      width: 12
+      height: 80
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-4
+  ROW-4:
+    type: ROW
+    id: ROW-4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    children:
+    - CHART-Every spurious finding
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  ROW-N-O88KT1T8:
+    children:
+    - CHART-9SC5GO6V
+    - CHART-ZM34R53Y
+    - CHART-Q4WQ51TZ
+    - CHART-1OSRGU3G
+    id: ROW-N-O88KT1T8
+    meta:
+      '0': ROOT_ID
+      background: BACKGROUND_TRANSPARENT
+    type: ROW
+    parents:
+    - ROOT_ID
+    - GRID_ID
+  CHART-9SC5GO6V:
+    children: []
+    id: CHART-9SC5GO6V
+    meta:
+      chartId: 14
+      height: 50
+      sliceName: Every spurious finding
+      uuid: aff6f071-5ac4-4577-9458-812e26999d12
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-O88KT1T8
+  CHART-ZM34R53Y:
+    children: []
+    id: CHART-ZM34R53Y
+    meta:
+      chartId: 13
+      height: 50
+      sliceName: Spurious findings per alert month
+      uuid: 27cce6b9-6ebc-4c35-80c9-9e37c246c8b0
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-O88KT1T8
+  CHART-Q4WQ51TZ:
+    children: []
+    id: CHART-Q4WQ51TZ
+    meta:
+      chartId: 11
+      height: 50
+      sliceName: Spurious findings reported
+      uuid: 240f90d7-e444-4f19-8319-f44b5571bbaf
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-O88KT1T8
+  CHART-1OSRGU3G:
+    children: []
+    id: CHART-1OSRGU3G
+    meta:
+      chartId: 12
+      height: 50
+      sliceName: Findings naming a copied brand
+      uuid: 558945d2-37b6-4516-96d0-3ed2b2c6fa92
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-O88KT1T8
+metadata:
+  refresh_frequency: 0
+  color_scheme: supersetColors
+  chart_configuration: {}
+  timed_refresh_immune_slices: []
+  expanded_slices: {}
+  label_colors: {}
+  shared_label_colors: []
+  map_label_colors: {}
+  color_scheme_domain: []
+  cross_filters_enabled: true
+theme_uuid: null
+version: 1.0.0

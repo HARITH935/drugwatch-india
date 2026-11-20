@@ -293,3 +293,18 @@ models:
       - name: source_url
         data_tests: [not_null]
 
+  - name: mart_data_freshness
+    description: >
+      One row: when the warehouse was last rebuilt by a run that *passed its checks*, and what that
+      run loaded. Reads Phase 5's run log through a dbt source, so the public dashboards can show
+      their own freshness without Superset being granted access to the `ops` schema.
+      The latest *successful* run, not the latest run: a failed run leaves the previous data in
+      place, so its timestamp would overstate freshness.
+    columns:
+      - name: last_updated_at
+        data_tests: [not_null]
+      - name: days_since_update
+        description: "CDSCO publishes monthly; over ~45 days means the pipeline has stopped."
+      - name: quality_gate
+        description: "The Great Expectations task's state on that run."
+

@@ -1,0 +1,243 @@
+dashboard_title: Where medicines are made and tested
+description: null
+css: null
+slug: states
+certified_by: null
+certification_details: null
+published: true
+uuid: c78ecc5a-eda7-4323-ae83-7290cf6d2790
+position:
+  DASHBOARD_VERSION_KEY: v2
+  ROOT_ID:
+    type: ROOT
+    id: ROOT_ID
+    children:
+    - GRID_ID
+  GRID_ID:
+    type: GRID
+    id: GRID_ID
+    parents:
+    - ROOT_ID
+    children:
+    - ROW-1
+    - ROW-2
+    - ROW-3
+    - ROW-4
+    - ROW-N-RN1A9I7J
+  HEADER_ID:
+    type: HEADER
+    id: HEADER_ID
+    meta:
+      text: Where medicines are made and tested
+  MARKDOWN-note:
+    type: MARKDOWN
+    id: MARKDOWN-note
+    children: []
+    meta:
+      code: "## Two different questions about states\n\n**Not medical advice. Data\
+        \ from CDSCO public alerts.**\n\nA finding has two states attached, and they\
+        \ are **not the same thing**:\n\n- **Made here** - the state the manufacturer\
+        \ is in. This says something about where a flagged batch\n  came from.\n-\
+        \ **Tested here** - the state of the laboratory that tested it. This says\
+        \ where the *laboratories*\n  are. CDSCO's central laboratories draw samples\
+        \ from the whole country.\n\n**In 92.7% of findings where both are known,\
+        \ they are different states.** West Bengal tests\n1,758 findings and makes\
+        \ 103; Himachal Pradesh makes 2,147 and tests 104.\n\nSo the two charts below\
+        \ are kept apart, and **their numbers must never be added together** - that\n\
+        would double-count the few findings where maker and laboratory share a state,\
+        \ and misrepresent\nevery other one. If you want \"what did this state's own\
+        \ laboratories find?\", use the\n*tested by a state laboratory* column in\
+        \ the table, which is much smaller than the headline.\n\nThere is **no map**\
+        \ here. India's boundaries are legally sensitive to depict, and a bar chart\n\
+        carries the same information without making a territorial claim. 603 of 2,609\
+        \ manufacturers have no\nresolvable state at all, so they appear in no bar\
+        \ on this page.\n\n---\n\n**Source:** Central Drugs Standard Control Organization\
+        \ (CDSCO) public drug alerts -\n[cdscoonline.gov.in](https://cdscoonline.gov.in/CDSCO/Drugs).\
+        \ Every finding links to the document\nthat reported it. Data is reproduced\
+        \ for public information, unaltered, and is not an official\nrecord; the CDSCO\
+        \ document is authoritative.\n\n**How this is built:** CDSCO's monthly alerts\
+        \ are downloaded, extracted, cleaned and checked by an\nautomated pipeline,\
+        \ then rebuilt into the tables these charts read. The *Data last updated*\
+        \ panel\nshows when that last ran and whether it passed its quality checks."
+      width: 12
+      height: 62
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-1
+  ROW-1:
+    type: ROW
+    id: ROW-1
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    children:
+    - MARKDOWN-note
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-Findings tested in a different state from the maker:
+    type: CHART
+    id: CHART-Findings tested in a different state from the maker
+    children: []
+    meta:
+      chartId: 7
+      sliceName: Findings tested in a different state from the maker
+      width: 12
+      height: 28
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-2
+  ROW-2:
+    type: ROW
+    id: ROW-2
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    children:
+    - CHART-Findings tested in a different state from the maker
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-Batches made in each state:
+    type: CHART
+    id: CHART-Batches made in each state
+    children: []
+    meta:
+      chartId: 8
+      sliceName: Batches made in each state
+      width: 6
+      height: 60
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-3
+  CHART-Batches tested in each state:
+    type: CHART
+    id: CHART-Batches tested in each state
+    children: []
+    meta:
+      chartId: 9
+      sliceName: Batches tested in each state
+      width: 6
+      height: 60
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-3
+  ROW-3:
+    type: ROW
+    id: ROW-3
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    children:
+    - CHART-Batches made in each state
+    - CHART-Batches tested in each state
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-Made here, tested here, side by side:
+    type: CHART
+    id: CHART-Made here, tested here, side by side
+    children: []
+    meta:
+      chartId: 10
+      sliceName: Made here, tested here, side by side
+      width: 12
+      height: 75
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-4
+  ROW-4:
+    type: ROW
+    id: ROW-4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    children:
+    - CHART-Made here, tested here, side by side
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  ROW-N-RN1A9I7J:
+    children:
+    - CHART-57FLR6FW
+    - CHART-3UMLWPMB
+    - CHART-CZKF3Y3B
+    - CHART-QI8JM6Z2
+    id: ROW-N-RN1A9I7J
+    meta:
+      '0': ROOT_ID
+      background: BACKGROUND_TRANSPARENT
+    type: ROW
+    parents:
+    - ROOT_ID
+    - GRID_ID
+  CHART-57FLR6FW:
+    children: []
+    id: CHART-57FLR6FW
+    meta:
+      chartId: 8
+      height: 50
+      sliceName: Batches made in each state
+      uuid: d4d8cbd8-2fb1-4696-9912-789fc749c4f3
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-RN1A9I7J
+  CHART-3UMLWPMB:
+    children: []
+    id: CHART-3UMLWPMB
+    meta:
+      chartId: 9
+      height: 50
+      sliceName: Batches tested in each state
+      uuid: d436fda1-d478-4f08-9297-656680a258c8
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-RN1A9I7J
+  CHART-CZKF3Y3B:
+    children: []
+    id: CHART-CZKF3Y3B
+    meta:
+      chartId: 7
+      height: 50
+      sliceName: Findings tested in a different state from the maker
+      uuid: 7e225f3e-aca0-4ec7-ab9c-d110e14bb01e
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-RN1A9I7J
+  CHART-QI8JM6Z2:
+    children: []
+    id: CHART-QI8JM6Z2
+    meta:
+      chartId: 10
+      height: 50
+      sliceName: Made here, tested here, side by side
+      uuid: b0636f2f-80b4-46e5-986f-266f17c6e37f
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-RN1A9I7J
+metadata:
+  refresh_frequency: 0
+  color_scheme: supersetColors
+  chart_configuration: {}
+  timed_refresh_immune_slices: []
+  expanded_slices: {}
+  label_colors: {}
+  shared_label_colors: []
+  map_label_colors: {}
+  color_scheme_domain: []
+  cross_filters_enabled: true
+theme_uuid: null
+version: 1.0.0

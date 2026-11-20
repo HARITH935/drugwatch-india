@@ -1,0 +1,32 @@
+slice_name: Batches reported
+description: null
+certified_by: null
+certification_details: null
+viz_type: big_number_total
+params:
+  metric:
+    expressionType: SIMPLE
+    column:
+      column_name: findings
+    aggregate: SUM
+    label: NSQ / spurious batches reported
+    optionName: metric_findings_sum
+  subheader: across 101 published alert months - reporting history, not quality
+  viz_type: big_number_total
+  datasource: 1__table
+query_context: '{"datasource": {"id": 1, "type": "table"}, "force": false, "queries":
+  [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
+  "annotation_layers": [], "series_limit": 0, "order_desc": true, "url_params": {},
+  "custom_params": {}, "custom_form_data": {}, "row_limit": 50000, "metrics": [{"expressionType":
+  "SIMPLE", "column": {"column_name": "findings"}, "aggregate": "SUM", "label": "NSQ
+  / spurious batches reported", "optionName": "metric_findings_sum"}], "columns":
+  [], "orderby": [], "post_processing": []}], "form_data": {"metric": {"expressionType":
+  "SIMPLE", "column": {"column_name": "findings"}, "aggregate": "SUM", "label": "NSQ
+  / spurious batches reported", "optionName": "metric_findings_sum"}, "subheader":
+  "across 101 published alert months - reporting history, not quality", "viz_type":
+  "big_number_total", "datasource": "1__table"}, "result_format": "json", "result_type":
+  "full"}'
+cache_timeout: null
+uuid: 4e664bcc-3332-47f0-b068-d7a37c27ca87
+version: 1.0.0
+dataset_uuid: 29f9b16a-0c1d-4e80-a949-f0db9ace1499

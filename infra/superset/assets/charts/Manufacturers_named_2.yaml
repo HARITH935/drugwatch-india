@@ -1,0 +1,31 @@
+slice_name: Manufacturers named
+description: null
+certified_by: null
+certification_details: null
+viz_type: big_number_total
+params:
+  metric:
+    expressionType: SIMPLE
+    column:
+      column_name: manufacturer_id
+    aggregate: COUNT_DISTINCT
+    label: Manufacturers named
+    optionName: metric_manufacturer_id_count_distinct
+  subheader: 58% of them appear exactly once
+  viz_type: big_number_total
+  datasource: 4__table
+query_context: '{"datasource": {"id": 4, "type": "table"}, "force": false, "queries":
+  [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
+  "annotation_layers": [], "series_limit": 0, "order_desc": true, "url_params": {},
+  "custom_params": {}, "custom_form_data": {}, "row_limit": 50000, "metrics": [{"expressionType":
+  "SIMPLE", "column": {"column_name": "manufacturer_id"}, "aggregate": "COUNT_DISTINCT",
+  "label": "Manufacturers named", "optionName": "metric_manufacturer_id_count_distinct"}],
+  "columns": [], "orderby": [], "post_processing": []}], "form_data": {"metric": {"expressionType":
+  "SIMPLE", "column": {"column_name": "manufacturer_id"}, "aggregate": "COUNT_DISTINCT",
+  "label": "Manufacturers named", "optionName": "metric_manufacturer_id_count_distinct"},
+  "subheader": "58% of them appear exactly once", "viz_type": "big_number_total",
+  "datasource": "4__table"}, "result_format": "json", "result_type": "full"}'
+cache_timeout: null
+uuid: b16f2ed4-8a70-4c23-a50c-6564f4bcd0f9
+version: 1.0.0
+dataset_uuid: e0a97abe-9fe8-467c-962a-c0f53c0a0a00
