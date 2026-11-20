@@ -1,0 +1,29 @@
+slice_name: Data last updated
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  query_mode: raw
+  all_columns:
+  - last_updated_on
+  - days_since_update
+  - findings_loaded
+  - source_files_in_the_archive
+  - quality_gate
+  row_limit: 1
+  viz_type: table
+  datasource: 9__table
+query_context: '{"datasource": {"id": 9, "type": "table"}, "force": false, "queries":
+  [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
+  "annotation_layers": [], "series_limit": 0, "order_desc": true, "url_params": {},
+  "custom_params": {}, "custom_form_data": {}, "row_limit": 1, "columns": ["last_updated_on",
+  "days_since_update", "findings_loaded", "source_files_in_the_archive", "quality_gate"],
+  "metrics": null, "orderby": [], "post_processing": []}], "form_data": {"query_mode":
+  "raw", "all_columns": ["last_updated_on", "days_since_update", "findings_loaded",
+  "source_files_in_the_archive", "quality_gate"], "row_limit": 1, "viz_type": "table",
+  "datasource": "9__table"}, "result_format": "json", "result_type": "full"}'
+cache_timeout: null
+uuid: f46e70de-e1bc-41a9-ae9c-7056a1ac5e0b
+version: 1.0.0
+dataset_uuid: 79c2b6ba-fab7-4539-8278-3ef3dac63d5a

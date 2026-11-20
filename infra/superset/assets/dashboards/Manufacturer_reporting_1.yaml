@@ -23,7 +23,8 @@ position:
     - ROW-2
     - ROW-3
     - ROW-4
-    - ROW-N-U07M83ZS
+    - ROW-5
+    - ROW-N-LRJH3LC2
   HEADER_ID:
     type: HEADER
     id: HEADER_ID
@@ -223,15 +224,39 @@ position:
     - CHART-How many findings each company has
     meta:
       background: BACKGROUND_TRANSPARENT
-  ROW-N-U07M83ZS:
+  CHART-Data last updated:
+    type: CHART
+    id: CHART-Data last updated
+    children: []
+    meta:
+      chartId: 16
+      sliceName: Data last updated
+      width: 12
+      height: 22
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-5
+  ROW-5:
+    type: ROW
+    id: ROW-5
+    parents:
+    - ROOT_ID
+    - GRID_ID
     children:
-    - CHART-DCX6GMOL
-    - CHART-J92Z9EVX
-    - CHART-8QYOCUBC
-    - CHART-TA85E2R8
-    - CHART-2Y1A64IB
-    - CHART-Y8UE6SMC
-    id: ROW-N-U07M83ZS
+    - CHART-Data last updated
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  ROW-N-LRJH3LC2:
+    children:
+    - CHART-DVHLRB7M
+    - CHART-4N7SYXD3
+    - CHART-U9AMTDZ1
+    - CHART-ZR0PDMYG
+    - CHART-THCOPDIG
+    - CHART-ORZ10YN8
+    - CHART-QZKV4W7L
+    id: ROW-N-LRJH3LC2
     meta:
       '0': ROOT_ID
       background: BACKGROUND_TRANSPARENT
@@ -239,23 +264,9 @@ position:
     parents:
     - ROOT_ID
     - GRID_ID
-  CHART-DCX6GMOL:
+  CHART-DVHLRB7M:
     children: []
-    id: CHART-DCX6GMOL
-    meta:
-      chartId: 6
-      height: 50
-      sliceName: How many findings each company has
-      uuid: ff96ad77-de5d-4fda-919f-06de8b3eb5f7
-      width: 4
-    type: CHART
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-N-U07M83ZS
-  CHART-J92Z9EVX:
-    children: []
-    id: CHART-J92Z9EVX
+    id: CHART-DVHLRB7M
     meta:
       chartId: 3
       height: 50
@@ -266,24 +277,10 @@ position:
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-N-U07M83ZS
-  CHART-8QYOCUBC:
+    - ROW-N-LRJH3LC2
+  CHART-4N7SYXD3:
     children: []
-    id: CHART-8QYOCUBC
-    meta:
-      chartId: 1
-      height: 50
-      sliceName: Batches reported
-      uuid: 4e664bcc-3332-47f0-b068-d7a37c27ca87
-      width: 4
-    type: CHART
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-N-U07M83ZS
-  CHART-TA85E2R8:
-    children: []
-    id: CHART-TA85E2R8
+    id: CHART-4N7SYXD3
     meta:
       chartId: 5
       height: 50
@@ -294,10 +291,52 @@ position:
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-N-U07M83ZS
-  CHART-2Y1A64IB:
+    - ROW-N-LRJH3LC2
+  CHART-U9AMTDZ1:
     children: []
-    id: CHART-2Y1A64IB
+    id: CHART-U9AMTDZ1
+    meta:
+      chartId: 1
+      height: 50
+      sliceName: Batches reported
+      uuid: 4e664bcc-3332-47f0-b068-d7a37c27ca87
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-LRJH3LC2
+  CHART-ZR0PDMYG:
+    children: []
+    id: CHART-ZR0PDMYG
+    meta:
+      chartId: 6
+      height: 50
+      sliceName: How many findings each company has
+      uuid: ff96ad77-de5d-4fda-919f-06de8b3eb5f7
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-LRJH3LC2
+  CHART-THCOPDIG:
+    children: []
+    id: CHART-THCOPDIG
+    meta:
+      chartId: 16
+      height: 50
+      sliceName: Data last updated
+      uuid: f46e70de-e1bc-41a9-ae9c-7056a1ac5e0b
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-LRJH3LC2
+  CHART-ORZ10YN8:
+    children: []
+    id: CHART-ORZ10YN8
     meta:
       chartId: 4
       height: 50
@@ -308,10 +347,10 @@ position:
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-N-U07M83ZS
-  CHART-Y8UE6SMC:
+    - ROW-N-LRJH3LC2
+  CHART-QZKV4W7L:
     children: []
-    id: CHART-Y8UE6SMC
+    id: CHART-QZKV4W7L
     meta:
       chartId: 2
       height: 50
@@ -322,7 +361,7 @@ position:
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-N-U07M83ZS
+    - ROW-N-LRJH3LC2
 metadata:
   refresh_frequency: 0
   color_scheme: supersetColors

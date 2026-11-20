@@ -23,7 +23,8 @@ position:
     - ROW-2
     - ROW-3
     - ROW-4
-    - ROW-N-O88KT1T8
+    - ROW-5
+    - ROW-N-EBYL8NL2
   HEADER_ID:
     type: HEADER
     id: HEADER_ID
@@ -200,13 +201,37 @@ position:
     - CHART-Every spurious finding
     meta:
       background: BACKGROUND_TRANSPARENT
-  ROW-N-O88KT1T8:
+  CHART-Data last updated:
+    type: CHART
+    id: CHART-Data last updated
+    children: []
+    meta:
+      chartId: 16
+      sliceName: Data last updated
+      width: 12
+      height: 22
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-5
+  ROW-5:
+    type: ROW
+    id: ROW-5
+    parents:
+    - ROOT_ID
+    - GRID_ID
     children:
-    - CHART-9SC5GO6V
-    - CHART-ZM34R53Y
-    - CHART-Q4WQ51TZ
-    - CHART-1OSRGU3G
-    id: ROW-N-O88KT1T8
+    - CHART-Data last updated
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  ROW-N-EBYL8NL2:
+    children:
+    - CHART-ROPCPBR0
+    - CHART-C9KDLF5T
+    - CHART-9B9Z57MW
+    - CHART-XTR4OBG1
+    - CHART-1U7W1T5W
+    id: ROW-N-EBYL8NL2
     meta:
       '0': ROOT_ID
       background: BACKGROUND_TRANSPARENT
@@ -214,51 +239,9 @@ position:
     parents:
     - ROOT_ID
     - GRID_ID
-  CHART-9SC5GO6V:
+  CHART-ROPCPBR0:
     children: []
-    id: CHART-9SC5GO6V
-    meta:
-      chartId: 14
-      height: 50
-      sliceName: Every spurious finding
-      uuid: aff6f071-5ac4-4577-9458-812e26999d12
-      width: 4
-    type: CHART
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-N-O88KT1T8
-  CHART-ZM34R53Y:
-    children: []
-    id: CHART-ZM34R53Y
-    meta:
-      chartId: 13
-      height: 50
-      sliceName: Spurious findings per alert month
-      uuid: 27cce6b9-6ebc-4c35-80c9-9e37c246c8b0
-      width: 4
-    type: CHART
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-N-O88KT1T8
-  CHART-Q4WQ51TZ:
-    children: []
-    id: CHART-Q4WQ51TZ
-    meta:
-      chartId: 11
-      height: 50
-      sliceName: Spurious findings reported
-      uuid: 240f90d7-e444-4f19-8319-f44b5571bbaf
-      width: 4
-    type: CHART
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-N-O88KT1T8
-  CHART-1OSRGU3G:
-    children: []
-    id: CHART-1OSRGU3G
+    id: CHART-ROPCPBR0
     meta:
       chartId: 12
       height: 50
@@ -269,7 +252,63 @@ position:
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-N-O88KT1T8
+    - ROW-N-EBYL8NL2
+  CHART-C9KDLF5T:
+    children: []
+    id: CHART-C9KDLF5T
+    meta:
+      chartId: 14
+      height: 50
+      sliceName: Every spurious finding
+      uuid: aff6f071-5ac4-4577-9458-812e26999d12
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-EBYL8NL2
+  CHART-9B9Z57MW:
+    children: []
+    id: CHART-9B9Z57MW
+    meta:
+      chartId: 11
+      height: 50
+      sliceName: Spurious findings reported
+      uuid: 240f90d7-e444-4f19-8319-f44b5571bbaf
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-EBYL8NL2
+  CHART-XTR4OBG1:
+    children: []
+    id: CHART-XTR4OBG1
+    meta:
+      chartId: 16
+      height: 50
+      sliceName: Data last updated
+      uuid: f46e70de-e1bc-41a9-ae9c-7056a1ac5e0b
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-EBYL8NL2
+  CHART-1U7W1T5W:
+    children: []
+    id: CHART-1U7W1T5W
+    meta:
+      chartId: 13
+      height: 50
+      sliceName: Spurious findings per alert month
+      uuid: 27cce6b9-6ebc-4c35-80c9-9e37c246c8b0
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-EBYL8NL2
 metadata:
   refresh_frequency: 0
   color_scheme: supersetColors

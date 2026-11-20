@@ -14,7 +14,7 @@ import json
 import urllib.parse
 from typing import Any
 
-from superset_api import Superset
+from superset_api import Superset, SupersetError
 
 DATABASE_NAME = "DrugWatch gold"
 SCHEMA = "gold"
@@ -47,13 +47,34 @@ def database_id(superset: Superset) -> int:
 
 
 def ensure_dataset(superset: Superset, database: int, table: str) -> int:
-    """The dataset id for a gold table, creating it if Superset does not know it yet."""
+    """The dataset id for a gold table, creating it if Superset does not know it yet.
+
+    The error path here exists because of a genuinely confusing Superset behaviour, found the hard
+    way: **its dataset and chart list APIs filter by datasource access, and an admin's
+    `all_datasource_access` does not cover a dataset that no role holds a grant for.** A dataset
+    created but never granted is invisible - `GET /api/v1/dataset/{id}` returns 404 and it is
+    missing from the list - while the uniqueness check still sees it, so creating it again fails
+    with "already exists". Cache flushes, container restarts and re-imports change nothing.
+
+    So a raw 422 here is not a bug in this script: it means the dataset exists and needs its
+    permission. Rather than let that surface as a traceback, it says what to run.
+    """
     existing = superset.find_id("dataset", "table_name", table)
     if existing:
         return existing
-    answer = superset.post(
-        "/api/v1/dataset/", {"database": database, "schema": SCHEMA, "table_name": table}
-    )
+    try:
+        answer = superset.post(
+            "/api/v1/dataset/", {"database": database, "schema": SCHEMA, "table_name": table}
+        )
+    except SupersetError as error:
+        if "already exists" not in str(error):
+            raise
+        raise SystemExit(
+            f"\nSuperset has a dataset for '{table}' that its API cannot see, because no role holds"
+            f" its datasource_access permission.\nGrant it and re-run this script:\n\n"
+            "    docker compose exec -T superset python - <"
+            " infra/superset/configure_public_role.py\n"
+        ) from error
     print(f"  dataset created: {table} (id {answer['id']})")
     return answer["id"]
 

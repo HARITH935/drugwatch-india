@@ -241,7 +241,8 @@ set -a && . ./.env && set +a && python3 infra/superset/build_states_dashboard.py
 set -a && . ./.env && set +a && python3 infra/superset/build_spurious_dashboard.py
 set -a && . ./.env && set +a && python3 infra/superset/verify_charts.py  # every chart must return rows
 # Anonymous (public) access: a minimal hand-built role, NOT PUBLIC_ROLE_LIKE=Gamma (which would let
-# strangers edit dashboards). Re-run after adding a dataset, so the public can see it.
+# strangers edit dashboards). MUST be re-run after adding a dataset: Superset's dataset and chart
+# list APIs filter by datasource_access, so an ungranted dataset is invisible even to the admin.
 docker compose exec -T superset python - < infra/superset/configure_public_role.py
 python3 infra/superset/public_access_test.py   # what a logged-out stranger can and cannot do
 # Dashboards as code: export to infra/superset/assets/ (refuses if a real password is in the bundle)

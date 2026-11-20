@@ -34,6 +34,7 @@ from dashboards import (  # noqa: E402
     ensure_chart,
     ensure_dashboard,
     ensure_datasets,
+    ensure_freshness_chart,
     metric,
 )
 from superset_api import from_env  # noqa: E402
@@ -70,7 +71,7 @@ def main() -> None:
     print("datasets:")
     dataset = ensure_datasets(
         superset,
-        ["mart_spurious_report", "mart_monthly_reporting"],
+        ["mart_spurious_report", "mart_monthly_reporting", "mart_data_freshness"],
     )
 
     print("charts:")
@@ -165,10 +166,12 @@ def main() -> None:
         ]
     )
     layout.row([(layout.chart("Every spurious finding", charts["Every spurious finding"]), 12, 80)])
-    # TODO (Phase 6 step 5): the "Data last updated" panel is blocked on a corrupt dataset row in
-    # Superset's metadata - gold.mart_data_freshness exists there but its own API returns 404 for
-    # it, so it can neither be found nor re-created. Recorded in PROGRESS.md; the mart itself is
-    # built and tested, and the source note below already points at it.
+    # Identical on every dashboard: a reader comparing two pages must not see two different
+    # answers to "how old is this?".
+    freshness_name, freshness_id = ensure_freshness_chart(superset, dataset)
+    charts[freshness_name] = freshness_id
+    layout.row([(layout.chart(freshness_name, freshness_id), 12, 22)])
+
     ensure_dashboard(superset, TITLE, SLUG, layout, charts)
     print(f"\n{dashboard_url(superset, SLUG)}")
 
