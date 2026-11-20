@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 7 — Data Science. The manufacturer risk score.
-**Next:** step 2 — the feature matrix, plus decision D's drug-class shares and testing-volume feature.
+**Next:** step 3 — the three baselines (the plan's two, plus the 0.687 count ranking).
 
 ---
 
@@ -1814,7 +1814,47 @@ score with per-manufacturer explanations.
       the embargo were deleted, had they been written against dates. Plus two integration tests
       pinning the protocol's shape to the live mart, so a rebuilt mart that shifts the test window
       fails here rather than in a model comparison months later.
-- [ ] Step 2 — the feature matrix, plus decision D's two additions
+- [x] **Step 2 — the feature matrix: 17 features to 28** (2026-11-20)
+    - **Decision D's drug-class shares, now that Phase 6 made them possible.** Plan §12 asked for
+      "share of reports by drug class"; Phase 4 left it out because nothing classified a medicine.
+      ADR 0014's vocabulary unblocked it. Shares of class **mentions**, so they do not sum to 1 —
+      a combination product belongs to two to four classes — the same contract as the failure
+      categories. Only the **seven classes above 5%** of the archive get a column, plus
+      `unclassified_share_12m`: a share of a 2%-class over one company's 12-month window is almost
+      always exactly 0 or exactly 1, which is noise with a column name. `distinct_drug_classes_12m`
+      is carried instead for the thin tail, because it does not fall apart on small windows.
+    - 🔍 **Decision D's other feature was changed by measuring it, and this is the interesting
+      part.** I had proposed "how much CDSCO tested overall in this window", so the model could
+      tell a company getting worse from the archive growing. Measured: the archive's trailing
+      12-month volume correlates **0.855 with calendar time** (2 findings in the earliest window,
+      2,517 in the largest). That is not a feature, it is a clock — and because the test period is
+      strictly later than training, "recent means positive" would score well for the wrong reason
+      and would surface in SHAP as a real risk factor. Tree models cannot extrapolate, so it would
+      not even fail loudly; it would just saturate. So it enters **only as a ratio**,
+      `share_of_archive_reports_12m`, which keeps the normalisation and drops the timeline:
+      **0.855 → -0.180**.
+    - **A test now rejects any feature correlating above 0.7 with the cutoff**, and pins the one
+      feature in between so a new drifter cannot appear unnoticed. That found a **pre-existing**
+      Phase 4 feature: `central_lab_share_12m` at **-0.534**. Real, not a bug — state drug-testing
+      laboratories grew relative to CDSCO's central ones across the archive, so the central share
+      of anybody's reports falls over time. Kept, because it is still genuinely about which
+      laboratories tested *this company's* products, with a model-card note to check SHAP for
+      over-reliance on it.
+    - 🐛 **A bug I wrote, and the test class that now catches it.** The unclassified share was
+      `filter (where drug_class = 'Unclassified')`, which counted **zero of 1,382 unclassified
+      findings** — because `dim_drug.drug_classes` holds an **empty array** when the vocabulary
+      matches nothing, deliberately (ADR 0014), not the string. The column built, every range
+      check passed, and the feature was a constant 0. A constant feature is the worst kind of
+      broken one: the model trains on it happily and SHAP calls it unimportant, which is true and
+      tells nobody it is empty. Now guarded twice — `assert_ml_feature_shares_are_valid` fails on
+      any share that never rises above zero, and a Python test fails on any feature with one
+      distinct value. Correct value: 0.222 average, matching the archive's 19.4%.
+    - 🐛 **And a bug in that new test, worth recording because SQL invites it.** The null-state
+      branch was `(class_mentions_12m > 0) is distinct from (share is not null)`. The counts are
+      NULL — not 0 — when a window holds no findings, and `NULL > 0` is NULL, which
+      `is distinct from false` reports as TRUE. It flagged all **46,296** quiet rows as corrupt
+      data. The mart was right; the test was wrong. `coalesce` added, with the reason in the file.
+    - `dbt build` 94 nodes green, 44 ml tests passing.
 - [ ] Step 3 — three baselines
 - [ ] Step 4 — LightGBM, tuned on validation cutoffs only
 - [ ] Step 5 — evaluation: ROC-AUC, PR-AUC, precision@K per month, calibration, company-level CIs
@@ -2039,3 +2079,7 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-20 | A date-based train/test split leaks here: a training row's label covers the 6 months AFTER its cutoff, so training to 2025-03 shares 5 of the 6 months a 2025-04 test row is scored on. `Fold` refuses to exist without the embargo | `ml/.../splits.py` |
 | 2026-11-20 | 1,071 of 2,242 test-window companies (48%) never appear in training, so every metric must be reported for seen and new companies separately | PROGRESS Phase 7 step 1 |
 | 2026-11-20 | The embargo discards 6,562 labelled rows (9.2%); the figure is printed by `show_protocol` so it stays a decision someone looked at | `drugwatch_ml/show_protocol.py` |
+| 2026-11-20 | The archive's trailing 12-month volume correlates 0.855 with calendar time, so it is a clock, not a feature. It enters only as a ratio (`share_of_archive_reports_12m`, -0.180) | `mart_ml_features.sql` |
+| 2026-11-20 | A test rejects any feature correlating >0.7 with the cutoff; it found `central_lab_share_12m` at -0.534 (state labs grew relative to central ones). Kept as a real company feature, pinned and noted for the model card | `ml/tests/test_features.py` |
+| 2026-11-20 | 🐛 `filter (where drug_class = 'Unclassified')` counted 0 of 1,382 findings: dim_drug stores an EMPTY ARRAY, not that string. A constant feature passes every range check, so two tests now fail on one | `assert_ml_feature_shares_are_valid.sql` |
+| 2026-11-20 | 🐛 `NULL > 0` is NULL and `NULL is distinct from false` is TRUE, so a null-state check flagged all 46,296 quiet rows as corrupt. The test was wrong, not the mart | `assert_ml_feature_shares_are_valid.sql` |

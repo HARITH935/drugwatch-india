@@ -40,6 +40,25 @@ FEATURE_COLUMNS: tuple[str, ...] = (
     "dissolution_share_12m",
     "sterility_share_12m",
     "description_share_12m",
+    # Plan §12's "share of reports by drug class", available since Phase 6's reviewed vocabulary
+    # (ADR 0014). Shares of class MENTIONS, so they do not sum to 1 - a combination product
+    # belongs to two to four classes. Only the seven classes above 5% of the archive get a column;
+    # a share of a 2%-class over one company's 12-month window is almost always exactly 0 or 1.
+    "class_mentions_12m",
+    "distinct_drug_classes_12m",
+    "antibiotic_share_12m",
+    "analgesic_share_12m",
+    "gastrointestinal_share_12m",
+    "vitamin_share_12m",
+    "respiratory_share_12m",
+    "cardiovascular_share_12m",
+    "antihistamine_share_12m",
+    "unclassified_share_12m",
+    # This company's share of everything the archive reported in the window. A ratio, never the
+    # raw archive volume: that correlates 0.855 with calendar time, and since the test period is
+    # strictly later than training, "recent means positive" would score well for the wrong reason
+    # and would read as a real finding in SHAP.
+    "share_of_archive_reports_12m",
 )
 
 # Not features: the keys identify a row, the label is the answer, and `label_window_complete` is

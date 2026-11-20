@@ -248,6 +248,30 @@ models:
         description: >
           Share of category MENTIONS, not of reports: 22.6% of findings name more than one failed
           test (ADR 0009), so these shares do not sum to 1.
+      - name: antibiotic_share_12m
+        description: >
+          Plan §12's "share of reports by drug class", from Phase 6's reviewed vocabulary (ADR
+          0014). Shares of class MENTIONS - a combination product belongs to two to four classes -
+          so these do not sum to 1 either. Only the seven classes above 5% of the archive get a
+          column, plus `unclassified_share_12m`: a share of a 2%-class over one company's
+          12-month window is almost always exactly 0 or exactly 1, which is noise.
+      - name: unclassified_share_12m
+        description: >
+          The share of this company's window with no class at all. Derived from `drug_classes`
+          being an EMPTY ARRAY, not from the string 'Unclassified' - writing it the other way
+          counted zero of 1,382 unclassified findings and produced a constant-zero feature that
+          every range check passed (`assert_ml_feature_shares_are_valid` now catches that).
+      - name: distinct_drug_classes_12m
+        description: >
+          How varied the company's reported range is. Carried instead of share columns for the
+          thin classes, because it does not fall apart on small windows.
+      - name: share_of_archive_reports_12m
+        description: >
+          This company's share of every attributable finding the archive published in the window.
+          A **ratio on purpose**: the raw archive volume correlates 0.855 with calendar time, so
+          giving it to the model would be giving it a clock, and since the test period is strictly
+          later than training, "recent means positive" would score well for the wrong reason. As a
+          ratio it correlates -0.180 with time.
 
   - name: mart_monthly_reporting
     description: >
