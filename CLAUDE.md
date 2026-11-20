@@ -269,6 +269,7 @@ docker compose exec postgres psql -U drugwatch -c "CREATE DATABASE airflow"
 # Reads gold.mart_ml_features ONLY, in a read-only transaction. MLflow tracks every run.
 uv sync                                    # lightgbm, shap, mlflow, scikit-learn
 uv run --env-file ../.env python -m drugwatch_ml.smoke_test  # foundations: gold + MLflow + artifacts
+uv run --env-file ../.env python -m drugwatch_ml.show_protocol  # the train/validate/test folds
 uv run --env-file ../.env pytest           # incl. that the feature list matches the live mart
 # First time only: MLflow's own database and its artifact bucket
 docker compose exec postgres psql -U drugwatch -c "CREATE DATABASE mlflow"

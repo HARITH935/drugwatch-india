@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 7 — Data Science. The manufacturer risk score.
-**Next:** step 1 — the train/validate/test protocol, with the 6-month embargo between train and test.
+**Next:** step 2 — the feature matrix, plus decision D's drug-class shares and testing-volume feature.
 
 ---
 
@@ -1774,7 +1774,46 @@ score with per-manufacturer explanations.
       addressing, so it is baked into the image where it actually applies; and no `ENTRYPOINT`
       with `CMD python3`, so Compose's arguments were being handed to the interpreter.
     - 16 tests passing.
-- [ ] Step 1 — the train/validate/test protocol, with a 6-month embargo between train and test
+- [x] **Step 1 — the train/validate/test protocol, with an embargo** (2026-11-20)
+    - **The leak a normal date split hides, and the reason this step exists.** Every row is a
+      manufacturer at a monthly cutoff; its features use months up to the cutoff, but its label is
+      a fact about the **6 months after** it. So training to 2025-03 and testing from 2025-04
+      shares five of the six months the test is scored on — the model is tested on a future it was
+      partly told about. Splitting on the cutoff date alone looks completely clean and shows
+      nothing. The fix is to purge the cutoffs in between: `Fold` **refuses to exist** if the gap
+      is smaller than the label horizon, and its message names the date to move to, so the guard
+      cannot be forgotten by a caller.
+    - **The protocol**, built backwards from the newest answerable cutoff (2026-03):
+
+      | | train up to | embargo | evaluate |
+      |---|---|---|---|
+      | validate-1 | 2022-10 | 5 months | 2023-04..2023-09 |
+      | validate-2 | 2023-04 | 5 months | 2023-10..2024-03 |
+      | validate-3 | 2023-10 | 5 months | 2024-04..2024-09 |
+      | **test** (once) | **2024-10** | 5 months | **2025-04..2026-03** |
+
+      Rolling origin, oldest first, each fold training on more data than the last — which is what
+      actually happens in production. All three tuning folds end before the test fold's own
+      training cutoff, so nothing that chooses a hyperparameter has seen a month the test is
+      scored on. Same rule CLAUDE.md §5 sets for the LLM eval set: a test set you fit against is a
+      training set with a flattering name.
+    - **The final fit recovers what tuning held back.** After the settings are chosen the model
+      refits on everything up to 2024-10 — 42,722 rows, 1,171 companies, 12.8% positive. Those
+      months were withheld to choose hyperparameters, not because they are tainted, and dropping a
+      year of the most recent data from the final fit would be a self-inflicted handicap.
+    - **The embargo costs 6,562 rows (9.2% of the labelled data), and that number is printed**
+      rather than left as a design detail. Paying it is the point.
+    - 🔍 **Measured, and it changes how step 5 must report: 1,071 of the 2,242 companies in the
+      test set (48%) never appear in training at all.** A company gets cutoff rows only from its
+      first finding onwards, so the test window is nearly half first-timers — 8,018 rows, 14.6%
+      positive, against 16.8% for the 1,171 companies the model trained on. They are still
+      scoreable (their features are their own history), but a single headline metric would average
+      over "a company the model has watched for years" and "one it is seeing for the first time".
+      Step 5 reports both. This is also the concrete form of the limitation for the model card.
+    - 42 tests. The ones that matter assert on **label windows, not dates** — they would pass if
+      the embargo were deleted, had they been written against dates. Plus two integration tests
+      pinning the protocol's shape to the live mart, so a rebuilt mart that shifts the test window
+      fails here rather than in a model comparison months later.
 - [ ] Step 2 — the feature matrix, plus decision D's two additions
 - [ ] Step 3 — three baselines
 - [ ] Step 4 — LightGBM, tuned on validation cutoffs only
@@ -1997,3 +2036,6 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-20 | 44% of manufacturers (1,151 of 2,609) were first reported during the test window and have no rows before their first finding, so the score cannot answer "is this company risky?" - only "will one already in the archive be reported again?" | model card |
 | 2026-11-20 | I expected companies quiet for 24 months to be certain negatives; they are 8.1% positive and supply 557 of 3,534 test positives. They stay in, reported separately | `mart_ml_features` |
 | 2026-11-20 | `log_artifact` reports success even when the server cannot reach its artifact store, so the smoke test reads the artifact back from RustFS byte for byte | `drugwatch_ml/smoke_test.py` |
+| 2026-11-20 | A date-based train/test split leaks here: a training row's label covers the 6 months AFTER its cutoff, so training to 2025-03 shares 5 of the 6 months a 2025-04 test row is scored on. `Fold` refuses to exist without the embargo | `ml/.../splits.py` |
+| 2026-11-20 | 1,071 of 2,242 test-window companies (48%) never appear in training, so every metric must be reported for seen and new companies separately | PROGRESS Phase 7 step 1 |
+| 2026-11-20 | The embargo discards 6,562 labelled rows (9.2%); the figure is printed by `show_protocol` so it stays a decision someone looked at | `drugwatch_ml/show_protocol.py` |
