@@ -2,8 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 6 — Analytics. Approved 2026-11-19. Steps 1-2 done; step 3 in progress (3 dashboards done, 3c blocked on decision B).
-**Next:** step 4 — anonymous read-only access, verified from a logged-out browser. (3c waits on the `drug_class` vocabulary.)
+**Current phase:** Phase 6 — Analytics. Approved 2026-11-19. Steps 1, 2, 4 done; 3 has 3 of 4 dashboards (3c blocked on decision B).
+**Next:** step 5 — source notes, a freshness line from the run log, and the dashboards exported as code. (3c waits on the `drug_class` vocabulary.)
 
 ---
 
@@ -1537,7 +1537,44 @@ Approved 2026-11-19. Plan: `DRUGWATCH_PHASES.md` §9 Phase 6. Goal: public, read
           green including a `not_null` test on `source_url`, so a finding can never appear without the
           document that reports it.
         - **All 14 charts across the three dashboards return data.**
-- [ ] Step 4 — anonymous read-only access, verified logged out
+- [x] **Step 4 — anonymous read-only access** (2026-11-20)
+      16 expectations, all holding (`infra/superset/public_access_test.py`, exit 0). An anonymous
+      visitor can open all three dashboards, run every chart's query and change a filter; and cannot
+      create a chart, rename or delete a dashboard, run SQL, list database connections, read the role
+      configuration, list users, or create a dataset.
+    - **`PUBLIC_ROLE_LIKE = "Gamma"` — the shortcut Superset's own docs and most tutorials reach for —
+      was rejected after reading what Gamma actually grants on this instance.** Checked, not assumed, it
+      includes `can_write on Chart`, `can_write on Dashboard`, `can_delete_embedded on Dashboard`,
+      `can_write on Theme` and `can_add`/`can_edit`/`can_delete on UserRegistrationsRestAPI`. Copying it
+      into the public role would let **any stranger on the internet create, edit and delete the
+      dashboards, and register users.** For the one service Phase 12 exposes, the public role is built
+      from nothing instead: **21 permissions, each justified in
+      `infra/superset/configure_public_role.py`**, and the refusals are listed in that file too so the
+      decision is on the record rather than implied by absence.
+    - **Datasource access is granted per dataset, not as "all datasources".** The seven gold datasets are
+      named individually, so a dataset added later is invisible to the public until someone grants it —
+      the script prints what it granted, and is idempotent (it *removes* anything not on the list, so a
+      permission added by hand in the UI does not survive).
+    - **The uncomfortable finding, stated rather than hidden: "filters working" requires a write
+      permission.** Superset stores a visitor's filter selections server-side and returns a key, so
+      `can_write on DashboardFilterStateRestApi` is needed for step 4's done-when to be true at all. It
+      writes only transient state for that visitor and cannot touch a chart, a dashboard or any data —
+      and it is listed as an explicit exception rather than waved through inside a bundle.
+    - **My test lied before Superset did, twice over:**
+      1. It reported `can_read on ChartDataRestApi` as a needed permission. No such permission exists in
+         this build — the chart-data endpoint is guarded by `can_read on Chart`. The script printed it as
+         **NOT FOUND** instead of skipping it silently, which is how it was caught.
+      2. It claimed a stranger could **list users** (HTTP 200). urllib was *following* Flask-AppBuilder's
+         redirect to `/login/` and reading the login page as success. The endpoint was always protected;
+         the test was wrong. It no longer follows redirects, so "you must log in" surfaces as the 302 it
+         is. Same lesson as the bar-order correction: a green check is only as good as what it measures.
+    - **Checked that routine setup does not undo it:** `superset init` syncs role definitions, so it was
+      run again afterwards — the Public role still had exactly 21 permissions, so a future
+      `superset-init` cannot quietly reopen the instance.
+    - ⚠️ **"Publicly" still means on this machine.** `docs/permissions.md` requires CDSCO permission
+      before this data appears on a live site, and **neither permission email has been sent**. Phase 12
+      must also enable `TALISMAN_ENABLED` with a Content Security Policy and change the admin password,
+      which is currently `admin`.
 - [ ] Step 5 — disclaimers, source notes, freshness line, and dashboards exported as code
 
 **Done when:** dashboards are viewable publicly with filters working.
@@ -1730,3 +1767,8 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-19 | The spurious mart carries NO manufacturer_id and names the copied brand `name_printed_on_the_pack`, so the ethics rule is enforced by the schema rather than by wording: verified 0 columns mention a manufacturer | `dbt/models/marts/mart_spurious_report.sql` |
 | 2026-11-19 | The spurious dashboard states its own scale (77 of 7,126 findings, 2024-04 onwards) and asks the reader not to treat the monthly chart as a trend | `infra/superset/build_spurious_dashboard.py` |
 | 2026-11-19 | `source_url` is `not_null`-tested on the spurious mart: a counterfeit finding must never be shown without the CDSCO document that reports it | `_marts__models.yml` |
+| 2026-11-20 | Public access is a hand-built 21-permission role, NOT `PUBLIC_ROLE_LIKE=Gamma`: Gamma grants anonymous `can_write on Chart`/`Dashboard`, `can_delete_embedded` and user registration | `infra/superset/configure_public_role.py` |
+| 2026-11-20 | Datasource access is granted per gold dataset, so a dataset added later is invisible to the public until granted; the script also removes anything not on its list | `configure_public_role.py` |
+| 2026-11-20 | "Filters working" genuinely requires `can_write on DashboardFilterStateRestApi` (Superset stores filter selections server-side); listed as an explicit exception | `configure_public_role.py` |
+| 2026-11-20 | The anonymous test must not follow redirects: urllib followed FAB's redirect to /login/ and reported that a stranger could list users | `infra/superset/public_access_test.py` |
+| 2026-11-20 | `superset init` does not reset the Public role (21 permissions before and after), so a future superset-init cannot quietly reopen the instance | PROGRESS Phase 6 step 4 |

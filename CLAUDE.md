@@ -240,6 +240,10 @@ set -a && . ./.env && set +a && python3 infra/superset/build_manufacturer_dashbo
 set -a && . ./.env && set +a && python3 infra/superset/build_states_dashboard.py
 set -a && . ./.env && set +a && python3 infra/superset/build_spurious_dashboard.py
 set -a && . ./.env && set +a && python3 infra/superset/verify_charts.py  # every chart must return rows
+# Anonymous (public) access: a minimal hand-built role, NOT PUBLIC_ROLE_LIKE=Gamma (which would let
+# strangers edit dashboards). Re-run after adding a dataset, so the public can see it.
+docker compose exec -T superset python - < infra/superset/configure_public_role.py
+python3 infra/superset/public_access_test.py   # what a logged-out stranger can and cannot do
 # First run only: create Superset's own database and its read-only role
 docker compose exec postgres psql -U drugwatch -c "CREATE DATABASE superset"
 set -a && . ./.env && set +a && docker compose exec -T postgres psql -U drugwatch -v ON_ERROR_STOP=1 -v reader_password="$SUPERSET_READER_PASSWORD" -f - < infra/postgres/superset_reader.sql
