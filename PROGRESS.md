@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 7 — Data Science. The manufacturer risk score.
-**Next:** step 4 — LightGBM, tuned on the validation folds only. It has to clear PR-AUC 0.373.
+**Next:** step 5 — refit on everything to 2024-10, score the test window once, and check calibration.
 
 ---
 
@@ -1895,7 +1895,54 @@ score with per-manufacturer explanations.
       refused. Filled with pandas, not sklearn's imputer — ADR 0015 approved three classes and a
       fourth would be a wider dependency than agreed for two lines of `fillna`.
     - 66 tests passing.
-- [ ] Step 4 — LightGBM, tuned on validation cutoffs only
+- [x] **Step 4 — LightGBM, tuned on the validation folds only** (2026-11-20)
+      40-trial random search, trial 1 being LightGBM's own defaults so the result can be reported
+      as "better than out of the box" and not only "better than other random guesses".
+
+      | | PR-AUC (mean of 3 tuning folds) |
+      |---|---|
+      | LightGBM **out of the box** | 0.359 |
+      | best baseline (logistic regression) | 0.373 |
+      | LightGBM **tuned** | **0.383** |
+
+    - ⚠️ **Out of the box, LightGBM loses to logistic regression** (0.359 against 0.373). That is
+      worth stating plainly: the mandated model is not automatically the better one here, and
+      without tuning this phase would have failed its own bar.
+    - ⚠️ **Tuned, it clears the bar — but narrowly.** On validate-3 the margin over logistic
+      regression is **+0.033 PR-AUC, 95% CI +0.006..+0.060**. It excludes zero, so decision C is
+      satisfied on validation, but a lower bound of +0.006 is a slim win and will be reported that
+      way. The test window decides, once, in step 5.
+    - 🔍 **The winning settings are far SIMPLER than the defaults**, which is itself the finding:
+      `num_leaves` 7 (default 31), `n_estimators` 100 (default 300), `min_child_samples` 100
+      (default 20), `lambda_l2` 10, `bagging_fraction` 0.7. Every chosen value points the same way
+      — this dataset supports a small, heavily regularised model, and the trials that grew the
+      model got worse (the 800-tree, 127-leaf trial scored 0.289). 40,000 rows of monthly
+      manufacturer history is simply not much signal, and the search found that rather than being
+      told it.
+    - **`scale_pos_weight` 3.0 was chosen**, which lifts ranking and distorts the predicted
+      probability — exactly the trade-off `model.py` flagged before the search ran. §4.3 shows this
+      number publicly as a probability, so **step 5's calibration check now decides whether it may
+      be called one**, or whether it must be presented as a rank.
+    - **26 of 28 features are split on.** Top gains: `reports_24m` (18,851, dominant, matching
+      logistic's +0.670 weight), `distinct_reporting_states_12m`, `months_since_last_report`, then
+      **`share_of_archive_reports_12m`** — step 2's ratio replacement for the calendar feature is
+      being used, so the normalisation was worth keeping once the clock was removed. Never split
+      on: `state_lab_reports_12m` and — reassuringly — **`central_lab_share_12m`, the -0.534
+      calendar drifter**. The model declined the feature most likely to be a timeline.
+    - **No early stopping during tuning**, on purpose: it would read each fold's own evaluation
+      rows to pick the tree count, and those same rows then score the trial. `n_estimators` is a
+      searched parameter instead, so the validation folds do exactly one job.
+    - 🐛 **A two-hour debugging detour that was my own process failure, not a code bug.** The first
+      search ran 141 minutes for 23 trials — 368s each against a measured 3.7s for the defaults.
+      MLflow's per-trial runs showed the fits themselves totalled 11 seconds, so the time was in
+      the *gaps*: median 8.7s but individual gaps of 1,000 and 3,214s with almost no CPU. **The Mac
+      was asleep.** Not a pathological hyperparameter combination — I checked that first and could
+      not reproduce it (`num_leaves=127` with `scale_pos_weight=3.0` is 1.5s in isolation).
+      CLAUDE.md §10 already says to wrap long local jobs in `caffeinate -i`; I had not. Re-run
+      under `caffeinate`, all 40 trials finished in minutes. Recorded because the lesson is that
+      "the code is slow" and "the machine stopped running it" look identical from a wall clock.
+    - 84 tests passing. `ruff.toml` gained `S311` for test files, beside the existing `S101`: a
+      seeded `random.Random` is the point of a reproducibility test, not a weak cipher.
 - [ ] Step 5 — evaluation: ROC-AUC, PR-AUC, precision@K per month, calibration, company-level CIs
 - [ ] Step 6 — SHAP: global importance and per-manufacturer explanations
 - [ ] Step 7 — MLflow runs logged, best model registered
@@ -2126,3 +2173,8 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-20 | The two best baselines tie on ROC-AUC (0.728 vs 0.726) and separate on PR-AUC (0.323 vs 0.373), which is why PR-AUC decides: with 13% positives, ROC-AUC is dominated by ordering easy negatives | step 3 |
 | 2026-11-20 | Logistic beats the count ranking by +0.034 PR-AUC, 95% CI +0.012..+0.050, so the bar is not a coin flip. Decision C's significance rule applied to the baselines too | `run_baselines.py` |
 | 2026-11-20 | Bootstrap CIs resample companies, not rows - a test shows row-level resampling gives a narrower interval than the evidence supports | `ml/.../metrics.py` |
+| 2026-11-20 | LightGBM out of the box (PR-AUC 0.359) LOSES to logistic regression (0.373); tuned it reaches 0.383. Without tuning this phase would have failed its own bar | step 4 |
+| 2026-11-20 | The winning settings are simpler than the defaults - 7 leaves not 31, 100 trees not 300, min_child_samples 100 not 20 - so the data supports a small regularised model. The 800-tree 127-leaf trial scored 0.289 | step 4 |
+| 2026-11-20 | `scale_pos_weight=3.0` was chosen, which distorts the predicted probability. §4.3 shows it publicly as a probability, so step 5's calibration check decides whether it may be called one | `model.py` note 3 |
+| 2026-11-20 | The model never split on `central_lab_share_12m`, the -0.534 calendar drifter, and did use `share_of_archive_reports_12m`, step 2's ratio replacement | step 4 |
+| 2026-11-20 | 🐛 A 141-minute 'slow search' was the Mac sleeping, not the code: fits totalled 11s, gaps reached 3,214s at no CPU. CLAUDE.md §10 says to use `caffeinate -i`; I had not | step 4 |

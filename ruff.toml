@@ -15,7 +15,13 @@ select = [
 ]
 
 [lint.per-file-ignores]
-"**/tests/**" = ["S101"] # pytest uses plain `assert`, which bandit would otherwise flag
+"**/tests/**" = [
+    "S101", # pytest uses plain `assert`, which bandit would otherwise flag
+    # S311 (non-cryptographic RNG) fires on `random.Random(seed)`. A seeded, reproducible
+    # generator is the whole point in a test: these are hyperparameter draws, not secrets,
+    # and the fixed seed is what makes the assertion mean anything.
+    "S311",
+]
 # Notebooks (ADR 0013): E501 only. A cell holds SQL literals and matplotlib calls that read worse
 # wrapped at 100 characters, and the checks that matter in a notebook - unused imports, undefined
 # names, import order - still apply.

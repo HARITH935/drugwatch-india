@@ -16,13 +16,9 @@ import os
 import subprocess
 from pathlib import Path
 
+# The agent-hint suppression lives in drugwatch_ml/__init__.py, which runs before this import.
+import mlflow
 import pandas as pd
-
-# MLflow prints a hint about loading an authoring skill on every import. It is addressed at coding
-# assistants, not at this pipeline, and it would appear in the middle of every training log.
-os.environ.setdefault("MLFLOW_DISABLE_AGENT_HINT", "1")
-
-import mlflow  # noqa: E402 - must follow the environment variable above
 
 EXPERIMENT = "manufacturer-risk"
 REPO = Path(__file__).resolve().parents[3]
