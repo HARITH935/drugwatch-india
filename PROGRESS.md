@@ -1505,10 +1505,17 @@ Approved 2026-11-19. Plan: `DRUGWATCH_PHASES.md` §9 Phase 6. Goal: public, read
           data each chart returns, not the pixels** — bar order and layout need a human with a browser,
           which is Harith's check.
         - **Verified** (`infra/superset/verify_charts.py`, exit 0): all **10 charts across both
-          dashboards** return data. States: made-here top value Himachal 2,147 · tested-here top Assam
-          946 / Chandigarh 751 (central laboratories) · the side-by-side table carries all 36 states and
-          union territories including the zeros, so a state with nothing reported is visible rather than
-          missing.
+          dashboards** return data. States: made-here top Himachal 2,147 · **tested-here top West Bengal
+          1,758**, then Assam 946 and Chandigarh 751 (central laboratories) · the side-by-side table
+          carries all 36 states and union territories including the zeros, so a state with nothing
+          reported is visible rather than missing.
+        - ⚠️ **Corrected 2026-11-20, by Harith looking at the dashboard.** This entry first recorded
+          "tested-here top Assam 946 / Chandigarh 751". That was wrong: those were simply the first rows
+          the chart *returned*, which arrive alphabetically after the pivot, and I read them as if they
+          were the largest. West Bengal (1,758) was on top all along, and the chart had been right since
+          the `x_axis_sort` fix. The lesson is the one the step already admitted and then forgot within
+          the same entry: **"the data is right" and "I have read it correctly" are different claims**, and
+          a row order is not a ranking.
     - [ ] 3c — drug class (needs decision B's vocabulary)
     - [x] **3d — "Spurious (counterfeit) reports"** (2026-11-19) — 4 charts, all verified. The
           archive's smallest slice (77 of 7,126 findings) and its most easily misread, so it is the one
