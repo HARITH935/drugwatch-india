@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 7 — Data Science. The manufacturer risk score.
-**Next:** step 5 — refit on everything to 2024-10, score the test window once, and check calibration.
+**Next:** Harith's call — LightGBM ties with logistic regression on the test window, so which model goes to steps 6-8.
 
 ---
 
@@ -1943,7 +1943,55 @@ score with per-manufacturer explanations.
       "the code is slow" and "the machine stopped running it" look identical from a wall clock.
     - 84 tests passing. `ruff.toml` gained `S311` for test files, beside the existing `S101`: a
       seeded `random.Random` is the point of a reproducibility test, not a weak cipher.
-- [ ] Step 5 — evaluation: ROC-AUC, PR-AUC, precision@K per month, calibration, company-level CIs
+- [x] **Step 5 — the test window, scored once. ⚠️ The result is a partial FAIL** (2026-11-20)
+
+      | model | ROC-AUC | PR-AUC | P@20/month |
+      |---|---|---|---|
+      | **LightGBM (tuned, calibrated)** | **0.706** | **0.385** | 0.738 |
+      | §12's logistic regression | 0.693 | 0.373 | **0.754** |
+      | ranking by reports in last 24m | 0.687 | 0.324 | 0.638 |
+      | §12's rule: reported in last 6m | 0.623 | 0.214 | 0.337 |
+
+    - ⚠️ **LightGBM does not clear decision C's bar.** Against the rule: +0.171 PR-AUC (CI
+      +0.144..+0.201) ✅. Against the count ranking: +0.061 (CI +0.045..+0.075) ✅. Against
+      **logistic regression: +0.011, 95% CI -0.004..+0.026 — the interval includes zero.** On this
+      test window LightGBM and a linear model are statistically indistinguishable.
+    - **And on the metric closest to how the output is used, logistic is ahead**: precision@20 per
+      month 0.754 against LightGBM's 0.738. That is the number a monthly list would be judged by.
+    - **Reported as-is, exactly as pre-committed.** The step 4 plan said "if LightGBM does not
+      clearly win, that is the reported result — the test window is used once and is never tuned
+      against." It was used once. There has been no second look, no re-tuning, and no quiet
+      widening of the bar.
+    - **On the plan's own literal wording it passes** (§9 Phase 7: "beats both baselines" — 0.385 >
+      0.373 and > 0.214 on point estimates). It is **decision C**, the stricter bar Harith approved
+      on 2026-11-20, that it fails. The bar was raised deliberately because the plan's two
+      baselines turned out to be beatable by a `count(*)`; that stricter bar has now done its job,
+      which is to stop a 0.011 difference being announced as a win.
+    - **The score IS publishable as a probability.** ECE 0.024, mean prediction 0.136 against a
+      base rate of 0.160, and the reliability table is monotonic across all ten deciles (top
+      decile: predicted 0.458, observed 0.486). **This came from a decision taken on validation,
+      before the test was touched**: step 4's search chose `scale_pos_weight` 3.0, whose mean
+      prediction was 0.252 against a 0.126 base rate — it doubled every probability. The standing
+      rule was "if dropping the reweighting costs less than 0.01 PR-AUC, drop it", because a score
+      reading "25% chance" when it means 12% is wrong in a way no caveat repairs. It cost 0.004
+      (ECE 0.126 → 0.025).
+    - ⚠️ **Every decile under-predicts** (all ten gaps negative). Not a bug: the model trained on
+      cutoffs with a 12.8% positive rate and was tested on 16.0%. The base rate drifted upward
+      between the two periods, so the model is systematically a little cautious — worth stating
+      wherever the number is shown, and worth a monthly recalibration in Phase 9 rather than a
+      refit.
+    - 🔍 **The 48% finding from step 1 is confirmed and it is large.** Companies seen during
+      training: PR-AUC **0.438**. Companies new since training: PR-AUC **0.269**, precision@20
+      0.408 against 0.725. The model is far weaker on the half of the archive it has never seen,
+      which is the single most important sentence for the model card.
+    - **No month is a disaster and the trend is upward**: worst 2025-06 at PR-AUC 0.302, best
+      2026-03 at 0.448, rising steadily as each company accumulates history. A single mean would
+      have hidden both ends.
+    - 🐛 MLflow rejects metric names containing parentheses, and does so *mid-run* after the first
+      metrics are already written — so "LightGBM (tuned, calibrated)" killed the first evaluation
+      pass between two logging calls. Metric names are now sanitised before they are sent.
+- [ ] **DECISION NEEDED** — which model goes to steps 6-8 (SHAP, registration, model card), given
+      that LightGBM is statistically tied with logistic regression on the test window.
 - [ ] Step 6 — SHAP: global importance and per-manufacturer explanations
 - [ ] Step 7 — MLflow runs logged, best model registered
 - [ ] Step 8 — `docs/model-card.md`
@@ -2178,3 +2226,8 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-20 | `scale_pos_weight=3.0` was chosen, which distorts the predicted probability. §4.3 shows it publicly as a probability, so step 5's calibration check decides whether it may be called one | `model.py` note 3 |
 | 2026-11-20 | The model never split on `central_lab_share_12m`, the -0.534 calendar drifter, and did use `share_of_archive_reports_12m`, step 2's ratio replacement | step 4 |
 | 2026-11-20 | 🐛 A 141-minute 'slow search' was the Mac sleeping, not the code: fits totalled 11s, gaps reached 3,214s at no CPU. CLAUDE.md §10 says to use `caffeinate -i`; I had not | step 4 |
+| 2026-11-20 | ⚠️ TEST RESULT: LightGBM PR-AUC 0.385 vs logistic 0.373, difference +0.011 with 95% CI -0.004..+0.026. It beats the other two baselines clearly but is statistically TIED with a linear model | step 5 |
+| 2026-11-20 | On precision@20 per month - the metric matching how a list is read - logistic is AHEAD: 0.754 vs 0.738 | step 5 |
+| 2026-11-20 | The score is publishable as a probability (ECE 0.024) only because the reweighting was dropped on validation first; `scale_pos_weight=3.0` predicted 0.252 against a 0.126 base rate | `evaluate.py` |
+| 2026-11-20 | Every decile under-predicts because the training base rate was 12.8% and the test period's is 16.0%. Needs monthly recalibration in Phase 9, not a refit | step 5 |
+| 2026-11-20 | Seen-during-training PR-AUC 0.438 vs new-companies 0.269 (P@20 0.725 vs 0.408): the model is far weaker on the half of the archive it has never seen | model card |

@@ -181,3 +181,64 @@ def bootstrap_difference(
         return observed, float("nan"), float("nan")
     lower, upper = np.percentile(differences, [2.5, 97.5])
     return observed, float(lower), float(upper)
+
+
+# --------------------------------------------------------------------------- calibration
+#
+# Ranking metrics do not care whether a score of 0.4 means "40% of these happen". Plan §4.3 shows
+# this number to the public *as a probability*, so whether it is one has to be measured separately
+# - and `scale_pos_weight` above 1, which step 4's search chose, systematically inflates it.
+
+
+def reliability(labels: Sequence[int], scores: Sequence[float], bins: int = 10) -> pd.DataFrame:
+    """Predicted probability against observed rate, in equal-count bins.
+
+    Equal-count rather than equal-width: with most predictions bunched low, equal-width bins leave
+    the top ones holding a handful of rows each, and a "calibration curve" built on 12 rows says
+    nothing. Each bin here carries the same number of manufacturers-months.
+    """
+    frame = pd.DataFrame(
+        {"label": np.asarray(labels, dtype="float64"), "score": np.asarray(scores, dtype="float64")}
+    )
+    # `duplicates="drop"` because a model can predict the same value for many rows, which would
+    # otherwise raise rather than merge the identical edges.
+    frame["bin"] = pd.qcut(frame["score"], q=bins, labels=False, duplicates="drop")
+    grouped = frame.groupby("bin", sort=True).agg(
+        rows=("label", "size"),
+        predicted=("score", "mean"),
+        observed=("label", "mean"),
+    )
+    return grouped.assign(gap=lambda f: f["predicted"] - f["observed"]).reset_index(drop=True)
+
+
+def expected_calibration_error(
+    labels: Sequence[int], scores: Sequence[float], bins: int = 10
+) -> float:
+    """Mean absolute gap between predicted and observed, weighted by how many rows each bin holds.
+
+    0 is perfect. Reported alongside the Brier score because the two disagree usefully: a model can
+    have a good Brier score from being confidently right about the easy majority while being badly
+    calibrated exactly where it matters.
+    """
+    table = reliability(labels, scores, bins)
+    weights = table["rows"] / table["rows"].sum()
+    return float((weights * table["gap"].abs()).sum())
+
+
+def brier_score(labels: Sequence[int], scores: Sequence[float]) -> float:
+    """Mean squared error of the probabilities. Lower is better; the floor is not 0 but the
+    variance of the outcome itself."""
+    labels = np.asarray(labels, dtype="float64")
+    scores = np.asarray(scores, dtype="float64")
+    return float(np.mean((scores - labels) ** 2))
+
+
+def mean_prediction_vs_base_rate(
+    labels: Sequence[int], scores: Sequence[float]
+) -> tuple[float, float]:
+    """The bluntest calibration check: does the average prediction match how often it happens?
+
+    A reweighted model fails this one obviously - its mean prediction sits far above the base rate
+    - which makes it the right thing to print first.
+    """
+    return float(np.mean(scores)), float(np.mean(labels))

@@ -273,6 +273,8 @@ uv run --env-file ../.env python -m drugwatch_ml.show_protocol  # the train/vali
 uv run --env-file ../.env python -m drugwatch_ml.run_baselines  # the bar LightGBM must clear
 # caffeinate: a sleeping Mac looks exactly like slow code (a 40-trial search once took 141 min)
 caffeinate -i uv run --env-file ../.env python -u -m drugwatch_ml.train --trials 40  # random search
+# The single-use test. Exits 1 if the model fails decision C's bar; that is a result, not a bug.
+caffeinate -i uv run --env-file ../.env python -u -m drugwatch_ml.evaluate
 uv run --env-file ../.env pytest           # incl. that the feature list matches the live mart
 # First time only: MLflow's own database and its artifact bucket
 docker compose exec postgres psql -U drugwatch -c "CREATE DATABASE mlflow"
