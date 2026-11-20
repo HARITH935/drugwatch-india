@@ -229,6 +229,12 @@ uv run --env-file ../.env jupyter lab                     # open the notebook an
 uv run --env-file ../.env jupyter nbconvert --execute --to notebook --stdout notebooks/01-explore-gold.ipynb >/dev/null  # does it still run?
 uv run jupyter nbconvert --clear-output --inplace notebooks/01-explore-gold.ipynb   # before committing
 uv run --env-file ../.env pytest           # the gold reader, incl. that writes are refused
+# The drug-class vocabulary (ADR 0014). Nothing in CDSCO classifies a medicine, so a person
+# accepts or rejects each proposed ingredient -> class; whatever is rejected stays Unclassified.
+uv run --env-file ../.env python -m drugwatch_analytics.drug_class_review --batches   # 187 clear, per class
+uv run --env-file ../.env python -m drugwatch_analytics.drug_class_review            # 28 judgement calls
+uv run --env-file ../.env python -m drugwatch_analytics.drug_class_review --seed      # -> dbt/seeds/
+uv run --env-file ../.env python -m drugwatch_analytics.drug_class_review --coverage  # what it covers
 
 # Superset dashboards (from the repo root, stack up). Reads gold ONLY, as the superset_reader role.
 docker compose run --rm superset-init          # first run only: migrate metadata + create the admin

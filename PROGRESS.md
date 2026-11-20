@@ -2,8 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 6 — Analytics. Steps 1, 2, 4, 5 done; step 3 has 3 of 4 dashboards (3c blocked on decision B).
-**Next:** decision B (`drug_class`) for dashboard 3c, then Phase 6's done-when check and sign-off.
+**Current phase:** Phase 6 — Analytics. Steps 1, 2, 4, 5 done; step 3 has 3 of 4 dashboards. 3c's vocabulary is built and waiting to be reviewed.
+**Next:** Harith runs the drug-class review (one session, ~187 batched + 28 individual calls), then the seed, the mart and dashboard 3c are built on it.
 
 ---
 
@@ -1516,7 +1516,57 @@ Approved 2026-11-19. Plan: `DRUGWATCH_PHASES.md` §9 Phase 6. Goal: public, read
           the `x_axis_sort` fix. The lesson is the one the step already admitted and then forgot within
           the same entry: **"the data is right" and "I have read it correctly" are different claims**, and
           a row order is not a ranking.
-    - [ ] 3c — drug class (needs decision B's vocabulary)
+    - [ ] **3c — drug class.** The vocabulary and its review tool are built (2026-11-20,
+          **ADR 0014**); the dashboard waits on one review session from Harith.
+        - **Measured first: there is no classification in this archive to read.** `generic_name` is
+          filled for 1,340 of 5,651 product names (23.7%) and holds the whole printed string
+          (`"Amoxycillin and Potassium Clavulanate Tablets IP"`), not a normalised salt. No ATC
+          code, no therapeutic group, nothing. So the class has to come from outside the data,
+          which makes it **a claim someone made, not a fact the archive reports** - and the design
+          keeps that visible instead of burying it in a column.
+        - **215 ingredient phrases match 5,746 of 7,126 findings (80.6%).** The remaining 1,380
+          stay `Unclassified` and that number goes on the dashboard: it is mostly brand-named
+          products whose pack prints no ingredient (`"Zylinta Syrup"`), which is a real limit of
+          name-based classification rather than a bug to tune away.
+        - **Phrases, never single words - this is the one that would have gone wrong quietly.** A
+          word-level vocabulary files "Atorvastatin Calcium Tablets IP" under mineral supplements,
+          because `calcium` there is the salt the statin is formulated as. So salt and mineral
+          names appear only as complete phrases (`calcium carbonate`, `ferrous sulphate`, `sodium
+          chloride`) and a bare `calcium`, `sodium` or `sulphate` is never in the vocabulary.
+          Tested against "Diclofenac Sodium", "Thyroxine Sodium" and "Rabeprazole Sodium": each
+          matches only its active ingredient. Whole-word matching too, so `ringer` does not match
+          "Ringerol" and `aspirin` does not match "Aspirinox".
+        - **A list per product, not one class.** 564 findings (7.9%) contain two to four classes -
+          combination products are the norm here ("Ambroxol Hydrochloride, Terbutaline Sulphate,
+          Guaiphenesin & Menthol Syrup"). Picking one would need a priority rule nobody can
+          defend, so `drug_classes` is an array and **every chart on it must state that the
+          classes add to more than the total**. Same contract as `failure_categories` (ADR 0009).
+        - **Four of the 26 classes exist to say "this is not a medicine."** CDSCO tests absorbent
+          cotton wool (50 findings), gauze, bandages, hypodermic syringes, hand sanitiser (41),
+          soap, hair colour, mehandi cones and propylene glycol. They get `Surgical consumable or
+          device`, `Antiseptic / disinfectant`, `Cosmetic or toiletry` and `Pharmaceutical raw
+          material`. This matters most for the beauty creams: some were tested *because* they
+          contained steroids they should not have, so filing them under `Corticosteroid` would
+          invert what the finding means.
+        - **The review is split the way Phase 3's manufacturer review was.** 187 `CLEAR` entries
+          (the class is the ingredient's textbook use, nothing to choose) are offered one batch per
+          class, each ingredient printed with its reason, its finding count and a real product
+          name. 28 `JUDGEMENT` entries are asked one at a time, each printing **why the proposal
+          might be wrong** first: aspirin is a painkiller at full dose and a clot preventer at the
+          low dose used here; menthol is a decongestant in a cough syrup and a skin coolant in a
+          pain gel; clavulanate is not an antibiotic at all. `n` is a real answer - it leaves those
+          products `Unclassified`, which is correct when nobody can say.
+        - **Every proposal must carry a reason, and that is enforced, not hoped for.** One test
+          rejects a reason under 13 characters; a second rejects a reason that only restates the
+          ingredient and its class (`"Vitamin."` under `Vitamin / mineral supplement`,
+          `"Bandage."` under `Surgical consumable or device`); a third requires each judgement call
+          to state its alternative. **Writing the tests found 13 such reasons in my own first
+          draft** - "NSAID.", "Anthelmintic.", "Vitamin." - and they were rewritten rather than the
+          threshold lowered. A reason a reviewer cannot disagree with is decoration.
+        - 33 tests, all passing. Decision log is git-ignored (`data/drug-class-review/`); the
+          accepted vocabulary is committed, because an ingredient's class is published pharmacology
+          while the manufacturer mapping holds real CDSCO names (ADR 0003). No archive count goes
+          into the seed.
     - [x] **3d — "Spurious (counterfeit) reports"** (2026-11-19) — 4 charts, all verified. The
           archive's smallest slice (77 of 7,126 findings) and its most easily misread, so it is the one
           built with the most care.
@@ -1818,3 +1868,7 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-20 | ⏳ OPEN: Superset holds a corrupt `tables` row (id 8) that its API 404s on while its uniqueness check sees it, blocking the freshness panel. Cache, restart, permissions and re-import all ruled out. Needs Harith's OK to delete the row | PROGRESS Phase 6 step 5 |
 | 2026-11-20 | ✅ RESOLVED: Superset's dataset and chart list APIs filter by `datasource_access`, and admin's `all_datasource_access` does NOT cover a dataset no role holds a grant for - such a dataset 404s while its uniqueness check still sees it. Granting it fixes it; `ensure_dataset` now says so instead of raising a 422 | `infra/superset/dashboards.py` |
 | 2026-11-20 | The "Data last updated" panel is one chart shared by all three dashboards, so two pages can never disagree about the data's age | `dashboards.ensure_freshness_chart()` |
+| 2026-11-20 | `drug_class` has no source in CDSCO, so it comes from a reviewed vocabulary of 215 ingredient phrases (80.6% of findings), held as an **array** because 7.9% of findings carry 2-4 classes | ADR 0014 |
+| 2026-11-20 | The vocabulary holds phrases, not words: a word-level one files "Atorvastatin Calcium" as a mineral supplement, because the calcium is the salt the statin is formulated as | `drug_class.py` |
+| 2026-11-20 | CDSCO also tests cotton wool, gauze, syringes, hand sanitiser, soap and hair colour, so 4 of the 26 classes exist to say "not a medicine" - charting a steroid-contaminated beauty cream as a Corticosteroid would invert the finding | ADR 0014 |
+| 2026-11-20 | A test that rejects a reason which only restates its own class found 13 such reasons in my first draft ("NSAID.", "Vitamin."); they were rewritten, not exempted | `tests/test_drug_class.py` |
