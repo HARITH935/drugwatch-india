@@ -24,7 +24,7 @@ position:
     - ROW-3
     - ROW-4
     - ROW-5
-    - ROW-N-EBYL8NL2
+    - ROW-N-KBWSRPVM
   HEADER_ID:
     type: HEADER
     id: HEADER_ID
@@ -224,14 +224,14 @@ position:
     - CHART-Data last updated
     meta:
       background: BACKGROUND_TRANSPARENT
-  ROW-N-EBYL8NL2:
+  ROW-N-KBWSRPVM:
     children:
-    - CHART-ROPCPBR0
-    - CHART-C9KDLF5T
-    - CHART-9B9Z57MW
-    - CHART-XTR4OBG1
-    - CHART-1U7W1T5W
-    id: ROW-N-EBYL8NL2
+    - CHART-TBD98V3T
+    - CHART-MQHMFS1Q
+    - CHART-HMHPQ61O
+    - CHART-5IVBMZM4
+    - CHART-RYU8292V
+    id: ROW-N-KBWSRPVM
     meta:
       '0': ROOT_ID
       background: BACKGROUND_TRANSPARENT
@@ -239,23 +239,9 @@ position:
     parents:
     - ROOT_ID
     - GRID_ID
-  CHART-ROPCPBR0:
+  CHART-TBD98V3T:
     children: []
-    id: CHART-ROPCPBR0
-    meta:
-      chartId: 12
-      height: 50
-      sliceName: Findings naming a copied brand
-      uuid: 558945d2-37b6-4516-96d0-3ed2b2c6fa92
-      width: 4
-    type: CHART
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-N-EBYL8NL2
-  CHART-C9KDLF5T:
-    children: []
-    id: CHART-C9KDLF5T
+    id: CHART-TBD98V3T
     meta:
       chartId: 14
       height: 50
@@ -266,38 +252,24 @@ position:
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-N-EBYL8NL2
-  CHART-9B9Z57MW:
+    - ROW-N-KBWSRPVM
+  CHART-MQHMFS1Q:
     children: []
-    id: CHART-9B9Z57MW
+    id: CHART-MQHMFS1Q
     meta:
-      chartId: 11
+      chartId: 12
       height: 50
-      sliceName: Spurious findings reported
-      uuid: 240f90d7-e444-4f19-8319-f44b5571bbaf
+      sliceName: Findings naming a copied brand
+      uuid: 558945d2-37b6-4516-96d0-3ed2b2c6fa92
       width: 4
     type: CHART
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-N-EBYL8NL2
-  CHART-XTR4OBG1:
+    - ROW-N-KBWSRPVM
+  CHART-HMHPQ61O:
     children: []
-    id: CHART-XTR4OBG1
-    meta:
-      chartId: 16
-      height: 50
-      sliceName: Data last updated
-      uuid: f46e70de-e1bc-41a9-ae9c-7056a1ac5e0b
-      width: 4
-    type: CHART
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-N-EBYL8NL2
-  CHART-1U7W1T5W:
-    children: []
-    id: CHART-1U7W1T5W
+    id: CHART-HMHPQ61O
     meta:
       chartId: 13
       height: 50
@@ -308,7 +280,35 @@ position:
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-N-EBYL8NL2
+    - ROW-N-KBWSRPVM
+  CHART-5IVBMZM4:
+    children: []
+    id: CHART-5IVBMZM4
+    meta:
+      chartId: 11
+      height: 50
+      sliceName: Spurious findings reported
+      uuid: 240f90d7-e444-4f19-8319-f44b5571bbaf
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-KBWSRPVM
+  CHART-RYU8292V:
+    children: []
+    id: CHART-RYU8292V
+    meta:
+      chartId: 16
+      height: 50
+      sliceName: Data last updated
+      uuid: f46e70de-e1bc-41a9-ae9c-7056a1ac5e0b
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-KBWSRPVM
 metadata:
   refresh_frequency: 0
   color_scheme: supersetColors

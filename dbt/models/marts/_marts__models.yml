@@ -144,7 +144,10 @@ models:
       One row per product name as CDSCO printed it (5,651). Verified: a product name never carries
       two different dosage forms, generic/brand names or strength lists. Differently-printed names
       for the same medicine are NOT merged - that needs the same reviewed evidence Phase 3 used
-      for manufacturers. `drug_class` from plan §8.1 is absent: no classification source exists yet.
+      for manufacturers.
+      Plan §8.1's `drug_class` is here as `drug_classes` - plural, because 530 of 7,126 findings
+      print ingredients from two to four classes, and it comes from a reviewed vocabulary rather
+      than from the data, which classifies nothing (ADR 0014).
     columns:
       - name: drug_id
         data_tests:
@@ -153,6 +156,16 @@ models:
         description: "md5 of the product name."
       - name: generic_name
         description: "Filled only where the split was unambiguous (~20%); null means 'not stated', not 'none'."
+      - name: drug_classes
+        data_tests: [not_null]
+        description: >
+          The classes the reviewed vocabulary found in the printed name, sorted so two products
+          with the same classes always produce the identical array. **An empty array means the
+          vocabulary matched nothing** (1,382 findings, mostly brand-named products whose pack
+          prints no ingredient) - empty rather than 'Unclassified', because "nobody could tell" is
+          not a therapeutic class; the marts turn it into a reported count. Never null.
+          Counting it requires unnesting, and a combination product then counts under each of its
+          classes, so the classes add up to more than the total.
 
   - name: dim_date
     description: >
@@ -307,4 +320,34 @@ models:
         description: "CDSCO publishes monthly; over ~45 days means the pipeline has stopped."
       - name: quality_gate
         description: "The Great Expectations task's state on that run."
+
+  - name: mart_drug_class_failures
+    description: >
+      Plan §8.2's `mart_drug_class_failures`: which laboratory tests fail, per drug class, per
+      alert month. Deferred since Phase 4 because `drug_class` had no source; built on the
+      reviewed vocabulary of ADR 0014.
+      **The grain is class x failure category x month, and summing `findings` overcounts.** A
+      finding belongs to as many classes as it has ingredients (530 of 7,126 have more than one)
+      and names as many failure categories as the laboratory reported (ADR 0009; 22% name more
+      than one), so one finding can be four rows here. `findings_in_class` and `findings_in_month`
+      are carried on every row so a chart can show a share without re-deriving a denominator that
+      would be wrong.
+      **`Unclassified` is a row, not a gap** - 1,382 findings match no ingredient, and dropping
+      them would quietly change the denominator of every percentage built on this.
+    columns:
+      - name: alert_month_start
+        data_tests: [not_null]
+      - name: drug_class
+        data_tests: [not_null]
+        description: "One of the 26 vocabulary classes, or `Unclassified`."
+      - name: failure_category
+        data_tests: [not_null]
+        description: "An ADR 0009 category. A finding naming three failed tests is three rows."
+      - name: findings
+        data_tests: [not_null]
+        description: "Distinct findings in this class/category/month. Do not sum across classes."
+      - name: findings_in_class
+        description: "Distinct findings in this class across all months - the share denominator."
+      - name: findings_in_month
+        description: "Distinct findings in this month across all classes."
 

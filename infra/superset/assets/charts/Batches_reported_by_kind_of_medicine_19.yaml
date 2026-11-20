@@ -1,0 +1,44 @@
+slice_name: Batches reported by kind of medicine
+description: null
+certified_by: null
+certification_details: null
+viz_type: echarts_timeseries_bar
+params:
+  x_axis: drug_class
+  metrics:
+  - expressionType: SIMPLE
+    column:
+      column_name: findings
+    aggregate: SUM
+    label: Batches reported
+    optionName: metric_findings_sum
+  row_limit: 40
+  x_axis_title: kind of medicine (from a reviewed vocabulary, not from CDSCO)
+  y_axis_title: batches reported
+  x_axis_sort: Batches reported
+  x_axis_sort_asc: false
+  rich_tooltip: true
+  viz_type: echarts_timeseries_bar
+  datasource: 10__table
+query_context: '{"datasource": {"id": 10, "type": "table"}, "force": false, "queries":
+  [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
+  "annotation_layers": [], "series_limit": 0, "order_desc": true, "url_params": {},
+  "custom_params": {}, "custom_form_data": {}, "row_limit": 40, "columns": [{"columnType":
+  "BASE_AXIS", "sqlExpression": "drug_class", "label": "drug_class", "expressionType":
+  "SQL"}], "metrics": [{"expressionType": "SIMPLE", "column": {"column_name": "findings"},
+  "aggregate": "SUM", "label": "Batches reported", "optionName": "metric_findings_sum"}],
+  "orderby": [[{"expressionType": "SIMPLE", "column": {"column_name": "findings"},
+  "aggregate": "SUM", "label": "Batches reported", "optionName": "metric_findings_sum"},
+  false]], "series_columns": [], "post_processing": [{"operation": "pivot", "options":
+  {"index": ["drug_class"], "columns": [], "aggregates": {"Batches reported": {"operator":
+  "mean"}}, "drop_missing_columns": false}}, {"operation": "flatten"}]}], "form_data":
+  {"x_axis": "drug_class", "metrics": [{"expressionType": "SIMPLE", "column": {"column_name":
+  "findings"}, "aggregate": "SUM", "label": "Batches reported", "optionName": "metric_findings_sum"}],
+  "row_limit": 40, "x_axis_title": "kind of medicine (from a reviewed vocabulary,
+  not from CDSCO)", "y_axis_title": "batches reported", "x_axis_sort": "Batches reported",
+  "x_axis_sort_asc": false, "rich_tooltip": true, "viz_type": "echarts_timeseries_bar",
+  "datasource": "10__table"}, "result_format": "json", "result_type": "full"}'
+cache_timeout: null
+uuid: 7f5fb2f9-2c66-4e23-9126-a7d4a65e9640
+version: 1.0.0
+dataset_uuid: d630371a-981c-4a70-b340-00c928354e76

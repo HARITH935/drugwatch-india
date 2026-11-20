@@ -1,0 +1,371 @@
+dashboard_title: What kinds of medicine are reported
+description: null
+css: null
+slug: drug-classes
+certified_by: null
+certification_details: null
+published: true
+uuid: 6b2f60ce-3b2d-437e-844b-08ece69c182f
+position:
+  DASHBOARD_VERSION_KEY: v2
+  ROOT_ID:
+    type: ROOT
+    id: ROOT_ID
+    children:
+    - GRID_ID
+  GRID_ID:
+    type: GRID
+    id: GRID_ID
+    parents:
+    - ROOT_ID
+    children:
+    - ROW-1
+    - ROW-2
+    - ROW-3
+    - ROW-4
+    - ROW-5
+    - ROW-N-ZEGT4QB6
+  HEADER_ID:
+    type: HEADER
+    id: HEADER_ID
+    meta:
+      text: What kinds of medicine are reported
+  MARKDOWN-note:
+    type: MARKDOWN
+    id: MARKDOWN-note
+    children: []
+    meta:
+      code: '## What kinds of medicine appear in these alerts
+
+
+        **Not medical advice. Data from CDSCO public alerts.**
+
+
+        **Read this before the charts: the drug class is not CDSCO data.** The alerts
+        name a product, a
+
+        batch and a manufacturer. They do not say what kind of medicine it is - there
+        is no therapeutic
+
+        class, no ATC code, and the printed name is all there is to go on. So the
+        classes below come from
+
+        a **reviewed vocabulary of 213 ingredient names**, each one accepted by a
+        person with its reason
+
+        recorded, applied to the name printed on the pack. They are a lens on the
+        archive, not a fact it
+
+        reports.
+
+
+        **19.4% of findings (1,382) could not be classified at all**, mostly brand-named
+        products whose
+
+        pack prints no ingredient. That is the largest single bar below, deliberately:
+        a classification
+
+        should be judged first on what it misses.
+
+
+        **The classes do not add up to 100%, and they are not slices of a pie.** 530
+        findings name
+
+        ingredients from two to four different classes - a cough syrup is routinely
+        four medicines in one
+
+        bottle - and each is counted under every class it contains. The classes total
+        7,721 against an
+
+        archive of 7,126 findings.
+
+
+        **Not every product here is a medicine.** CDSCO also tests absorbent cotton
+        wool, gauze, syringes,
+
+        hand sanitiser, soap and hair colour against Indian Pharmacopoeia standards,
+        so four of the classes
+
+        say that rather than pretending otherwise.
+
+
+        Each finding is still **one tested batch** of one product, not a judgement
+        on a product or a
+
+        company, and these remain *reported* failures from a sample that was never
+        random - so they
+
+        describe **reporting history, not quality**.
+
+
+        ---
+
+
+        **Source:** Central Drugs Standard Control Organization (CDSCO) public drug
+        alerts -
+
+        [cdscoonline.gov.in](https://cdscoonline.gov.in/CDSCO/Drugs). Every finding
+        links to the document
+
+        that reported it. Data is reproduced for public information, unaltered, and
+        is not an official
+
+        record; the CDSCO document is authoritative.
+
+
+        **How this is built:** CDSCO''s monthly alerts are downloaded, extracted,
+        cleaned and checked by an
+
+        automated pipeline, then rebuilt into the tables these charts read. The *Data
+        last updated* panel
+
+        shows when that last ran and whether it passed its quality checks.'
+      width: 12
+      height: 78
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-1
+  ROW-1:
+    type: ROW
+    id: ROW-1
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    children:
+    - MARKDOWN-note
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-Findings that could be classified:
+    type: CHART
+    id: CHART-Findings that could be classified
+    children: []
+    meta:
+      chartId: 17
+      sliceName: Findings that could be classified
+      width: 6
+      height: 30
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-2
+  CHART-Findings with no class:
+    type: CHART
+    id: CHART-Findings with no class
+    children: []
+    meta:
+      chartId: 18
+      sliceName: Findings with no class
+      width: 6
+      height: 30
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-2
+  ROW-2:
+    type: ROW
+    id: ROW-2
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    children:
+    - CHART-Findings that could be classified
+    - CHART-Findings with no class
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-Batches reported by kind of medicine:
+    type: CHART
+    id: CHART-Batches reported by kind of medicine
+    children: []
+    meta:
+      chartId: 19
+      sliceName: Batches reported by kind of medicine
+      width: 12
+      height: 60
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-3
+  ROW-3:
+    type: ROW
+    id: ROW-3
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    children:
+    - CHART-Batches reported by kind of medicine
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-Each kind of medicine, and what most often failed:
+    type: CHART
+    id: CHART-Each kind of medicine, and what most often failed
+    children: []
+    meta:
+      chartId: 20
+      sliceName: Each kind of medicine, and what most often failed
+      width: 6
+      height: 70
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-4
+  CHART-Which tests failed, within each kind of medicine:
+    type: CHART
+    id: CHART-Which tests failed, within each kind of medicine
+    children: []
+    meta:
+      chartId: 21
+      sliceName: Which tests failed, within each kind of medicine
+      width: 6
+      height: 70
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-4
+  ROW-4:
+    type: ROW
+    id: ROW-4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    children:
+    - CHART-Each kind of medicine, and what most often failed
+    - CHART-Which tests failed, within each kind of medicine
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-Data last updated:
+    type: CHART
+    id: CHART-Data last updated
+    children: []
+    meta:
+      chartId: 16
+      sliceName: Data last updated
+      width: 12
+      height: 22
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-5
+  ROW-5:
+    type: ROW
+    id: ROW-5
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    children:
+    - CHART-Data last updated
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  ROW-N-ZEGT4QB6:
+    children:
+    - CHART-WNKVXHYR
+    - CHART-M7C0XH26
+    - CHART-CN53MEOL
+    - CHART-B8HNM1PZ
+    - CHART-55MGND58
+    - CHART-PPD2RTP8
+    id: ROW-N-ZEGT4QB6
+    meta:
+      '0': ROOT_ID
+      background: BACKGROUND_TRANSPARENT
+    type: ROW
+    parents:
+    - ROOT_ID
+    - GRID_ID
+  CHART-WNKVXHYR:
+    children: []
+    id: CHART-WNKVXHYR
+    meta:
+      chartId: 20
+      height: 50
+      sliceName: Each kind of medicine, and what most often failed
+      uuid: 3ec423cf-a96a-4ce9-8a6c-2f7b5bf05aa6
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-ZEGT4QB6
+  CHART-M7C0XH26:
+    children: []
+    id: CHART-M7C0XH26
+    meta:
+      chartId: 18
+      height: 50
+      sliceName: Findings with no class
+      uuid: b8e5119e-652f-4cb3-a325-c42a47541ae0
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-ZEGT4QB6
+  CHART-CN53MEOL:
+    children: []
+    id: CHART-CN53MEOL
+    meta:
+      chartId: 17
+      height: 50
+      sliceName: Findings that could be classified
+      uuid: 8f092714-151e-4595-a596-953b71a88032
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-ZEGT4QB6
+  CHART-B8HNM1PZ:
+    children: []
+    id: CHART-B8HNM1PZ
+    meta:
+      chartId: 19
+      height: 50
+      sliceName: Batches reported by kind of medicine
+      uuid: 7f5fb2f9-2c66-4e23-9126-a7d4a65e9640
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-ZEGT4QB6
+  CHART-55MGND58:
+    children: []
+    id: CHART-55MGND58
+    meta:
+      chartId: 21
+      height: 50
+      sliceName: Which tests failed, within each kind of medicine
+      uuid: c8cb2a40-2bba-4128-a533-1ef7f40ec6cd
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-ZEGT4QB6
+  CHART-PPD2RTP8:
+    children: []
+    id: CHART-PPD2RTP8
+    meta:
+      chartId: 16
+      height: 50
+      sliceName: Data last updated
+      uuid: f46e70de-e1bc-41a9-ae9c-7056a1ac5e0b
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-ZEGT4QB6
+metadata:
+  refresh_frequency: 0
+  color_scheme: supersetColors
+  chart_configuration: {}
+  timed_refresh_immune_slices: []
+  expanded_slices: {}
+  label_colors: {}
+  shared_label_colors: []
+  map_label_colors: {}
+  color_scheme_domain: []
+  cross_filters_enabled: true
+theme_uuid: null
+version: 1.0.0

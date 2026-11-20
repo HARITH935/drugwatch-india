@@ -2,8 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 6 — Analytics. Steps 1, 2, 4, 5 done; step 3 has 3 of 4 dashboards. 3c's vocabulary is built and waiting to be reviewed.
-**Next:** Harith runs the drug-class review (one session, ~187 batched + 28 individual calls), then the seed, the mart and dashboard 3c are built on it.
+**Current phase:** Phase 6 — Analytics. All five steps done; all four dashboards built, verified and public.
+**Next:** Harith's visual review of the four dashboards, then Phase 6's sign-off and Phase 7.
 
 ---
 
@@ -1433,7 +1433,8 @@ Approved 2026-11-19. Plan: `DRUGWATCH_PHASES.md` §9 Phase 6. Goal: public, read
     - Fixed a false positive in `repo-checks.sh`: it could not tell Compose's escaped variable form
       (meaning "leave this for the container's shell") from a real one, so it demanded `.env.example`
       entries for variables that only exist inside the superset-init container.
-- [ ] Step 3 — the dashboards, one per slice
+- [x] **Step 3 — the dashboards, one per slice** (2026-11-20) — all four built from code,
+      never clicked, and every chart verified to return data. 20 charts in all.
     - [x] **3a — "Manufacturer reporting"** (2026-11-19) — 6 charts, all verified returning data.
           Provisioned **from code** (`infra/superset/build_manufacturer_dashboard.py`, idempotent): a
           dashboard that exists only because someone filled in forms cannot be rebuilt after
@@ -1516,8 +1517,32 @@ Approved 2026-11-19. Plan: `DRUGWATCH_PHASES.md` §9 Phase 6. Goal: public, read
           the `x_axis_sort` fix. The lesson is the one the step already admitted and then forgot within
           the same entry: **"the data is right" and "I have read it correctly" are different claims**, and
           a row order is not a ranking.
-    - [ ] **3c — drug class.** The vocabulary and its review tool are built (2026-11-20,
-          **ADR 0014**); the dashboard waits on one review session from Harith.
+    - [x] **3c — "What kinds of medicine are reported"** (2026-11-20, **ADR 0014**) — 5 charts
+          plus the freshness panel, all verified. The only dashboard in the project built on a
+          column the archive does not contain, and that shaped every choice on it.
+        - **Reviewed by Harith, 2026-11-20: 213 of 215 proposals accepted**, `oxetacaine` and
+          `menthol` rejected — both because the ingredient's role changes with what it is combined
+          with, so a single class would have mislabelled one of the two uses. Those products stay
+          `Unclassified`, which is the outcome the review exists to make available.
+        - **80.6% of findings classified (5,744 of 7,126); 1,382 are not**, and `Unclassified` is
+          the largest bar on the chart and the first row of the table on purpose. A reader's first
+          question about a classification is how much it misses, and sorting it away would have
+          been easy and would have flattered the work.
+        - **The classes sum to 7,721 against an archive of 7,126**, because 530 findings carry two
+          to four classes. So no pie chart anywhere on the page: bars and tables can carry
+          "overlapping categories", a pie asserts the opposite.
+        - **Two new marts exist so that no chart has to remember a caveat.** §8.2's
+          `mart_drug_class_failures` is correct but its grain is class × category × month, where
+          one finding can be four rows — `sum(findings)` on a dashboard would silently inflate
+          every class. `mart_drug_class_summary` (one row per class) and
+          `mart_drug_class_category` (one row per class × category) make the safe reading the
+          default one. The headline percentages are repeated columns read with `MAX`, the same
+          shape `mart_lab_vs_maker_state` already uses.
+        - **The results are pharmacologically coherent, which is the best evidence the vocabulary
+          works**: injectable fluids fail *sterility* 68.1% of the time, tablet-form
+          antihypertensives fail *dissolution* 53.1%, syrups fail *assay* 64.4%. Nothing in the
+          vocabulary knows about dosage forms or failure categories, so that pattern is the data
+          agreeing with the lens rather than the lens imposing itself.
         - **Measured first: there is no classification in this archive to read.** `generic_name` is
           filled for 1,340 of 5,651 product names (23.7%) and holds the whole printed string
           (`"Amoxycillin and Potassium Clavulanate Tablets IP"`), not a normalised salt. No ATC
@@ -1625,7 +1650,7 @@ Approved 2026-11-19. Plan: `DRUGWATCH_PHASES.md` §9 Phase 6. Goal: public, read
       before this data appears on a live site, and **neither permission email has been sent**. Phase 12
       must also enable `TALISMAN_ENABLED` with a Content Security Policy and change the admin password,
       which is currently `admin`.
-- [x] **Step 5 — source notes and dashboards as code** (2026-11-20) — one piece parked, see below.
+- [x] **Step 5 — source notes and dashboards as code** (2026-11-20)
     - **Source note on every dashboard, in one place.** `SOURCE_FOOTER` in `dashboards.py` is appended
       to all three notes, so a dashboard added later cannot be missing it: it credits CDSCO, links to
       cdscoonline.gov.in, states that the data is reproduced unaltered and that the CDSCO document is
@@ -1872,3 +1897,7 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-20 | The vocabulary holds phrases, not words: a word-level one files "Atorvastatin Calcium" as a mineral supplement, because the calcium is the salt the statin is formulated as | `drug_class.py` |
 | 2026-11-20 | CDSCO also tests cotton wool, gauze, syringes, hand sanitiser, soap and hair colour, so 4 of the 26 classes exist to say "not a medicine" - charting a steroid-contaminated beauty cream as a Corticosteroid would invert the finding | ADR 0014 |
 | 2026-11-20 | A test that rejects a reason which only restates its own class found 13 such reasons in my first draft ("NSAID.", "Vitamin."); they were rewritten, not exempted | `tests/test_drug_class.py` |
+| 2026-11-20 | Harith reviewed the drug-class vocabulary: 213 of 215 accepted, `oxetacaine` and `menthol` rejected because each changes role with what it is combined with | `data/drug-class-review/decisions.jsonl` |
+| 2026-11-20 | 🔍 A Superset dashboard with NO charts is invisible even to an admin - access is resolved through its charts' datasources - so a build that dies before attaching them leaves a dashboard whose slug is taken and which nothing can find | `infra/superset/attach_orphan_dashboard.py` |
+| 2026-11-20 | `int_drug_class` is a table, not a view: three nodes read it and each was re-running the 5,651 x 213 regex cross join (~21 s apiece). Full `dbt build` 45 s -> 23 s | `int_drug_class.sql` |
+| 2026-11-20 | Dashboard 3c's charts read summary marts rather than §8.2's month-grain mart, so the default reading is the safe one instead of depending on a remembered caveat | `mart_drug_class_summary.sql` |

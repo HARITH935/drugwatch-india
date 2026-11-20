@@ -76,7 +76,7 @@ def main() -> int:
     status, _ = call("GET", "/api/v1/dashboard/")
     expect("list dashboards", True, status)
 
-    for slug in ("manufacturer-reporting", "states", "spurious-reports"):
+    for slug in ("manufacturer-reporting", "states", "spurious-reports", "drug-classes"):
         status, _ = call("GET", f"/superset/dashboard/{slug}/")
         expect(f"open the {slug} dashboard", True, status)
 

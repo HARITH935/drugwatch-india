@@ -10,14 +10,37 @@
 -- the drug equivalent of Phase 3 step 5, needs the same kind of reviewed evidence, and is not
 -- something to slip in unannounced.
 --
--- `drug_class` from Section 8.1 is missing on purpose: nothing in the archive classifies a drug
--- (no ATC or therapeutic-class source has been ingested), and inventing classes from name
--- fragments would be a guess presented as a fact. `mart_drug_class_failures` needs this resolved
--- first - it is an open question for Harith, recorded in PROGRESS.md.
+-- `drug_classes` is Section 8.1's `drug_class`, and it is plural for a measured reason: 530 of
+-- 7,126 findings print ingredients from two to four different classes, so one column would need a
+-- priority rule nobody can defend ("why does Antibiotic outrank Probiotic?"). Same shape as
+-- `failure_categories` (ADR 0009), with the same obligation on anything that counts it: a
+-- combination product is counted under each of its classes, so the classes add up to more than
+-- the total, and every chart has to say so.
+--
+-- It is also the one column here that the archive does not report. Nothing in CDSCO classifies a
+-- medicine, so these come from a vocabulary of 213 ingredient phrases that a person accepted one
+-- batch at a time (ADR 0014). An empty array means the vocabulary matched nothing - 1,382
+-- findings, mostly brand-named products whose pack prints no ingredient ("Zylinta Syrup") - and
+-- it is an empty array rather than the string 'Unclassified' because "nobody could tell" is not
+-- a therapeutic class. The marts turn it into a reported `Unclassified` count; this table does
+-- not pretend to know.
 
 with samples as (
 
     select * from {{ ref('stg_nsq_sample') }}
+
+),
+
+-- Collapsed to one row per product name, sorted so two products with the same classes always
+-- produce the identical array - otherwise anything grouping on it sees two groups where there is
+-- one.
+classes as (
+
+    select
+        product_name,
+        array_agg(distinct drug_class order by drug_class) as drug_classes
+    from {{ ref('int_drug_class') }}
+    group by product_name
 
 ),
 
@@ -32,13 +55,18 @@ final as (
         generic_name,
         brand_name,
         dosage_form,
-        strengths
+        strengths,
+
+        -- coalesce, not a null: "the vocabulary matched nothing" is an empty set of classes, and
+        -- a null here would make every consumer handle a third case that does not exist.
+        coalesce(classes.drug_classes, array[]::text[]) as drug_classes
 
     from samples
+    left join classes using (product_name)
     -- grouping by all of them is free (they are constant per product_name, proven above) and
     -- says so in the code. No count of findings here, for the same reason as dim_manufacturer:
     -- a dimension describes a thing, the marts do the counting.
-    group by product_name, generic_name, brand_name, dosage_form, strengths
+    group by product_name, generic_name, brand_name, dosage_form, strengths, classes.drug_classes
 
 )
 

@@ -1,0 +1,33 @@
+slice_name: Findings that could be classified
+description: null
+certified_by: null
+certification_details: null
+viz_type: big_number_total
+params:
+  metric:
+    expressionType: SIMPLE
+    column:
+      column_name: pct_classified
+    aggregate: MAX
+    label: '% of findings classified'
+    optionName: metric_pct_classified_max
+  subheader: by a reviewed vocabulary of 213 ingredient names - the other 19.4% print
+    no ingredient this could match
+  viz_type: big_number_total
+  datasource: 10__table
+query_context: '{"datasource": {"id": 10, "type": "table"}, "force": false, "queries":
+  [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
+  "annotation_layers": [], "series_limit": 0, "order_desc": true, "url_params": {},
+  "custom_params": {}, "custom_form_data": {}, "row_limit": 50000, "metrics": [{"expressionType":
+  "SIMPLE", "column": {"column_name": "pct_classified"}, "aggregate": "MAX", "label":
+  "% of findings classified", "optionName": "metric_pct_classified_max"}], "columns":
+  [], "orderby": [], "post_processing": []}], "form_data": {"metric": {"expressionType":
+  "SIMPLE", "column": {"column_name": "pct_classified"}, "aggregate": "MAX", "label":
+  "% of findings classified", "optionName": "metric_pct_classified_max"}, "subheader":
+  "by a reviewed vocabulary of 213 ingredient names - the other 19.4% print no ingredient
+  this could match", "viz_type": "big_number_total", "datasource": "10__table"}, "result_format":
+  "json", "result_type": "full"}'
+cache_timeout: null
+uuid: 8f092714-151e-4595-a596-953b71a88032
+version: 1.0.0
+dataset_uuid: d630371a-981c-4a70-b340-00c928354e76

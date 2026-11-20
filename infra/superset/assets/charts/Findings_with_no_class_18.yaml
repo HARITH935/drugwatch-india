@@ -1,0 +1,32 @@
+slice_name: Findings with no class
+description: null
+certified_by: null
+certification_details: null
+viz_type: big_number_total
+params:
+  metric:
+    expressionType: SIMPLE
+    column:
+      column_name: findings_unclassified
+    aggregate: MAX
+    label: Unclassified findings
+    optionName: metric_findings_unclassified_max
+  subheader: mostly brand-named products whose pack prints no ingredient
+  viz_type: big_number_total
+  datasource: 10__table
+query_context: '{"datasource": {"id": 10, "type": "table"}, "force": false, "queries":
+  [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
+  "annotation_layers": [], "series_limit": 0, "order_desc": true, "url_params": {},
+  "custom_params": {}, "custom_form_data": {}, "row_limit": 50000, "metrics": [{"expressionType":
+  "SIMPLE", "column": {"column_name": "findings_unclassified"}, "aggregate": "MAX",
+  "label": "Unclassified findings", "optionName": "metric_findings_unclassified_max"}],
+  "columns": [], "orderby": [], "post_processing": []}], "form_data": {"metric": {"expressionType":
+  "SIMPLE", "column": {"column_name": "findings_unclassified"}, "aggregate": "MAX",
+  "label": "Unclassified findings", "optionName": "metric_findings_unclassified_max"},
+  "subheader": "mostly brand-named products whose pack prints no ingredient", "viz_type":
+  "big_number_total", "datasource": "10__table"}, "result_format": "json", "result_type":
+  "full"}'
+cache_timeout: null
+uuid: b8e5119e-652f-4cb3-a325-c42a47541ae0
+version: 1.0.0
+dataset_uuid: d630371a-981c-4a70-b340-00c928354e76

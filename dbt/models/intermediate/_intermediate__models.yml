@@ -86,3 +86,23 @@ models:
         description: >
           Category mentions, not reports: a finding naming three failed tests counts three times
           (ADR 0009). The marts' column names keep the two units apart.
+
+  - name: int_drug_class
+    description: >
+      Every (product name -> drug class) pair the reviewed vocabulary finds, unnested: one row per
+      match, so a combination product appears once per class it contains. Keyed on the printed
+      product name rather than `drug_id` because `dim_drug` is what turns this into an array -
+      reading dim_drug here would be a circular reference.
+      The match is whole-word (`~*` with Postgres's `\y` boundary). The identical rule exists in
+      Python too, since the review has to run before this table can exist; what stops the two
+      drifting is `analytics/tests/test_drug_class_sql.py`, which runs both over every product name
+      in the archive and requires identical answers.
+    columns:
+      - name: product_name
+        data_tests: [not_null]
+      - name: ingredient
+        data_tests: [not_null]
+        description: "Which vocabulary entry matched - kept so a surprising class can be traced."
+      - name: drug_class
+        data_tests: [not_null]
+

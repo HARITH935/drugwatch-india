@@ -6,7 +6,7 @@
 -- same training example twice and quietly weight it double.
 --
 -- dbt's built-in `unique` test takes one column, and three of these grains are composite. Writing
--- them as one query keeps the four claims in one place: each branch returns the offending key and
+-- them as one query keeps the five claims in one place: each branch returns the offending key and
 -- says which mart it came from.
 
 with offenders as (
@@ -33,6 +33,14 @@ with offenders as (
 
     select 'mart_state_summary', state_id, count(*)
     from {{ ref('mart_state_summary') }}
+    group by 1, 2 having count(*) > 1
+
+    union all
+
+    select 'mart_drug_class_failures',
+           alert_month_start || ' / ' || drug_class || ' / ' || failure_category,
+           count(*)
+    from {{ ref('mart_drug_class_failures') }}
     group by 1, 2 having count(*) > 1
 
 )

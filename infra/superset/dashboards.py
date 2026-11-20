@@ -297,7 +297,29 @@ def ensure_dashboard(
         dashboard = existing
         print(f"  dashboard updated: {title} (id {dashboard})")
     else:
-        dashboard = superset.post("/api/v1/dashboard/", payload)["id"]
+        try:
+            dashboard = superset.post("/api/v1/dashboard/", payload)["id"]
+        except SupersetError as error:
+            if "slug" not in str(error):
+                raise
+            # A dashboard the list API cannot see, whose slug is nevertheless taken. Measured
+            # cause: Superset resolves a dashboard's visibility through the datasources of the
+            # charts on it, so a dashboard with NO charts is invisible even to an admin - and a
+            # previous run of this script leaves exactly that behind if it created the dashboard
+            # and then failed before attaching them. Recovering needs one chart attached by id,
+            # which the chart API will do because it is not filtered the same way.
+            raise SystemExit(
+                f"\nSuperset already has a dashboard with the slug '{slug}', but its list API"
+                " cannot see it.\n\nWhy: Superset decides who may see a dashboard from the"
+                " datasources of the charts on it, so a\ndashboard with NO charts is invisible"
+                " even to an admin. An earlier run of this script\nleaves exactly that behind if"
+                " it created the dashboard and then failed before attaching\nthem - usually"
+                " because a newly registered dataset had no datasource_access grant.\n\nRun these"
+                " two, in this order, and the dashboard becomes visible and updatable again:\n\n"
+                "    docker compose exec -T superset python - <"
+                " infra/superset/configure_public_role.py\n"
+                "    python3 infra/superset/attach_orphan_dashboard.py\n"
+            ) from error
         print(f"  dashboard created: {title} (id {dashboard})")
 
     # A chart that renders on a dashboard but does not know it belongs there shows up as

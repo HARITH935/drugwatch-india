@@ -24,7 +24,7 @@ position:
     - ROW-3
     - ROW-4
     - ROW-5
-    - ROW-N-LRJH3LC2
+    - ROW-N-WOQYQDX6
   HEADER_ID:
     type: HEADER
     id: HEADER_ID
@@ -247,16 +247,16 @@ position:
     - CHART-Data last updated
     meta:
       background: BACKGROUND_TRANSPARENT
-  ROW-N-LRJH3LC2:
+  ROW-N-WOQYQDX6:
     children:
-    - CHART-DVHLRB7M
-    - CHART-4N7SYXD3
-    - CHART-U9AMTDZ1
-    - CHART-ZR0PDMYG
-    - CHART-THCOPDIG
-    - CHART-ORZ10YN8
-    - CHART-QZKV4W7L
-    id: ROW-N-LRJH3LC2
+    - CHART-0CRZK77O
+    - CHART-R3MR72Y5
+    - CHART-TX6K2IKQ
+    - CHART-YSCA5NPR
+    - CHART-FWSWRMJ6
+    - CHART-94O5MIZN
+    - CHART-LKA03RLU
+    id: ROW-N-WOQYQDX6
     meta:
       '0': ROOT_ID
       background: BACKGROUND_TRANSPARENT
@@ -264,9 +264,9 @@ position:
     parents:
     - ROOT_ID
     - GRID_ID
-  CHART-DVHLRB7M:
+  CHART-0CRZK77O:
     children: []
-    id: CHART-DVHLRB7M
+    id: CHART-0CRZK77O
     meta:
       chartId: 3
       height: 50
@@ -277,66 +277,10 @@ position:
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-N-LRJH3LC2
-  CHART-4N7SYXD3:
+    - ROW-N-WOQYQDX6
+  CHART-R3MR72Y5:
     children: []
-    id: CHART-4N7SYXD3
-    meta:
-      chartId: 5
-      height: 50
-      sliceName: Most frequently reported manufacturers
-      uuid: 41dc6aa5-18c3-48bf-b07e-9514b5aa5bf7
-      width: 4
-    type: CHART
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-N-LRJH3LC2
-  CHART-U9AMTDZ1:
-    children: []
-    id: CHART-U9AMTDZ1
-    meta:
-      chartId: 1
-      height: 50
-      sliceName: Batches reported
-      uuid: 4e664bcc-3332-47f0-b068-d7a37c27ca87
-      width: 4
-    type: CHART
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-N-LRJH3LC2
-  CHART-ZR0PDMYG:
-    children: []
-    id: CHART-ZR0PDMYG
-    meta:
-      chartId: 6
-      height: 50
-      sliceName: How many findings each company has
-      uuid: ff96ad77-de5d-4fda-919f-06de8b3eb5f7
-      width: 4
-    type: CHART
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-N-LRJH3LC2
-  CHART-THCOPDIG:
-    children: []
-    id: CHART-THCOPDIG
-    meta:
-      chartId: 16
-      height: 50
-      sliceName: Data last updated
-      uuid: f46e70de-e1bc-41a9-ae9c-7056a1ac5e0b
-      width: 4
-    type: CHART
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-N-LRJH3LC2
-  CHART-ORZ10YN8:
-    children: []
-    id: CHART-ORZ10YN8
+    id: CHART-R3MR72Y5
     meta:
       chartId: 4
       height: 50
@@ -347,10 +291,10 @@ position:
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-N-LRJH3LC2
-  CHART-QZKV4W7L:
+    - ROW-N-WOQYQDX6
+  CHART-TX6K2IKQ:
     children: []
-    id: CHART-QZKV4W7L
+    id: CHART-TX6K2IKQ
     meta:
       chartId: 2
       height: 50
@@ -361,7 +305,63 @@ position:
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-N-LRJH3LC2
+    - ROW-N-WOQYQDX6
+  CHART-YSCA5NPR:
+    children: []
+    id: CHART-YSCA5NPR
+    meta:
+      chartId: 1
+      height: 50
+      sliceName: Batches reported
+      uuid: 4e664bcc-3332-47f0-b068-d7a37c27ca87
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-WOQYQDX6
+  CHART-FWSWRMJ6:
+    children: []
+    id: CHART-FWSWRMJ6
+    meta:
+      chartId: 6
+      height: 50
+      sliceName: How many findings each company has
+      uuid: ff96ad77-de5d-4fda-919f-06de8b3eb5f7
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-WOQYQDX6
+  CHART-94O5MIZN:
+    children: []
+    id: CHART-94O5MIZN
+    meta:
+      chartId: 5
+      height: 50
+      sliceName: Most frequently reported manufacturers
+      uuid: 41dc6aa5-18c3-48bf-b07e-9514b5aa5bf7
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-WOQYQDX6
+  CHART-LKA03RLU:
+    children: []
+    id: CHART-LKA03RLU
+    meta:
+      chartId: 16
+      height: 50
+      sliceName: Data last updated
+      uuid: f46e70de-e1bc-41a9-ae9c-7056a1ac5e0b
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-WOQYQDX6
 metadata:
   refresh_frequency: 0
   color_scheme: supersetColors

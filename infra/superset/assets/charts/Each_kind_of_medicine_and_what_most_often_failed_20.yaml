@@ -1,0 +1,33 @@
+slice_name: Each kind of medicine, and what most often failed
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  query_mode: raw
+  all_columns:
+  - drug_class
+  - findings
+  - pct_of_findings
+  - products
+  - commonest_failure
+  - commonest_failure_pct
+  order_by_cols:
+  - '["findings", false]'
+  row_limit: 40
+  viz_type: table
+  datasource: 10__table
+query_context: '{"datasource": {"id": 10, "type": "table"}, "force": false, "queries":
+  [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
+  "annotation_layers": [], "series_limit": 0, "order_desc": true, "url_params": {},
+  "custom_params": {}, "custom_form_data": {}, "row_limit": 40, "columns": ["drug_class",
+  "findings", "pct_of_findings", "products", "commonest_failure", "commonest_failure_pct"],
+  "metrics": null, "orderby": [["findings", false]], "post_processing": []}], "form_data":
+  {"query_mode": "raw", "all_columns": ["drug_class", "findings", "pct_of_findings",
+  "products", "commonest_failure", "commonest_failure_pct"], "order_by_cols": ["[\"findings\",
+  false]"], "row_limit": 40, "viz_type": "table", "datasource": "10__table"}, "result_format":
+  "json", "result_type": "full"}'
+cache_timeout: null
+uuid: 3ec423cf-a96a-4ce9-8a6c-2f7b5bf05aa6
+version: 1.0.0
+dataset_uuid: d630371a-981c-4a70-b340-00c928354e76

@@ -1,0 +1,33 @@
+slice_name: Which tests failed, within each kind of medicine
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  query_mode: raw
+  all_columns:
+  - drug_class
+  - failure_category
+  - mentions
+  - findings_in_class
+  - pct_of_class
+  order_by_cols:
+  - '["findings_in_class", false]'
+  - '["mentions", false]'
+  row_limit: 200
+  viz_type: table
+  datasource: 11__table
+query_context: '{"datasource": {"id": 11, "type": "table"}, "force": false, "queries":
+  [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
+  "annotation_layers": [], "series_limit": 0, "order_desc": true, "url_params": {},
+  "custom_params": {}, "custom_form_data": {}, "row_limit": 200, "columns": ["drug_class",
+  "failure_category", "mentions", "findings_in_class", "pct_of_class"], "metrics":
+  null, "orderby": [["findings_in_class", false], ["mentions", false]], "post_processing":
+  []}], "form_data": {"query_mode": "raw", "all_columns": ["drug_class", "failure_category",
+  "mentions", "findings_in_class", "pct_of_class"], "order_by_cols": ["[\"findings_in_class\",
+  false]", "[\"mentions\", false]"], "row_limit": 200, "viz_type": "table", "datasource":
+  "11__table"}, "result_format": "json", "result_type": "full"}'
+cache_timeout: null
+uuid: c8cb2a40-2bba-4128-a533-1ef7f40ec6cd
+version: 1.0.0
+dataset_uuid: 5c00031b-87ed-4542-a524-0fa86b7043e7

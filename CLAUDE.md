@@ -245,12 +245,17 @@ bash infra/superset/smoke_test.sh              # proves gold is readable and sta
 set -a && . ./.env && set +a && python3 infra/superset/build_manufacturer_dashboard.py
 set -a && . ./.env && set +a && python3 infra/superset/build_states_dashboard.py
 set -a && . ./.env && set +a && python3 infra/superset/build_spurious_dashboard.py
+set -a && . ./.env && set +a && python3 infra/superset/build_drug_class_dashboard.py
 set -a && . ./.env && set +a && python3 infra/superset/verify_charts.py  # every chart must return rows
 # Anonymous (public) access: a minimal hand-built role, NOT PUBLIC_ROLE_LIKE=Gamma (which would let
 # strangers edit dashboards). MUST be re-run after adding a dataset: Superset's dataset and chart
 # list APIs filter by datasource_access, so an ungranted dataset is invisible even to the admin.
 docker compose exec -T superset python - < infra/superset/configure_public_role.py
 python3 infra/superset/public_access_test.py   # what a logged-out stranger can and cannot do
+# A dashboard with NO charts is invisible even to an admin (Superset resolves dashboard access
+# through the datasources of its charts), so a build that died before attaching them leaves a
+# dashboard whose slug is taken and which nothing can find. This brings it back:
+set -a && . ./.env && set +a && python3 infra/superset/attach_orphan_dashboard.py
 # Dashboards as code: export to infra/superset/assets/ (refuses if a real password is in the bundle)
 set -a && . ./.env && set +a && python3 infra/superset/export_assets.py
 set -a && . ./.env && set +a && bash infra/superset/import_assets.sh  # rebuild them from the repo

@@ -53,3 +53,33 @@ seeds:
         description: "The state or UT that city is in."
       - name: verified_against_data
         description: "yes = the archive confirms it elsewhere; no = reviewed knowledge only."
+
+  - name: drug_class_vocabulary
+    description: >
+      The reviewed ingredient -> drug class vocabulary (ADR 0014). **Nothing in the CDSCO archive
+      classifies a medicine** - no ATC code, no therapeutic group, and `generic_name` is filled for
+      1,340 of 5,651 product names and holds the whole printed string rather than a normalised
+      salt. So every row here is a claim a person accepted, not a fact the data reports: 213 of 215
+      proposals were accepted one batch at a time, each with a written reason
+      (`analytics/src/drugwatch_analytics/drug_class_review.py`). `oxetacaine` and `menthol` were
+      rejected, which leaves those products unclassified rather than mislabelled.
+      **The entries are phrases, never single words.** A word-level vocabulary files "Atorvastatin
+      Calcium Tablets IP" under mineral supplements, because that calcium is the salt the statin is
+      formulated as - so `calcium carbonate` and `ferrous sulphate` are here and a bare `calcium`,
+      `sodium` or `sulphate` never is. No count from the archive is stored: a measurement mixed in
+      would make a pharmacological claim look like a CDSCO one.
+    columns:
+      - name: ingredient
+        data_tests: [unique, not_null]
+        description: >
+          Lower-case ingredient phrase. Matched whole-word against the printed product name, so
+          `ringer` does not match "Ringerol". Restricted to plain text, because the same string is
+          used as a regex by both Postgres and Python.
+      - name: drug_class
+        data_tests: [not_null]
+        description: >
+          One of 26 classes. Four of them exist to say the product is **not** a medicine -
+          `Surgical consumable or device`, `Antiseptic / disinfectant`, `Cosmetic or toiletry`,
+          `Pharmaceutical raw material` - because CDSCO also tests cotton wool, gauze, syringes,
+          hand sanitiser, soap and hair colour.
+
