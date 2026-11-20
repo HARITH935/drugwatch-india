@@ -151,10 +151,16 @@ def coverage(vocabulary: Mapping[str, str], names: Sequence[tuple[str, int]]) ->
             per_class[drug_class] += n
     lines = [
         f"{len(vocabulary)} accepted ingredient(s) classify {matched} of {total} findings"
-        f" ({matched / total:.1%}); {total - matched} stay Unclassified.",
-        f"{multi} finding(s) carry more than one class, so the classes add up to more than"
-        " the total - a combination product counts under each of its classes.",
+        f" ({matched / total:.1%}); {total - matched} stay Unclassified."
     ]
+    # Only said when it is true: "0 findings carry more than one class, so the classes add up to
+    # more than the total" is a sentence that contradicts itself, and a reader who spots that
+    # stops trusting the rest of the report.
+    if multi:
+        lines.append(
+            f"{multi} finding(s) carry more than one class, so the classes add up to more than"
+            " the total - a combination product counts under each of its classes."
+        )
     lines += [f"  {n:5d} {n / total:5.1%}  {c}" for c, n in per_class.most_common()]
     return "\n".join(lines)
 

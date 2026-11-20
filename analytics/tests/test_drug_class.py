@@ -306,3 +306,11 @@ def test_coverage_reports_the_unclassified_remainder_and_the_double_counting():
     report = coverage(VOCABULARY, NAMES)
     assert "29 of 32 findings (90.6%); 3 stay Unclassified" in report
     assert "4 finding(s) carry more than one class" in report
+
+
+def test_coverage_stays_silent_about_double_counting_when_there_is_none():
+    """A report saying "0 findings carry more than one class, so the classes add up to more than
+    the total" contradicts itself, and a reader who notices stops trusting the rest of it."""
+    report = coverage({"paracetamol": "Analgesic / anti-inflammatory"}, NAMES)
+    assert "more than one class" not in report
+    assert "25 of 32 findings" in report
