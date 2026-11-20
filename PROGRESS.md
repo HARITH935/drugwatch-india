@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 7 — Data Science. The manufacturer risk score.
-**Next:** Harith's call — LightGBM ties with logistic regression on the test window, so which model goes to steps 6-8.
+**Next:** Phase 7 sign-off, then Phase 8 — ONNX export and the FastAPI serving service.
 
 ---
 
@@ -1990,16 +1990,68 @@ score with per-manufacturer explanations.
     - 🐛 MLflow rejects metric names containing parentheses, and does so *mid-run* after the first
       metrics are already written — so "LightGBM (tuned, calibrated)" killed the first evaluation
       pass between two logging calls. Metric names are now sanitised before they are sent.
-- [ ] **DECISION NEEDED** — which model goes to steps 6-8 (SHAP, registration, model card), given
-      that LightGBM is statistically tied with logistic regression on the test window.
-- [ ] Step 6 — SHAP: global importance and per-manufacturer explanations
-- [ ] Step 7 — MLflow runs logged, best model registered
-- [ ] Step 8 — `docs/model-card.md`
+- [x] **Decision: option A** (Harith, 2026-11-20) — ship LightGBM, and let the model card say in
+      plain words that it is statistically tied with logistic regression. The stack mandates
+      LightGBM (plan §6), the point estimates lead on two of three metrics, SHAP comes free from a
+      tree model, and a documented negative result is a better artefact than a win nobody checked.
+- [x] **Step 6 — SHAP, with the wording rules enforced by tests** (2026-11-20)
+    - **Additivity is checked before anything is published, not assumed.** Measured error
+      **2.9 × 10⁻¹⁵** over 3,000 rows. `publish` refuses to register a model whose contributions do
+      not reconstruct its own predictions, because a silent mismatch would mean the sentences
+      describe a different prediction from the one on screen.
+    - **Global importance confirms both of step 2's judgement calls were right.**
+      `reports_24m` 0.397, `months_since_last_report` 0.272, then
+      **`distinct_drug_classes_12m` 0.093** — Phase 6's drug-class vocabulary is the third most
+      used signal — and **`share_of_archive_reports_12m` 0.084**, the ratio that replaced the
+      0.855-correlated calendar feature. Neither was an obvious win when added; both earned a place.
+      `central_lab_share_12m`, the -0.534 drifter, is used **not at all**.
+    - **The public wording is a fixed vocabulary of 28 phrases, one per feature, reviewable in one
+      screen.** A feature with no approved phrase **raises rather than falling back to its column
+      name** — so no future feature can reach a sentence about a named Indian company before a
+      person has written neutral words for it. This is the mechanism that implements CLAUDE.md §6
+      instead of relying on care.
+    - **Five tests enforce the ethics rather than documenting them**: no phrase may contain any of
+      17 forbidden words (fraud, fake, counterfeit, unsafe, substandard, offender, blacklist,
+      avoid…); no phrase may mention quality; every phrase must describe batches, tests, products
+      or laboratories rather than the company; every explanation must end with the
+      reporting-history clause; and the direction words are "raises"/"lowers", never
+      "worsens"/"improves" — the score is not a grade.
+    - The clause lives **in the generated text, not in a page template**, so a website redesign
+      cannot drop it.
+- [x] **Step 7 — registered in MLflow** (2026-11-20)
+    - `manufacturer-risk` version 1, alias `production`. The **plain LightGBM model** is what is
+      registered, not an ONNX export: Phase 8 converts it for serving, but `/explain` needs SHAP
+      and SHAP needs the tree structure ONNX discards. One artifact serves both.
+    - **The test results and the limitations are tags on the registered version**, not only on a
+      run. A model in a registry outlives the conversation that made it, so whoever loads it in
+      Phase 8 reads "statistically tied with logistic regression" off the artifact itself:
+      `test_pr_auc 0.3846`, `test_roc_auc 0.7062`, `test_expected_calibration_error 0.0242`,
+      `test_window 2025-04..2026-03`, and a `limitations` tag naming the tie, the 0.269-vs-0.438
+      gap and the under-prediction.
+    - Artifacts logged: the SHAP importance plot and CSV, and three worked explanations spanning
+      the score range. **No manufacturer is named in them** — a worked example naming a real
+      company is a published allegation (ADR 0003).
+    - `get_latest_versions` is deprecated with registry stages; replaced with
+      `search_model_versions`.
+- [x] **Step 8 — `docs/model-card.md`** (2026-11-20) — 185 lines, written for whoever ships or
+      reviews this rather than for us. Leads with what the score does **not** predict, states the
+      tie with logistic regression under its own heading, gives the seen/new split as a table,
+      explains why PR-AUC is the headline (a random ranking scores 0.16 here, not 0.5), lists the
+      §12 features that cannot exist and why, and ends with eight numbered limitations and the
+      unsent permission emails.
 
 **Done when:** LightGBM beats both baselines on the time-based test set, and explanations are
 generated. ⚠️ Raised by decision C to **all three** baselines, on PR-AUC, with a confidence
 interval that excludes no difference. **If LightGBM does not clearly win, that is the reported
 result** — the test window is used once and is never tuned against.
+
+**Outcome (2026-11-20): met on the plan's criterion, NOT met on decision C's.** On point estimates
+LightGBM beats both of §12's baselines (PR-AUC 0.385 against 0.373 and 0.214). Under decision C it
+beats the rule and the count ranking with intervals clear of zero, and is **tied with logistic
+regression** (+0.011, 95% CI -0.004..+0.026). Explanations are generated and their arithmetic is
+verified. Shipped under option A with the tie documented on the registered model and in the model
+card. The stricter bar did exactly what it was raised to do: it stopped a 0.011 difference being
+reported as a win.
 
 ---
 
@@ -2231,3 +2283,7 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-20 | The score is publishable as a probability (ECE 0.024) only because the reweighting was dropped on validation first; `scale_pos_weight=3.0` predicted 0.252 against a 0.126 base rate | `evaluate.py` |
 | 2026-11-20 | Every decile under-predicts because the training base rate was 12.8% and the test period's is 16.0%. Needs monthly recalibration in Phase 9, not a refit | step 5 |
 | 2026-11-20 | Seen-during-training PR-AUC 0.438 vs new-companies 0.269 (P@20 0.725 vs 0.408): the model is far weaker on the half of the archive it has never seen | model card |
+| 2026-11-20 | Option A: ship LightGBM with the tie documented. SHAP comes free from a tree model and a documented negative result beats a win nobody checked | Harith |
+| 2026-11-20 | SHAP confirms both step-2 judgement calls: `distinct_drug_classes_12m` is the 3rd most used feature and `share_of_archive_reports_12m` the 4th, while the -0.534 calendar drifter is used not at all | step 6 |
+| 2026-11-20 | Public wording is a fixed 28-phrase vocabulary; a feature with no approved phrase raises rather than printing its column name. Five tests enforce CLAUDE.md §6 instead of documenting it | `ml/.../explain.py` |
+| 2026-11-20 | The registered model carries its own limitations as tags, so Phase 8 reads the tie off the artifact rather than a commit message | MLflow `manufacturer-risk` v1 |
