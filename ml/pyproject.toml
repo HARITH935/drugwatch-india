@@ -1,0 +1,35 @@
+# Python project for the manufacturer risk model (Phase 7). Managed by uv (ADR 0005).
+[project]
+name = "drugwatch-ml"
+version = "0.1.0"
+description = "Manufacturer risk score: LightGBM over gold.mart_ml_features, with SHAP explanations"
+authors = [
+    { name = "Harith", email = "181994424+HARITH935@users.noreply.github.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "lightgbm>=4.7,<5", # plan §6: the model. Needs libomp on macOS (brew install libomp)
+    "shap>=0.54,<1", # plan §6: per-prediction explanations
+    "mlflow>=3.18,<4", # plan §6: run tracking + the model registry
+    "scikit-learn>=1.9,<2", # the logistic-regression baseline and the metrics only (ADR 0015)
+    "pandas>=2.3,<3", # same pin as spark/ and analytics/ (PySpark compatibility)
+    "psycopg[binary]>=3.2.0", # reads gold.mart_ml_features (same driver as warehouse/, ADR 0011)
+    "matplotlib>=3.9", # SHAP summary plots, logged to MLflow as artifacts (ADR 0013's choice)
+]
+
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.4", # lint + format rules live in the repo-root ruff.toml
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: needs the local Postgres with gold loaded, or MLflow (skipped without them)",
+]

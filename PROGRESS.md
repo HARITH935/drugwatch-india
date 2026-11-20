@@ -2,8 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 6 — Analytics. All five steps done; all four dashboards built, verified and public.
-**Next:** Harith's visual review of the four dashboards, then Phase 6's sign-off and Phase 7.
+**Current phase:** Phase 7 — Data Science. The manufacturer risk score.
+**Next:** step 1 — the train/validate/test protocol, with the 6-month embargo between train and test.
 
 ---
 
@@ -1693,9 +1693,100 @@ Approved 2026-11-19. Plan: `DRUGWATCH_PHASES.md` §9 Phase 6. Goal: public, read
       first, and the orphaned chart that pointed at it was removed with it.)
 
 **Done when:** dashboards are viewable publicly with filters working.
+✅ **Phase 6 signed off by Harith, 2026-11-20.** All five steps done; four dashboards, 20 charts,
+every one verified to return data; anonymous read-only access proven by test; the whole thing
+exported as YAML and re-imported successfully. The visual review is Harith's and continues to be -
+anything that looks wrong on a page is a fix, not a reopened phase.
 ⚠️ **"Publicly" is local-only until Phase 12:** `docs/permissions.md` requires CDSCO permission before the
 data appears on a live site, and **neither permission email has been sent**. Sending them is on the
 critical path and is Harith's to do.
+
+---
+
+## Phase 7 — Data Science
+
+Approved 2026-11-20. Plan: `DRUGWATCH_PHASES.md` §9 Phase 7 and §12. Goal: a manufacturer risk
+score with per-manufacturer explanations.
+
+**Four decisions taken at the start** (Harith, 2026-11-20 — "your recommendations"):
+- **A. scikit-learn is a direct dependency** of `ml/`, for §12's logistic-regression baseline and
+  its metrics only — **ADR 0015**. It costs nothing: `shap`, `mlflow` and `skops` already install
+  it, so this makes an existing transitive dependency a declared one.
+- **B. MLflow runs as a Compose service** with Postgres behind it and RustFS for artifacts —
+  **ADR 0016**. Decided by Phase 8, not Phase 7: a serving container cannot read a directory on
+  the Mac.
+- **C. A stricter bar than the plan's.** LightGBM must beat **all three** baselines on PR-AUC with
+  a confidence interval excluding no-difference. The plan says "beats both baselines", which the
+  measurements below show could be satisfied by luck against the weakest one.
+- **D. Two features the plan does not list**: §12's drug-class shares (unblocked by Phase 6 step
+  3c) and the archive-wide testing volume in the window.
+
+**What was measured before planning anything** (2026-11-20, against the live `mart_ml_features`):
+- **The real bar is higher than the plan assumes.** §12's baseline 1 ("reported in the last 6
+  months → will be again") scores **ROC-AUC 0.623** on the candidate test year. But simply ranking
+  companies by `reports_24m` scores **0.687** — better than the plan's own baseline, and free. A
+  model that beat only 0.623 would be beating a straw man, hence decision C.
+- **The population grows about 9×** across the archive (304 manufacturers with a cutoff row in
+  2019, 2,609 in 2026) and the positive rate drifts between 9.4% and 17.8%. So the test set has to
+  be the most recent period and the probabilities need a calibration check, not just a ranking
+  metric.
+- **44% of manufacturers are invisible to this model by construction.** 1,151 of 2,609 companies
+  were first reported *during* the candidate test window, and a company has no cutoff rows before
+  its first finding. So the score answers "will a manufacturer **already in the archive** be
+  reported again?" and cannot answer "is this company risky?" — a limitation for the model card,
+  not a bug.
+- **An assumption of mine was wrong, and the data corrected it.** I expected companies with
+  nothing reported in 24 months to be near-certain negatives. They are **8.1% positive** against
+  19.6% for recently-reported ones — low, but nothing like zero, and 557 of the test window's 3,534
+  positives come from that group. They stay in the data and results are reported for both groups
+  separately.
+
+- [x] **Step 0 — the `ml/` project and the tracking server** (2026-11-20)
+    - **`ml/` reads `gold.mart_ml_features` and nothing else**, in a read-only transaction, so no
+      training run can modify the warehouse it learns from. Tested by attempting a write and
+      requiring `ReadOnlySqlTransaction`. The connection code is duplicated from `analytics/`
+      rather than imported: a training pipeline that breaks when a notebook dependency changes
+      would be the wrong coupling.
+    - **The feature list is written out, not inferred from the table.** `FEATURE_COLUMNS` names all
+      17, and an integration test compares it against the live mart and fails if they differ. The
+      failure it prevents is silent: a renamed mart column would otherwise reach LightGBM as a
+      column of nulls, train without complaining, and score every manufacturer on a feature that
+      means nothing. Tests also pin that the label and the keys are **not** features —
+      `as_of_month` as a feature would let the model learn "later months are riskier", which is a
+      fact about CDSCO's publishing volume, not about any manufacturer.
+    - **The unknowable labels are reachable but never mixed in.** The last 6 cutoffs have a future
+      the archive cannot see; those rows keep a null label and nothing fills it in, because an
+      unknown future is not a negative outcome. They are exactly the rows that scoring a company
+      *today* needs, so both sets are available and a test asserts the null stays null.
+    - **Every MLflow run records what it would take to reproduce it**: the git commit, **whether
+      the working tree was dirty** (a commit hash describes the code only if nothing was edited on
+      top of it), and a fingerprint of the feature table — row count, column count, newest cutoff.
+      Deliberately not a hash of the values: the mart is rebuilt monthly and a hash would change
+      every time without saying what changed.
+    - **Verified end to end before any modelling exists** (`drugwatch_ml.smoke_test`): 71,354
+      labelled rows readable, all 17 features numeric, writes refused, a run tagged, and **an
+      artifact written to RustFS and read back byte for byte**. That last check earns its place —
+      `log_artifact` reports success whether or not the server can reach its artifact store, so a
+      misconfigured bucket would have surfaced in Phase 8 as a model that cannot be loaded.
+      Confirmed independently against RustFS: `s3://mlflow/1/<run>/artifacts/smoke.json`, 64 bytes.
+    - Three things the official MLflow image needed, all found by running it: no Postgres driver
+      and no S3 client (added, pinned); no environment variable for RustFS's required path-style
+      addressing, so it is baked into the image where it actually applies; and no `ENTRYPOINT`
+      with `CMD python3`, so Compose's arguments were being handed to the interpreter.
+    - 16 tests passing.
+- [ ] Step 1 — the train/validate/test protocol, with a 6-month embargo between train and test
+- [ ] Step 2 — the feature matrix, plus decision D's two additions
+- [ ] Step 3 — three baselines
+- [ ] Step 4 — LightGBM, tuned on validation cutoffs only
+- [ ] Step 5 — evaluation: ROC-AUC, PR-AUC, precision@K per month, calibration, company-level CIs
+- [ ] Step 6 — SHAP: global importance and per-manufacturer explanations
+- [ ] Step 7 — MLflow runs logged, best model registered
+- [ ] Step 8 — `docs/model-card.md`
+
+**Done when:** LightGBM beats both baselines on the time-based test set, and explanations are
+generated. ⚠️ Raised by decision C to **all three** baselines, on PR-AUC, with a confidence
+interval that excludes no difference. **If LightGBM does not clearly win, that is the reported
+result** — the test window is used once and is never tuned against.
 
 ---
 
@@ -1901,3 +1992,8 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-20 | 🔍 A Superset dashboard with NO charts is invisible even to an admin - access is resolved through its charts' datasources - so a build that dies before attaching them leaves a dashboard whose slug is taken and which nothing can find | `infra/superset/attach_orphan_dashboard.py` |
 | 2026-11-20 | `int_drug_class` is a table, not a view: three nodes read it and each was re-running the 5,651 x 213 regex cross join (~21 s apiece). Full `dbt build` 45 s -> 23 s | `int_drug_class.sql` |
 | 2026-11-20 | Dashboard 3c's charts read summary marts rather than §8.2's month-grain mart, so the default reading is the safe one instead of depending on a remembered caveat | `mart_drug_class_summary.sql` |
+| 2026-11-20 | ✅ Phase 6 signed off. Phase 7 approved with four decisions: scikit-learn declared (ADR 0015), MLflow in Compose (ADR 0016), a stricter winning bar, two extra features | Harith |
+| 2026-11-20 | Plan §12's baseline scores ROC-AUC 0.623, but ranking by `reports_24m` alone scores 0.687 - so "beats both baselines" could be satisfied against a straw man. The bar is now all three, on PR-AUC, with a CI | PROGRESS Phase 7 |
+| 2026-11-20 | 44% of manufacturers (1,151 of 2,609) were first reported during the test window and have no rows before their first finding, so the score cannot answer "is this company risky?" - only "will one already in the archive be reported again?" | model card |
+| 2026-11-20 | I expected companies quiet for 24 months to be certain negatives; they are 8.1% positive and supply 557 of 3,534 test positives. They stay in, reported separately | `mart_ml_features` |
+| 2026-11-20 | `log_artifact` reports success even when the server cannot reach its artifact store, so the smoke test reads the artifact back from RustFS byte for byte | `drugwatch_ml/smoke_test.py` |

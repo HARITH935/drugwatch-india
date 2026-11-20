@@ -117,7 +117,7 @@ drugwatch-india/
 ├── warehouse/        # silver -> Postgres staging loader (ADR 0011)
 ├── orchestration/    # Airflow DAGs + its config wrapper (ADR 0012)
 ├── analytics/        # exploration notebook over gold (ADR 0013)
-├── ml/               # Feature prep, LightGBM training, SHAP, MLflow
+├── ml/               # LightGBM risk model, SHAP, MLflow tracking (ADR 0015, ADR 0016)
 ├── ml-serving/       # FastAPI + ONNX Runtime service
 ├── llm/              # Hugging Face + PEFT LoRA fine-tuning and inference
 ├── backend/          # Spring Boot application
@@ -264,6 +264,16 @@ docker compose exec postgres psql -U drugwatch -c "CREATE DATABASE superset"
 set -a && . ./.env && set +a && docker compose exec -T postgres psql -U drugwatch -v ON_ERROR_STOP=1 -v reader_password="$SUPERSET_READER_PASSWORD" -f - < infra/postgres/superset_reader.sql
 # First time only: create Airflow's own database beside drugwatch's
 docker compose exec postgres psql -U drugwatch -c "CREATE DATABASE airflow"
+
+# ML: the manufacturer risk score (from ml/, Postgres up with gold loaded; ADR 0015, ADR 0016)
+# Reads gold.mart_ml_features ONLY, in a read-only transaction. MLflow tracks every run.
+uv sync                                    # lightgbm, shap, mlflow, scikit-learn
+uv run --env-file ../.env python -m drugwatch_ml.smoke_test  # foundations: gold + MLflow + artifacts
+uv run --env-file ../.env pytest           # incl. that the feature list matches the live mart
+# First time only: MLflow's own database and its artifact bucket
+docker compose exec postgres psql -U drugwatch -c "CREATE DATABASE mlflow"
+docker compose run --rm rustfs-init        # creates the mlflow bucket too (idempotent)
+docker compose up -d --wait mlflow         # UI: http://localhost:5050
 ```
 
 **Local service ports** (all bound to 127.0.0.1; Postgres and Redis are shifted so they don't clash with OpsPilot):
@@ -278,6 +288,7 @@ docker compose exec postgres psql -U drugwatch -c "CREATE DATABASE airflow"
 | Mailpit inbox | http://localhost:8025 | — |
 | Airflow UI | http://localhost:8082 | — (runs on the host, not in Docker) |
 | Superset | http://localhost:8088 | `superset:8088` |
+| MLflow | http://localhost:5050 | `mlflow:5000` |
 
 S3 clients talking to RustFS must use **path-style addressing** (see ADR 0002).
 If S3 calls fail with `RequestTimeTooSkewed` after the Mac has slept, Docker's VM clock has drifted more than

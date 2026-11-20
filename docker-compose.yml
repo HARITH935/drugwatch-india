@@ -61,7 +61,7 @@ services:
     entrypoint: ["sh", "/scripts/create-buckets.sh"] # run our script instead of the RustFS server
     environment:
       S3_ENDPOINT: http://rustfs:9000 # inside the compose network, the service name works as a hostname
-      BUCKETS: raw bronze silver # gold lives in Postgres, not here
+      BUCKETS: raw bronze silver mlflow # gold is in Postgres; mlflow holds model artifacts
       RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:?Set RUSTFS_ACCESS_KEY in .env}
       RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:?Set RUSTFS_SECRET_KEY in .env}
     volumes:
@@ -154,6 +154,60 @@ services:
         superset fab create-admin --username "$${ADMIN_USERNAME}" --firstname Admin --lastname User --email admin@drugwatch.local --password "$${ADMIN_PASSWORD}" || echo "admin already exists"
         superset init
 
+  # --- MLflow: experiment tracking + the model registry (Phase 7, ADR 0016) ---
+  # In Docker rather than as local files, because Phase 8's serving container has to load the
+  # registered model over the network, and a directory on the Mac is not reachable from a
+  # container.
+  mlflow:
+    # Built from infra/mlflow/Dockerfile: the official image has no Postgres driver, no S3 client.
+    build:
+      context: .
+      dockerfile: infra/mlflow/Dockerfile
+    image: drugwatch/mlflow:3.18.0
+    depends_on:
+      postgres:
+        condition: service_healthy # the backend store is a Postgres database
+      rustfs:
+        condition: service_healthy # artifacts land in the `mlflow` bucket
+    environment:
+      # Reaches RustFS over the S3 API inside the compose network. Path-style addressing
+      # (ADR 0002) comes from the image's /root/.aws/config, not from here.
+      AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY:?Set RUSTFS_ACCESS_KEY in .env}
+      AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY:?Set RUSTFS_SECRET_KEY in .env}
+      MLFLOW_S3_ENDPOINT_URL: http://rustfs:9000
+      AWS_DEFAULT_REGION: us-east-1 # RustFS ignores it; boto3 refuses to start without one
+      POSTGRES_USER: ${POSTGRES_USER:-drugwatch}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:5050:5000" # host 5050: macOS AirPlay Receiver listens on 5000
+    # The image has no ENTRYPOINT and CMD is `python3`, so the command has to be named here or
+    # Compose's args get handed to the Python interpreter.
+    entrypoint: ["mlflow", "server"]
+    # --serve-artifacts makes this server the only thing holding S3 credentials: clients log
+    # and fetch artifacts through it, so the training code on the Mac and the Phase 8 container
+    # need the MLflow URL and nothing else.
+    command:
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5000"
+      - --backend-store-uri
+      - postgresql+psycopg2://${POSTGRES_USER:-drugwatch}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/mlflow
+      - --serve-artifacts
+      - --artifacts-destination
+      - s3://mlflow/
+    healthcheck:
+      # No curl in this image, and python3 is already its CMD, so the check uses the stdlib
+      # rather than installing a package only the healthcheck would need.
+      test:
+        - CMD
+        - python3
+        - -c
+        - import urllib.request; urllib.request.urlopen("http://localhost:5000/health")
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
 volumes:
   postgres-data:
   rustfs-data:
