@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 7 — Data Science. The manufacturer risk score.
-**Next:** step 3 — the three baselines (the plan's two, plus the 0.687 count ranking).
+**Next:** step 4 — LightGBM, tuned on the validation folds only. It has to clear PR-AUC 0.373.
 
 ---
 
@@ -1855,7 +1855,46 @@ score with per-manufacturer explanations.
       `is distinct from false` reports as TRUE. It flagged all **46,296** quiet rows as corrupt
       data. The mart was right; the test was wrong. `coalesce` added, with the reason in the file.
     - `dbt build` 94 nodes green, 44 ml tests passing.
-- [ ] Step 3 — three baselines
+- [x] **Step 3 — three baselines, and the bar is not where the plan put it** (2026-11-20)
+      Measured on the tuning folds only; the test window stays untouched until step 5.
+
+      | baseline | ROC-AUC | PR-AUC | P@20/month |
+      |---|---|---|---|
+      | §12's rule: reported in last 6m | 0.628 | 0.185 | 0.272 |
+      | ranking by reports in last 24m | 0.728 | 0.323 | 0.672 |
+      | **§12's logistic regression** | 0.726 | **0.373** | 0.697 |
+
+    - **The bar is PR-AUC 0.373, double the plan's rule at 0.185.** Decision C's worry is now a
+      measurement: a model could "beat both baselines" while being far worse than a one-column
+      count. And the count ranking really is a serious baseline — ROC-AUC 0.728, *higher* than the
+      logistic model's 0.726, with no fitting at all.
+    - **Which is exactly why PR-AUC decides and not ROC-AUC.** The two strongest baselines are
+      tied on ROC-AUC (0.728 vs 0.726) and clearly apart on PR-AUC (0.323 vs 0.373). With 12-13%
+      positives, ROC-AUC is dominated by how well the model orders the easy negatives; PR-AUC only
+      cares about the top of the list, which is the part anybody would act on.
+    - **The bar was itself tested for significance, not assumed.** Logistic minus count-ranking on
+      validate-3: **+0.034 PR-AUC, 95% CI +0.012..+0.050** — excludes zero, so the bar is genuinely
+      the logistic model's. Decision C's rule applied to the baselines too; otherwise the bar
+      itself could have been a coin flip.
+    - **Confidence intervals resample companies, not rows**, and a test proves the grouping
+      changes the answer: one manufacturer contributes up to 12 monthly rows, which are one
+      company's history seen twelve times rather than twelve independent cases. Row-level
+      resampling gives a visibly narrower interval — which is how a model gets reported
+      "significantly better" when it is not.
+    - **Precision@K is per month, then averaged**, with a test showing it differs from pooling
+      (1.000 pooled vs 0.625 per-month on a constructed case). Pooled, the busiest month fills the
+      whole top 20 and the quiet months are never represented — but a list is read one month at a
+      time.
+    - **What the linear model leaned on** (scaled, so comparable): `reports_24m` +0.670, then
+      `distinct_reporting_states_12m` +0.306, `central_lab_reports_12m` **-0.298**,
+      `distinct_drugs_12m` +0.281, `distinct_drug_classes_12m` +0.208. Breadth of exposure matters
+      beyond raw count, and step 6 can check SHAP against this.
+    - Leak checks on the only fitted baseline: nulls are filled with the **training** median
+      (filling an evaluation set from its own median leaks, invisibly), a column entirely null in
+      training becomes 0 rather than reaching sklearn as NaN, and scoring before fitting is
+      refused. Filled with pandas, not sklearn's imputer — ADR 0015 approved three classes and a
+      fourth would be a wider dependency than agreed for two lines of `fillna`.
+    - 66 tests passing.
 - [ ] Step 4 — LightGBM, tuned on validation cutoffs only
 - [ ] Step 5 — evaluation: ROC-AUC, PR-AUC, precision@K per month, calibration, company-level CIs
 - [ ] Step 6 — SHAP: global importance and per-manufacturer explanations
@@ -2083,3 +2122,7 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-20 | A test rejects any feature correlating >0.7 with the cutoff; it found `central_lab_share_12m` at -0.534 (state labs grew relative to central ones). Kept as a real company feature, pinned and noted for the model card | `ml/tests/test_features.py` |
 | 2026-11-20 | 🐛 `filter (where drug_class = 'Unclassified')` counted 0 of 1,382 findings: dim_drug stores an EMPTY ARRAY, not that string. A constant feature passes every range check, so two tests now fail on one | `assert_ml_feature_shares_are_valid.sql` |
 | 2026-11-20 | 🐛 `NULL > 0` is NULL and `NULL is distinct from false` is TRUE, so a null-state check flagged all 46,296 quiet rows as corrupt. The test was wrong, not the mart | `assert_ml_feature_shares_are_valid.sql` |
+| 2026-11-20 | The bar is PR-AUC 0.373 (logistic regression), not the plan's rule at 0.185. Ranking by `reports_24m` alone beats the plan's rule on every metric with no fitting | step 3 |
+| 2026-11-20 | The two best baselines tie on ROC-AUC (0.728 vs 0.726) and separate on PR-AUC (0.323 vs 0.373), which is why PR-AUC decides: with 13% positives, ROC-AUC is dominated by ordering easy negatives | step 3 |
+| 2026-11-20 | Logistic beats the count ranking by +0.034 PR-AUC, 95% CI +0.012..+0.050, so the bar is not a coin flip. Decision C's significance rule applied to the baselines too | `run_baselines.py` |
+| 2026-11-20 | Bootstrap CIs resample companies, not rows - a test shows row-level resampling gives a narrower interval than the evidence supports | `ml/.../metrics.py` |
