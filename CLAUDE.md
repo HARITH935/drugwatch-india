@@ -118,7 +118,7 @@ drugwatch-india/
 ├── orchestration/    # Airflow DAGs + its config wrapper (ADR 0012)
 ├── analytics/        # exploration notebook over gold (ADR 0013)
 ├── ml/               # LightGBM risk model, SHAP, MLflow tracking (ADR 0015, ADR 0016)
-├── ml-serving/       # FastAPI + ONNX Runtime service
+├── ml-serving/       # FastAPI + ONNX Runtime risk service (ADR 0017)
 ├── llm/              # Hugging Face + PEFT LoRA fine-tuning and inference
 ├── backend/          # Spring Boot application
 ├── frontend/         # Next.js + Tailwind website
@@ -276,6 +276,16 @@ caffeinate -i uv run --env-file ../.env python -u -m drugwatch_ml.train --trials
 # The single-use test. Exits 1 if the model fails decision C's bar; that is a result, not a bug.
 caffeinate -i uv run --env-file ../.env python -u -m drugwatch_ml.evaluate
 caffeinate -i uv run --env-file ../.env python -u -m drugwatch_ml.publish  # SHAP + register (docs/model-card.md)
+
+# Risk service (from ml-serving/, MLflow up with a registered model; ADR 0017)
+# Reads NOTHING from Postgres: Phase 9's API reads gold and posts the 28 features.
+uv sync                                    # fastapi, onnxruntime, onnxmltools (+ ../ml for wording)
+uv run --env-file ../.env python -m drugwatch_serving.build_onnx   # export + verify vs the original
+uv run --env-file ../.env pytest           # incl. that /predict and /explain return the same score
+uv run --env-file ../.env uvicorn drugwatch_serving.app:app --port 8000  # run it on the Mac
+docker compose up -d --build --wait risk-api   # or in Docker: http://localhost:8000/docs
+curl -s localhost:8000/health | python3 -m json.tool    # which model version is answering
+uv run python -m drugwatch_serving.benchmark --url http://localhost:8000  # p50/p95/p99 latency
 uv run --env-file ../.env pytest           # incl. that the feature list matches the live mart
 # First time only: MLflow's own database and its artifact bucket
 docker compose exec postgres psql -U drugwatch -c "CREATE DATABASE mlflow"
@@ -296,6 +306,7 @@ docker compose up -d --wait mlflow         # UI: http://localhost:5050
 | Airflow UI | http://localhost:8082 | — (runs on the host, not in Docker) |
 | Superset | http://localhost:8088 | `superset:8088` |
 | MLflow | http://localhost:5050 | `mlflow:5000` |
+| Risk API | http://localhost:8000 | `risk-api:8000` |
 
 S3 clients talking to RustFS must use **path-style addressing** (see ADR 0002).
 If S3 calls fail with `RequestTimeTooSkewed` after the Mac has slept, Docker's VM clock has drifted more than

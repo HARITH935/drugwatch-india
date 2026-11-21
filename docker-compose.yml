@@ -191,11 +191,27 @@ services:
       - 0.0.0.0
       - --port
       - "5000"
+      # One worker. MLflow 3 starts four by default and each loads the whole server, measured at
+      # ~1.9 GiB resident in total on a VM with 4.8 GiB that also has to host Spark (ADR 0012
+      # keeps Airflow off it for the same reason). A tracking server for one developer and one
+      # serving container does not need four.
+      - --workers
+      - "1"
       - --backend-store-uri
       - postgresql+psycopg2://${POSTGRES_USER:-drugwatch}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/mlflow
       - --serve-artifacts
       - --artifacts-destination
       - s3://mlflow/
+      # MLflow 3 rejects a request whose Host header it does not recognise, as DNS-rebinding
+      # protection, and its default list is localhost plus private IPs - which does NOT include
+      # a compose service name. So `risk-api` calling http://mlflow:5000 got a 403 "possible DNS
+      # rebinding attack" until these were named. Listed explicitly rather than disabled: the
+      # protection is worth keeping for a service Phase 12 may expose.
+      - --allowed-hosts
+      # Both ports matter and that is easy to get wrong: a container reaches it as
+      # mlflow:5000, while the Mac reaches the PUBLISHED port as localhost:5050. Listing
+      # only :5000 broke every command run from the Mac with the same 403.
+      - mlflow:5000,localhost:5000,127.0.0.1:5000,localhost:5050,127.0.0.1:5050
     healthcheck:
       # No curl in this image, and python3 is already its CMD, so the check uses the stdlib
       # rather than installing a package only the healthcheck would need.
@@ -208,6 +224,30 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
+  # --- risk-api: the manufacturer risk score service (Phase 8) ---
+  # Loads the model registered by Phase 7 from MLflow at startup, exports it to ONNX in
+  # memory, and refuses to start if the two disagree. It never touches Postgres: Phase 9's
+  # Spring Boot API reads gold and posts the features (plan §5).
+  risk-api:
+    build:
+      # The repo root, because this project depends on ../ml for the approved wording.
+      context: .
+      dockerfile: infra/ml-serving/Dockerfile
+    image: drugwatch/risk-api:1.0.0
+    depends_on:
+      mlflow:
+        condition: service_healthy # no registry means no model, so starting first is a crash
+    environment:
+      # Inside the compose network the service name is the host; 5050 is only the Mac's port.
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s # loading the model and converting it to ONNX takes a few seconds
 volumes:
   postgres-data:
   rustfs-data:

@@ -44,3 +44,6 @@ data/
 *.onnx
 *.safetensors
 !**/tests/fixtures/**
+
+# Phase 8: the ONNX export is rebuilt from the MLflow registry, never committed.
+ml-serving/artifacts/

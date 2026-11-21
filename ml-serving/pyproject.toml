@@ -1,0 +1,49 @@
+# The prediction service (Phase 8). Managed by uv (ADR 0005).
+[project]
+name = "drugwatch-serving"
+version = "0.1.0"
+description = "FastAPI + ONNX Runtime service for the manufacturer risk score"
+authors = [
+    { name = "Harith", email = "181994424+HARITH935@users.noreply.github.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.165,<1", # plan §6: the HTTP service
+    "uvicorn[standard]>=0.54,<1", # the ASGI server FastAPI runs on; nothing serves without one
+    "onnxruntime>=1.32,<2", # plan §6: runs the exported model
+    "onnxmltools>=1.16,<2", # plan §6.1: converts LightGBM to ONNX (approved 2026-11-03)
+    # /explain needs SHAP, and SHAP needs the tree structure that ONNX discards, so the original
+    # model is loaded alongside the ONNX one. Same reason the registry holds the LightGBM flavour.
+    "lightgbm>=4.7,<5",
+    "shap>=0.54,<1",
+    "mlflow>=3.18,<4", # loads the registered model version at startup
+    "pandas>=2.3,<3", # same pin as every other Python project here
+    "numpy>=2.0",
+    # The approved public wording for explanations (the 28-phrase vocabulary, the forbidden-word
+    # list, the reporting-history clause) lives in drugwatch_ml.explain and is NOT copied here. A
+    # second copy of public text about named Indian companies is a second thing to keep correct,
+    # and the copy is always the one that drifts. It is a runtime dependency because /explain is
+    # part of the service the plan specifies, so the container needs it.
+    "drugwatch-ml",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "httpx>=0.28", # FastAPI's TestClient needs it; tests only, never at runtime
+    "ruff>=0.17.4",
+]
+
+[tool.uv.sources]
+drugwatch-ml = { path = "../ml", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: needs MLflow with a registered model, or the running service",
+]
