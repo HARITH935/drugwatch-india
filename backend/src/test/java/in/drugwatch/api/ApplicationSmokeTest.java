@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.client.RestTestClient;
 
 /**
@@ -16,9 +17,13 @@ import org.springframework.test.web.servlet.client.RestTestClient;
  *
  * <p>The client is {@link RestTestClient}, not {@code TestRestTemplate}: Spring Boot 4 removed the
  * latter.
+ *
+ * <p>It imports {@link TestDatabase} because the context now needs a database to start - which is
+ * the point of a smoke test: it fails when the application cannot boot for real.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureRestTestClient
+@Import(TestDatabase.class)
 class ApplicationSmokeTest {
 
     @Autowired

@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 9 — Backend. The Spring Boot API.
-**Next:** step 1 — the `drugwatch_api` Postgres role and Flyway migrations for the app tables.
+**Next:** step 2 — the public endpoints: batch search, drugs, manufacturers, latest alerts.
 
 ---
 
@@ -2229,7 +2229,41 @@ exist. It belongs to the deferred price phase.
       `RestTestClient` needs both `@AutoConfigureRestTestClient` **and** a separate
       `spring-boot-resttestclient` module that `spring-boot-starter-test` does not pull in.
     - 7 tests passing.
-- [ ] Step 1 — `drugwatch_api` Postgres role + Flyway migrations for the app tables (§8.3)
+- [x] **Step 1 — the API's database role and its own tables** (2026-11-21)
+    - **The role plays two parts, and Postgres enforces both.** Against the warehouse it is a
+      reader: `SELECT` on `gold` and nothing more, so a stray `UPDATE gold.fact_nsq_sample` from
+      the public service fails with "permission denied" instead of silently rewriting published
+      CDSCO findings. Against its own tables it is the owner, in a separate `app` schema that
+      Flyway migrates and dbt never touches. **Verified on the real database: 17 gold tables
+      readable, 0 writable, cannot see `staging` or `ops`.**
+    - **Six tests ask the database the forbidden questions** rather than trusting the SQL file:
+      write to gold, create a table in gold, read `staging.silver_nsq` (silver *before* its quality
+      gate), read `ops.pipeline_run` (the operational run log). They need the real Postgres, so they
+      skip when `API_DB_PASSWORD` is absent — the same shape as the Python integration tests.
+      Testcontainers cannot answer this: its container has one superuser and none of the grants.
+    - **Flyway owns `app`**: numbered SQL, applied once, recorded. Hibernate is set to `validate`
+      and never `update` — a schema generated at startup has no history, no review and no rollback.
+      A test asserts **nothing was created outside `app`**, because a migration leaking a table into
+      `public` is the first step towards two tools editing one schema.
+    - **The constraints carry the design, not the Java.** `alert_notifications` has a UNIQUE on
+      (watchlist item, alert month), which makes a duplicate email **impossible** rather than
+      unlikely: a retry after a half-finished run, two schedulers overlapping, or a redeploy
+      mid-send all collide with it. Emails are forced lower-case by a CHECK, or `A@b.com` and
+      `a@b.com` become two accounts and the unique index stops meaning anything. A watch term must
+      be 3–100 characters, because a one-letter term matches most of the archive and emails the
+      user every month, which is indistinguishable from spam. `email_verified` defaults to **false**
+      (decision E). Deleting a user cascades, or a deleted account keeps being emailed.
+    - **13 schema tests**, each checking a rule the application would otherwise have to remember.
+      A constraint enforced only in Java is enforced until the second code path.
+    - 🐛 **Spring Boot 4 split auto-configuration into per-technology modules**, and `flyway-core`
+      alone gives you a Flyway that sits on the classpath and never runs: no migration, no log
+      line, and a bare "relation app.users does not exist" at the first query. It needs
+      `spring-boot-flyway` beside it. Same restructuring that caught step 0 with
+      `spring-boot-resttestclient`.
+    - 🐛 **Testcontainers 2.0 renamed every module** with a `testcontainers-` prefix
+      (`postgresql` → `testcontainers-postgresql`), and Spring Boot 4's parent no longer manages
+      their versions, so the BOM is imported explicitly.
+    - 26 tests passing (6 skipping without the local database, as CI will see them).
 - [ ] Step 2 — public endpoints: batch search, drugs, manufacturers, latest alerts
 - [ ] Step 3 — auth: register, login, refresh, roles, email verification
 - [ ] Step 4 — watchlist + notification emails
@@ -2488,3 +2522,7 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-21 | 40% of batch numbers carry spaces or punctuation (KA/018), but normalising collapses only 6,807 distinct values to 6,766 - and "Not applicable" is a batch number on 22 findings | step 2 design |
 | 2026-11-21 | Actuator publishes config, env and a map of internal services by default; the API exposes health only, with no component detail, checked by three tests | `application.yaml` |
 | 2026-11-21 | 🐛 Spring Boot 4 removed `TestRestTemplate`; `RestTestClient` replaces it and needs its own `spring-boot-resttestclient` module, which starter-test does not pull in | `ApplicationSmokeTest` |
+| 2026-11-21 | The API's Postgres role can read gold and write only its own `app` schema: 17 gold tables readable, 0 writable, `staging` and `ops` invisible. Six tests ask the database the forbidden questions | `infra/postgres/api_role.sql` |
+| 2026-11-21 | `alert_notifications` has a UNIQUE on (watchlist item, alert month), so a duplicate email is impossible in the database rather than unlikely in the code | `V1__app_tables.sql` |
+| 2026-11-21 | 🐛 Spring Boot 4 split auto-configuration into per-technology modules: `flyway-core` alone never runs the migration, and fails as a bare "relation does not exist". It needs `spring-boot-flyway` | backend/pom.xml |
+| 2026-11-21 | 🐛 Testcontainers 2.0 renamed every module with a `testcontainers-` prefix, and Boot 4's parent no longer manages their versions | backend/pom.xml |

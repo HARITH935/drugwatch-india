@@ -4,6 +4,35 @@ spring:
   application:
     name: drugwatch-api
 
+  datasource:
+    # Host 5433 is how Postgres is published to this Mac; inside Docker it is postgres:5432.
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/${POSTGRES_DB:drugwatch}
+    username: ${API_DB_USER:drugwatch_api}
+    # No default, on purpose: the application must refuse to start rather than fall back to a
+    # guessable password (plan §15, and the same rule as every other service here).
+    password: ${API_DB_PASSWORD}
+
+  jpa:
+    hibernate:
+      # Never `update` or `create`. Flyway owns the `app` schema and dbt owns `gold`; Hibernate
+      # generating tables at startup would give the schema no history, no review and no rollback.
+      # `validate` instead makes a mismatch between an entity and its table fail at boot, loudly,
+      # rather than at the first query that touches the missing column.
+      ddl-auto: validate
+    properties:
+      hibernate:
+        # The API's own tables live in `app`, so an unqualified entity resolves there rather than
+        # in `public` - which this role deliberately cannot use at all.
+        default_schema: app
+    open-in-view: false # see the note below
+
+  flyway:
+    enabled: true
+    schemas: app
+    # Flyway creates its history table in the first schema it manages, and must not try to create
+    # the schema itself: `app` is created by infra/postgres/api_role.sql so that the role owns it.
+    create-schemas: false
+
 server:
   port: 8080
   # Do not tell the internet which server this is; it is free information for an attacker.
@@ -28,3 +57,8 @@ management:
 logging:
   level:
     root: INFO
+
+# open-in-view is disabled above. Left on (its default), Spring keeps a database connection open
+# for the whole HTTP request so that lazy associations still work while the response is being
+# written. That turns a slow JSON serialisation into a held connection, and hides N+1 queries
+# behind a controller instead of failing in the service where they can be fixed.

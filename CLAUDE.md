@@ -293,6 +293,10 @@ uv run python -m drugwatch_serving.benchmark --url http://localhost:8000  # p50/
 ./mvnw spotless:apply          # format the code (the Java equivalent of `ruff format`)
 ./mvnw test -Dtest=ArchitectureTest   # just the layering rules
 ./mvnw spring-boot:run         # run the API on http://localhost:8080 (health: /actuator/health)
+# First run only: the drugwatch_api role (SELECT on gold, owns the `app` schema, nothing else)
+set -a && . ./.env && set +a && docker compose exec -T postgres psql -U drugwatch -v ON_ERROR_STOP=1 -v api_password="$API_DB_PASSWORD" -f - < infra/postgres/api_role.sql
+# Flyway migrates `app` at startup. The privilege tests need the real DB and skip without it:
+set -a && . ../.env && set +a && ./mvnw verify   # from backend/, runs them too
 uv run --env-file ../.env pytest           # incl. that the feature list matches the live mart
 # First time only: MLflow's own database and its artifact bucket
 docker compose exec postgres psql -U drugwatch -c "CREATE DATABASE mlflow"

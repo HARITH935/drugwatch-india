@@ -34,7 +34,26 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spotless.version>3.12.0</spotless.version>
         <archunit.version>1.5.1</archunit.version>
+        <testcontainers.version>2.0.5</testcontainers.version>
     </properties>
+
+    <!--
+      Spring Boot 4's parent no longer manages Testcontainers versions, so its BOM is imported
+      here. A BOM is a list of versions that belong together: importing it keeps the Postgres
+      module and the JUnit integration on one release, which is the pairing that breaks first
+      when two Testcontainers artifacts drift apart.
+    -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <!-- The HTTP layer: controllers, JSON, an embedded server. -->
@@ -59,9 +78,73 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
+        <!--
+          JPA for the app tables. The warehouse side is read-only and will use plain SQL instead:
+          gold is dbt's output with no entity relationships to map, and an ORM over it would
+          invite someone to call save() on a published CDSCO finding.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+
+        <!--
+          Flyway owns the `app` schema: numbered SQL files, applied in order, each exactly once,
+          recorded in a table it keeps. The alternative is Hibernate generating the schema at
+          startup, which has no history, no review and no way to roll anything back.
+        -->
+        <!--
+          Two artifacts, not one. `flyway-core` is Flyway itself; `spring-boot-flyway` is the
+          auto-configuration that reads spring.flyway.* and runs the migration at startup. Spring
+          Boot 4 moved auto-configuration out of the monolithic spring-boot-autoconfigure into
+          per-technology modules, so flyway-core alone gives a Flyway that is on the classpath and
+          never runs - which is exactly how it failed here first: no migration, no log line, and a
+          "relation app.users does not exist" at the first query.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-flyway</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!--
+          Testcontainers: tests run against a real Postgres in Docker, never H2. An in-memory
+          database would accept SQL this project's Postgres rejects, and would make every test
+          that touches a constraint, an array column or a partial index meaningless.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Testcontainers 2.0 renamed every module with a `testcontainers-` prefix. -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
 
