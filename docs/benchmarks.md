@@ -150,3 +150,97 @@ cd spark
 uv run --env-file ../.env python -m drugwatch_spark.compare_engines   # prove both engines agree
 uv run --env-file ../.env python -m drugwatch_spark.benchmark --repeat 3
 ```
+
+---
+
+## 2. Risk service latency (2026-11-21)
+
+Phase 8 step 5: *"Benchmark latency (p50/p95) under load."* The service is the one in
+`docker-compose.yml` (`drugwatch/risk-api:1.0.0`), loading `manufacturer-risk` v1 from MLflow,
+`/predict` answering from ONNX Runtime and `/explain` computing SHAP over the original LightGBM
+model (ADR 0017).
+
+### What was measured, and why in this shape
+
+- **`/predict` and `/explain` separately.** SHAP walks every tree path for one row, so an
+  explanation cannot be as fast as a score. One blended number would make the fast path look slow
+  and hide whether the slow one is acceptable.
+- **100 rows in one call against 100 single calls.** At this model size the per-request overhead -
+  HTTP, JSON parsing, one ONNX invocation - dominates the arithmetic, so the two answer different
+  questions: "what does a page wait for" and "what does scoring a list cost".
+- **p95 and p99, not the mean.** A mean hides the tail, and a page waits for its slowest call.
+- **Sequential and 8-way concurrent.** The service runs one uvicorn worker on purpose (each worker
+  loads its own model and its own SHAP explainer), so concurrency is where that choice shows.
+
+The client is `drugwatch_serving.benchmark`, standard library only - `urllib` and a thread pool -
+so the numbers are not partly a measurement of an HTTP client the service does not use. The feature
+names come from the service's own 422 response rather than a hardcoded list, so the script cannot
+drift from the model.
+
+### What these numbers are not
+
+**A server measurement.** This is a MacBook Air running Docker Desktop, Postgres, RustFS, Redis,
+Superset, Mailpit and MLflow at the same time, with the benchmark client on the same machine. The
+**p50 and p95 figures were stable across three runs**; the p99 moved between 29 ms and 371 ms on
+the same endpoint with no code change, which is host scheduling rather than the service. So p50 and
+p95 below are worth comparing against; p99 on this hardware is noise with a decimal point, and is
+reported rather than quietly dropped.
+
+Two things were found by measuring rather than reasoning:
+
+- **SHAP's first call costs ~77 ms against ~4 ms for every call after it.** That surfaced as a p99
+  of 558 ms on an endpoint whose p50 was 5.6 ms. The explainer is now warmed during startup, so the
+  cost lands inside the healthcheck's `start_period` instead of on whoever asks first.
+- **MLflow's own footprint dwarfs the service's.** The tracking server sits at ~1.87 GiB resident
+  against the risk service's ~265 MiB, on a Docker VM with 4.8 GiB total. It starts four workers by
+  default; pinning it to one moved it from ~1.93 GiB to ~1.74 GiB, so most of that is a single
+  process's import baseline and not the worker count. Worth knowing before Phase 12 sizes a VM.
+
+### Results
+
+1,000 requests per sequential endpoint (50 for the batch call, 166 for `/explain`), taken at a
+1-minute load average of 1.74. All times in milliseconds.
+
+| | p50 | p95 | p99 | max |
+|---|---|---|---|---|
+| `/health` | **1.1** | 2.4 | 4.3 | 12.1 |
+| `/predict`, 1 row | **3.8** | 6.1 | 11.9 | 61.7 |
+| `/predict`, 100 rows in one call | **7.3** | 24.8 | 32.4 | 32.4 |
+| `/explain`, 1 row | **5.7** | 9.9 | 16.3 | 105.0 |
+| `/predict`, 1 row, 8 concurrent | **9.9** | 19.6 | 30.5 | 36.9 |
+| `/explain`, 1 row, 8 concurrent | **20.3** | 30.3 | 38.4 | 41.8 |
+
+No request failed, at any concurrency.
+
+### What the numbers say
+
+**A batch is 51× cheaper per row.** 3.8 ms for one row alone against **0.07 ms per row** inside a
+100-row call — 100 rows cost 7.3 ms in total, barely twice a single row. At this model size (100
+trees, 7 leaves) almost none of the time is the model: it is HTTP, JSON and one ONNX invocation.
+**Phase 9 should send one batch per page**, not one request per manufacturer. A page showing 20
+companies would take ~76 ms of round trips done singly and ~5 ms done together.
+
+**An explanation costs 1.9 ms more than a score** (5.7 against 3.8 at p50). SHAP walking every
+tree path for one row is cheap because the trees are small — which is a direct dividend of step 4's
+finding that the data supports a *small* model. A 127-leaf, 800-tree model would have made
+`/explain` an order of magnitude slower, on top of scoring worse.
+
+**Eight concurrent callers roughly double p50 and leave p95 under 31 ms.** That is a single uvicorn
+worker time-slicing, which is the expected shape and is comfortable for a public site: the service
+is not the bottleneck in any page that also queries Postgres.
+
+**`/health` at 1.1 ms** matters more than it looks: it loads no model and touches no registry, so a
+container orchestrator polling it every 15 seconds costs nothing.
+
+### Reproducing
+
+```bash
+docker compose up -d --wait risk-api
+cd ml-serving
+uv run python -m drugwatch_serving.benchmark --url http://localhost:8000 --requests 1000
+```
+
+Run it on a quiet machine. Taken immediately after a 2.4 GB image build, the same benchmark
+reported a p99 of 2,426 ms for an endpoint whose p50 was 17 ms — which measured the build, not the
+service.
+

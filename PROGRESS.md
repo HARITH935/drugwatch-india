@@ -2,8 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 7 — Data Science. The manufacturer risk score.
-**Next:** Phase 7 sign-off, then Phase 8 — ONNX export and the FastAPI serving service.
+**Current phase:** Phase 8 — Model Serving. The risk score as an HTTP service.
+**Next:** Phase 8 sign-off, then Phase 9 — the Spring Boot API.
 
 ---
 
@@ -2055,6 +2055,111 @@ reported as a win.
 
 ---
 
+## Phase 8 — Model Serving
+
+Approved 2026-11-21. Plan: `DRUGWATCH_PHASES.md` §9 Phase 8. Goal: fast, portable predictions.
+**ADR 0017** records the architecture.
+
+- [x] **Steps 1-2 — ONNX export, verified with a veto** (2026-11-21)
+    - **Measured on the real test window, not on random numbers** (which exercise leaves no
+      manufacturer ever reaches): 22,070 rows, **max difference 1.37 × 10⁻⁷**, mean 3.07 × 10⁻⁸,
+      Spearman **1.000000**, **0 inverted rows**, identical top-20. ONNX runs tree ensembles in
+      float32 while LightGBM accumulates in float64, so they cannot agree to the last bit; what
+      matters is whether the gap could move anything a reader sees, and 1.37 × 10⁻⁷ cannot.
+    - `build_onnx` **deletes the artifact and exits non-zero** if the comparison fails. A served
+      score has to be the score the model card describes.
+    - 🐛 **My first verification check was wrong, and it failed loudly in the right direction.** It
+      compared `argsort` outputs and reported a changed ranking at **zero** real inversions with
+      Spearman 1.000000. Where the original gives two rows exactly equal scores, a stable sort keeps
+      input order while a 1e-8 difference in the converted model orders them — so the check was
+      measuring tie-breaking. Replaced with a count of rows that moved below something the original
+      ranked **strictly** beneath, plus whether the **top-20 set** changed, which is what
+      precision@20 actually depends on.
+    - The ONNX artifact is **not committed**: a binary derived from a tracked model version is not
+      a source file, and it is rebuilt from the registry.
+- [x] **Step 3 — `/health`, `/predict`, `/explain`** (2026-11-21)
+    - **`/predict` answers from ONNX, `/explain` computes SHAP over the original model and returns
+      the ONNX score**, so the number in an explanation is always the number `/predict` gives for
+      the same row. **Startup refuses to serve if the two disagree** by more than 5 × 10⁻⁴ — half
+      the smallest unit anyone will see, because a score shown as "14.2%" cannot be moved by less.
+      Measured at startup: 2.6 × 10⁻⁸.
+    - ONNX stores an inference graph — thresholds, child pointers, leaf values — and SHAP needs the
+      node coverage that graph discards. So an ONNX-only service could score and not explain, and
+      §4.3 requires it to do both. That is the whole reason both representations are loaded.
+    - **The service never touches Postgres.** Phase 9's Spring Boot API reads `gold` (plan §5) and
+      posts the 28 features. Credentials here would mean a prediction endpoint that shares the
+      warehouse's failure modes, and a second place a password can leak. **A test reads
+      `docker-compose.yml` and fails if `POSTGRES_*` or `RUSTFS_*` ever appear in its environment**
+      — an architectural promise with nothing checking it is a comment.
+    - **A missing feature is a 422 naming it; an unexpected feature is also a 422.** Several
+      features are legitimately null — a share is null when the window held no findings to divide —
+      so null is a *value* the model was trained to read. Filling an absent field with 0 would
+      answer a different question and say nothing about having done so. Column **order comes from
+      the model**, never from the request: JSON objects have no meaningful order, and a caller that
+      serialised its fields differently would otherwise have every value shifted into the wrong
+      feature and still get a plausible-looking 200.
+    - **`/health` serves the model's own limitations**, read from the tags Phase 7 attached to the
+      registered version — so a disputed score is traceable to a version and the caveat comes off
+      the artifact rather than a hardcoded string.
+    - **The approved wording is imported from `drugwatch_ml.explain`, not copied.** A second copy
+      of public text about named Indian companies is a second thing to keep correct, and the copy
+      is the one that drifts. That makes `drugwatch-ml` a runtime dependency — a deliberate
+      coupling, and the honest cost is a 2.44 GB image (265 MiB resident).
+- [x] **Step 4 — containerised** (2026-11-21)
+    - 🐛 **MLflow 3 blocked the container on arrival.** It rejects an unrecognised `Host` header as
+      DNS-rebinding protection, and its default list is localhost plus private IPs — which does
+      **not** include a compose service name. `risk-api` calling `http://mlflow:5000` got a 403
+      "possible DNS rebinding attack". Fixed by naming the hosts explicitly rather than disabling
+      the protection, which is worth keeping for a service Phase 12 may expose.
+    - 🐛 **And then I broke host access with the fix**: listing only `:5000` meant every command run
+      from the Mac — which reaches the published `:5050` — got the same 403. The deployment tests
+      caught it within one run. Both ports are now listed, with the reason in the compose file.
+    - 🐛 **The container needs `libgomp1`**, LightGBM's OpenMP runtime, or `import lightgbm` fails
+      at start with `libgomp.so.1: cannot open shared object file` — which reads like a Python
+      packaging fault and is not one. It is the same dependency `brew install libomp` provides.
+    - `--frozen` and `--no-dev`: no pytest or ruff in a deployed image, and a build that cannot
+      re-resolve, because a container that resolves is one whose dependencies can change between
+      two builds of the same commit. Non-root user. One uvicorn worker, because each worker loads
+      its own model and its own SHAP explainer.
+    - 🔍 **MLflow's footprint dwarfs the service's**: ~1.87 GiB resident against the risk service's
+      ~265 MiB, on a 4.8 GiB Docker VM. It starts **four** workers by default; pinning it to one
+      moved it from ~1.93 GiB to ~1.74 GiB — so most of that is a single process's import baseline
+      rather than the worker count, and it is recorded as the modest saving it is. Worth knowing
+      before Phase 12 sizes a VM.
+- [x] **Step 5 — latency recorded** (2026-11-21) — full table and reasoning in
+      **`docs/benchmarks.md` §2**. 1,000 requests per endpoint, at a 1-minute load average of 1.74.
+
+      | | p50 | p95 | p99 |
+      |---|---|---|---|
+      | `/health` | 1.1 ms | 2.4 ms | 4.3 ms |
+      | `/predict`, 1 row | 3.8 ms | 6.1 ms | 11.9 ms |
+      | `/predict`, 100 rows in one call | 7.3 ms | 24.8 ms | 32.4 ms |
+      | `/explain`, 1 row | 5.7 ms | 9.9 ms | 16.3 ms |
+      | `/predict`, 8 concurrent | 9.9 ms | 19.6 ms | 30.5 ms |
+      | `/explain`, 8 concurrent | 20.3 ms | 30.3 ms | 38.4 ms |
+
+      No request failed at any concurrency.
+    - 🔍 **A batch is 51× cheaper per row**: 3.8 ms for one row alone against **0.07 ms per row**
+      inside a 100-row call, because at 100 trees of 7 leaves almost none of the time is the model
+      — it is HTTP, JSON and one ONNX invocation. **Phase 9 should send one batch per page.** A
+      20-company page costs ~76 ms of round trips done singly and ~5 ms done together.
+    - **An explanation costs only 1.9 ms more than a score**, which is a direct dividend of step
+      4's finding that the data supports a *small* model. The 127-leaf, 800-tree candidate would
+      have made `/explain` an order of magnitude slower **and** scored worse (PR-AUC 0.289).
+    - ⚠️ **These are not server numbers, and the write-up says so.** p50 and p95 held steady across
+      three runs; p99 on the same endpoint moved between 29 ms and 371 ms with no code change.
+      Taken immediately after a 2.4 GB image build, the same benchmark reported a p99 of
+      **2,426 ms** for an endpoint whose p50 was 17 ms — it was measuring the build. The final run
+      waited for the machine to go quiet, and the reproduction instructions say to do the same.
+
+**Done when:** service runs in Docker, outputs match the original model, latency recorded.
+
+**Outcome (2026-11-21): all three met.** The service is healthy in Docker at ~265 MiB resident;
+the ONNX export matches the original on 22,070 real rows with 0 inverted rows and an identical
+top-20; latency is recorded in `docs/benchmarks.md` §2 with its measurement caveats stated.
+
+---
+
 Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when each phase starts.
 
 ---
@@ -2287,3 +2392,11 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-20 | SHAP confirms both step-2 judgement calls: `distinct_drug_classes_12m` is the 3rd most used feature and `share_of_archive_reports_12m` the 4th, while the -0.534 calendar drifter is used not at all | step 6 |
 | 2026-11-20 | Public wording is a fixed 28-phrase vocabulary; a feature with no approved phrase raises rather than printing its column name. Five tests enforce CLAUDE.md §6 instead of documenting it | `ml/.../explain.py` |
 | 2026-11-20 | The registered model carries its own limitations as tags, so Phase 8 reads the tie off the artifact rather than a commit message | MLflow `manufacturer-risk` v1 |
+| 2026-11-21 | ONNX matches the original on 22,070 real test rows: max difference 1.37e-07, Spearman 1.000000, 0 inverted rows, identical top-20. `build_onnx` vetoes its own artifact otherwise | ADR 0017 |
+| 2026-11-21 | 🐛 Comparing `argsort` outputs reported a changed ranking at zero real inversions: it measures tie-breaking, not order. Replaced with strict-pair inversions plus top-20 set equality | `onnx_export.py` |
+| 2026-11-21 | 🐛 MLflow 3 rejects an unrecognised Host header, and a compose service name is not in its default allow-list, so risk-api got a 403 'DNS rebinding attack'. Listing only :5000 then broke the Mac's :5050 access | docker-compose.yml |
+| 2026-11-21 | 🐛 SHAP's first call costs ~77ms against ~4ms after; it showed as a p99 of 558ms on a 5.6ms endpoint. The explainer is warmed at startup | `app.py` lifespan |
+| 2026-11-21 | MLflow sits at ~1.87 GiB resident against the risk service's ~265 MiB on a 4.8 GiB VM; four default workers to one saved only ~0.2 GiB | docker-compose.yml |
+| 2026-11-21 | A 100-row batch costs 0.07ms per row against 3.8ms for a single call (51x), because at 100 trees of 7 leaves the time is HTTP and JSON, not the model. Phase 9 should send one batch per page | `docs/benchmarks.md` §2 |
+| 2026-11-21 | `/explain` costs only 1.9ms more than `/predict` - a dividend of step 4's small model; the 127-leaf candidate would have been far slower AND scored worse | step 5 |
+| 2026-11-21 | Benchmark p99 is host noise on this hardware: 29ms to 371ms on one endpoint with no code change, and 2,426ms when run right after an image build. p50/p95 are stable | `docs/benchmarks.md` §2 |
