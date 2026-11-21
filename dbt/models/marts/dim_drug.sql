@@ -25,6 +25,8 @@
 -- a therapeutic class. The marts turn it into a reported `Unclassified` count; this table does
 -- not pretend to know.
 
+{{ config(post_hook = [trigram_index('product_name')]) }}
+
 with samples as (
 
     select * from {{ ref('stg_nsq_sample') }}

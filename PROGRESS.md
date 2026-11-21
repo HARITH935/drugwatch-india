@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 9 — Backend. The Spring Boot API.
-**Next:** step 2 — the public endpoints: batch search, drugs, manufacturers, latest alerts.
+**Next:** step 3 — auth: register, login, refresh, roles, and email verification.
 
 ---
 
@@ -2264,7 +2264,67 @@ exist. It belongs to the deferred price phase.
       (`postgresql` → `testcontainers-postgresql`), and Spring Boot 4's parent no longer manages
       their versions, so the BOM is imported explicitly.
     - 26 tests passing (6 skipping without the local database, as CI will see them).
-- [ ] Step 2 — public endpoints: batch search, drugs, manufacturers, latest alerts
+- [x] **Step 2 — the public endpoints** (2026-11-21)
+      `/api/v1/batches/search`, `/drugs/{id}`, `/drugs/search`, `/manufacturers/{id}`,
+      `/alerts/latest`, plus validation and one place where errors become responses.
+    - **The batch checker works on the real archive**: searching `TETY01` — punctuation stripped,
+      as a user copying from a foil strip would type it — returns **7 findings of `TETY-01`**, each
+      with its alert month and a link to the CDSCO document.
+    - **Normalisation merges spellings without merging batches.** Letters and digits only,
+      upper-cased. Leading zeros are kept (`01` ≠ `001`, both real) and letters are never
+      transliterated (`BO1` ≠ `B01`) — those substitutions look helpful and turn one company's
+      batch into another's.
+    - 🔍 **The rule exists twice, in Java and in SQL**, because the query normalises 7,126 stored
+      values and the request normalises one typed value. That is the ONNX problem again, and it is
+      guarded the same way: **a test runs both over every batch number CDSCO has published and
+      requires identical text**. A disagreement would not error — the user would simply be told
+      their medicine is not in the archive.
+    - **The sentinel is refused, and the refusal is checked against reality.** `"Not applicable"`
+      is the printed batch number on 22 findings; searching for it returns `NOT_SEARCHABLE` with
+      an explanation. A separate test asserts the sentinel **is still in the archive**, so the
+      refusal cannot quietly become dead code.
+    - **A match needs a medicine as well as a batch.** `1`, `6` and `01` are real batch numbers on
+      findings from different manufacturers, so a batch-only search would report somebody's
+      medicine as flagged on a one-digit coincidence. The 3-character minimum on the medicine name
+      is the same idea.
+    - **"Close matches" are separate from matches**: the same batch on a *different* medicine is
+      returned in its own field, which is how a user discovers they typed the name differently
+      from the way CDSCO printed it.
+    - **The ethics rules are in the response, not in a page template.** Every result carries the
+      disclaimer — including error responses — and "not found" carries the sentence that it is not
+      a guarantee of safety, naming the 101-of-111 months the archive covers. A redesign of the
+      frontend cannot drop them, and a second client gets them too.
+    - **Spurious findings name no manufacturer, structurally.** `Finding`'s constructor *throws*
+      if a spurious finding carries one, and the repository nulls it regardless — on top of gold
+      having no `manufacturer_id` for those rows at all. **Verified on real data**: batch
+      `GTE1350A` appears twice in the archive, once as a genuine finding (manufacturer named) and
+      once as spurious (manufacturer null, copied brand in `nameOnPack`), and the API frames each
+      correctly.
+    - **Fuzzy drug search via `pg_trgm`** (decision B), with the index built by **dbt as a
+      post-hook** — dbt drops and recreates every mart monthly, so an index added by hand would
+      vanish and nobody would notice until a search got slow. Measured: the index is **11× faster
+      when used** (2.4 ms against 27.6 ms), though Postgres still prefers a sequential scan at
+      5,651 rows. Both are fast enough today; the index is there for when the archive is not small.
+    - **Search says the same medicine can appear twice.** Phase 4 deliberately left the 5,651
+      printed names unmerged, so a reader seeing two rows must be told they may be one medicine.
+    - **Reads gold with plain SQL, not JPA.** Gold has no entity graph to map, is rebuilt monthly,
+      and the API's role cannot write to it — an ORM would add a mapping layer with nothing to map
+      and put `save()` within reach of a published CDSCO finding.
+    - 🐛 **My own catch-all handler turned every 404 into a 500.** `@ExceptionHandler(Exception)`
+      swallows Spring's own status-carrying exceptions, so `/actuator/env` started answering "500,
+      quote this reference" instead of 404 — which hides real errors *and* tells anyone probing
+      for paths that the one they guessed did something. Caught by the step-0 smoke test, fixed by
+      handling `ErrorResponseException` and `NoResourceFoundException` first, with a regression
+      test.
+    - 🐛 `%` is pg_trgm's similarity operator and needs no escaping in a JdbcClient query; writing
+      `%%` produced a SQL grammar error, and the test container also needed the extension created,
+      which dbt does in production via an `on-run-start` hook.
+    - **Test data is invented** (`db/gold-fixture.sql`) — ADR 0003 keeps real CDSCO rows out of
+      git, and a fixture is still git. The names are deliberately fictional. A separate
+      `GoldContractTest` asks the **real** warehouse whether every column the API reads still
+      exists, so the fixture cannot drift quietly.
+    - 88 tests passing (BatchNumber 23, batch search 12, public endpoints 12, HTTP 11, schema 13,
+      privileges 6, gold contract 3, architecture 5, smoke 3).
 - [ ] Step 3 — auth: register, login, refresh, roles, email verification
 - [ ] Step 4 — watchlist + notification emails
 - [ ] Step 5 — risk-score proxy to the FastAPI service
@@ -2526,3 +2586,8 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-21 | `alert_notifications` has a UNIQUE on (watchlist item, alert month), so a duplicate email is impossible in the database rather than unlikely in the code | `V1__app_tables.sql` |
 | 2026-11-21 | 🐛 Spring Boot 4 split auto-configuration into per-technology modules: `flyway-core` alone never runs the migration, and fails as a bare "relation does not exist". It needs `spring-boot-flyway` | backend/pom.xml |
 | 2026-11-21 | 🐛 Testcontainers 2.0 renamed every module with a `testcontainers-` prefix, and Boot 4's parent no longer manages their versions | backend/pom.xml |
+| 2026-11-21 | The batch checker works on the real archive: `TETY01` typed without punctuation finds 7 findings of `TETY-01`, each with its CDSCO source link | step 2 |
+| 2026-11-21 | The batch rule exists in Java and in SQL, so a test runs both over every published batch number and requires identical text - a disagreement would silently tell users their medicine is absent | `GoldContractTest` |
+| 2026-11-21 | Verified on real data: batch GTE1350A appears both as a genuine finding (manufacturer named) and as spurious (manufacturer null, copied brand in nameOnPack) | step 2 |
+| 2026-11-21 | The pg_trgm index is 11x faster when used (2.4ms vs 27.6ms) but Postgres prefers a seq scan at 5,651 rows; built by dbt as a post-hook so a monthly rebuild cannot drop it | `macros/search_indexes.sql` |
+| 2026-11-21 | 🐛 `@ExceptionHandler(Exception)` swallows Spring's status-carrying exceptions, turning every 404 into "500, quote this reference" | `GlobalExceptionHandler` |

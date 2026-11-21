@@ -61,6 +61,23 @@ class ArchitectureTest {
             .because("code is organised by feature; a controller belongs to one");
 
     /**
+     * The layering rules above have something to check.
+     *
+     * <p>ArchUnit normally fails a rule that matched no classes, and {@code archunit.properties}
+     * turns that off because the step-0 skeleton had no controllers. This is what makes that
+     * allowance safe: if every controller were renamed, the rules would silently stop applying
+     * and this would fail instead.
+     */
+    @ArchTest
+    static final ArchRule the_api_has_controllers_to_check = classes()
+            .that()
+            .haveSimpleNameEndingWith("Controller")
+            .should()
+            .beAnnotatedWith(org.springframework.web.bind.annotation.RestController.class)
+            .allowEmptyShould(false)
+            .because("if this matches nothing, the layering rules are checking nothing either");
+
+    /**
      * Exactly one class may sit in the root package: the application entry point. Everything else
      * belongs to a feature, and a class that drifts to the root is how a "shared" bucket starts.
      *

@@ -15,6 +15,8 @@
 -- the way 36 states do, and the same learned trick does not transfer: a 3-digit PIN prefix covers
 -- a whole postal district, not a town.
 
+{{ config(post_hook = [trigram_index('canonical_name')]) }}
+
 with manufacturers as (
 
     select * from {{ ref('int_manufacturer_address') }}

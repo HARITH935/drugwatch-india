@@ -13,6 +13,11 @@ vars:
   # 3, chosen by holdout: 99.78% agreement on held-out rows against 99.59% at 2.
   pin_prefix_min_observations: 3
 
+# Runs before any model, every invocation. The API's fuzzy drug search needs pg_trgm, and the
+# extension must exist before a model tries to build an index that uses it (Phase 9 decision B).
+on-run-start:
+  - "{{ create_extension_pg_trgm() }}"
+
 flags:
   # dbt phones home with anonymous usage statistics unless this is off. A public-interest data
   # project should not send telemetry it never asked its users about.
