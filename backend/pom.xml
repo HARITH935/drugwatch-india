@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The DrugWatch India API (Phase 9). Maven build, pinned by .mvn/wrapper (ADR 0018).
+
+  Dependencies are added step by step rather than all at once: a starter that is present but
+  unused still boots code, opens ports and widens what a vulnerability scan has to care about.
+  Step 0 is the skeleton, so it carries the web layer, health reporting, validation and the two
+  test tools - and nothing else yet.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+      The Spring Boot parent supplies managed versions for every Spring dependency, so the
+      <dependency> blocks below carry no <version> of their own and cannot drift apart.
+    -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.2.0</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>in.drugwatch</groupId>
+    <artifactId>drugwatch-api</artifactId>
+    <version>0.1.0</version>
+    <name>drugwatch-api</name>
+    <description>Public API for DrugWatch India: batch checker, drug and manufacturer pages, watchlist</description>
+
+    <properties>
+        <java.version>21</java.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <spotless.version>3.12.0</spotless.version>
+        <archunit.version>1.5.1</archunit.version>
+    </properties>
+
+    <dependencies>
+        <!-- The HTTP layer: controllers, JSON, an embedded server. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Actuator publishes /actuator/health, which is what Docker's healthcheck will poll. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!--
+          Bean Validation. Plan §15 requires input validation on every endpoint, and doing it with
+          annotations on the request record keeps the rule beside the field it describes rather
+          than in an if-statement at the top of a controller method.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!--
+          RestTestClient, which replaces TestRestTemplate in Spring Boot 4. It ships in its own
+          module rather than inside spring-boot-starter-test, so an end-to-end test that drives a
+          real port will not compile without this.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-resttestclient</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!--
+          ArchUnit (ADR 0018): the layering is enforced as a test, not as a convention. A rule
+          that only exists in a README stops existing the first time somebody is in a hurry.
+        -->
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <version>${archunit.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+
+            <!--
+              Spotless: the Java equivalent of ruff format in check mode (ADR 0005, ADR 0018).
+              `mvn spotless:apply` formats, and the `check` goal below fails the build when
+              something is unformatted, so formatting never becomes a review topic.
+            -->
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>${spotless.version}</version>
+                <configuration>
+                    <java>
+                        <palantirJavaFormat/>
+                        <removeUnusedImports/>
+                        <trimTrailingWhitespace/>
+                        <endWithNewline/>
+                    </java>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <phase>verify</phase>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

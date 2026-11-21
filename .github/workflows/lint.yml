@@ -1,6 +1,6 @@
 # CI lint workflow: runs on every push to main and on every pull request.
 # repo-checks: repo hygiene (Phase 0). python: lint + tests for each Python folder (Phase 1, ADR 0005).
-# Still to come: Java → Phase 9, TypeScript → Phase 11.
+# backend: the Spring Boot API (Phase 9, ADR 0018). Still to come: TypeScript → Phase 11.
 name: lint
 
 on:
@@ -35,7 +35,7 @@ jobs:
     timeout-minutes: 20 # spark/: installing PySpark (450 MB) is slow until uv's cache is warm
     strategy:
       matrix:
-        project: [ingestion, extraction, spark, quality, warehouse, orchestration, analytics] # add ml ... here as each Python folder appears
+        project: [ingestion, extraction, spark, quality, warehouse, orchestration, analytics, ml, ml-serving]
     defaults:
       run:
         working-directory: ${{ matrix.project }} # every `run:` step below starts in this folder
@@ -93,3 +93,27 @@ jobs:
       # connecting to something.
       - name: Parse the dbt project
         run: uv run dbt parse
+
+  # The Spring Boot API (Phase 9, ADR 0018). Separate from the python job rather than another
+  # matrix entry: it needs a JDK and a Maven cache instead of uv, and it runs in parallel so a
+  # slower Java build does not delay the Python feedback.
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: "21" # Spring Boot 4 needs 17+; 21 is the current LTS and what local dev uses
+          cache: maven # caches ~/.m2 keyed on pom.xml, so a clean build is not a full re-download
+
+      # ./mvnw, not mvn: the wrapper pins Maven 3.10.0, so CI and this Mac run the same build
+      # tool. The same reasoning as uv.lock for Python and --frozen for the serving image.
+      - name: Build, test and check formatting
+        run: ./mvnw -B verify
+

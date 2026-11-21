@@ -286,6 +286,13 @@ uv run --env-file ../.env uvicorn drugwatch_serving.app:app --port 8000  # run i
 docker compose up -d --build --wait risk-api   # or in Docker: http://localhost:8000/docs
 curl -s localhost:8000/health | python3 -m json.tool    # which model version is answering
 uv run python -m drugwatch_serving.benchmark --url http://localhost:8000  # p50/p95/p99 latency
+
+# Backend API (from backend/, Phase 9; ADR 0018). Java 21 + Spring Boot 4.2, built with Maven.
+# ./mvnw, not mvn: the wrapper pins Maven 3.10.0, so this Mac and CI run the same build tool.
+./mvnw verify                  # compile, run every test, and fail if anything is unformatted
+./mvnw spotless:apply          # format the code (the Java equivalent of `ruff format`)
+./mvnw test -Dtest=ArchitectureTest   # just the layering rules
+./mvnw spring-boot:run         # run the API on http://localhost:8080 (health: /actuator/health)
 uv run --env-file ../.env pytest           # incl. that the feature list matches the live mart
 # First time only: MLflow's own database and its artifact bucket
 docker compose exec postgres psql -U drugwatch -c "CREATE DATABASE mlflow"
@@ -307,6 +314,7 @@ docker compose up -d --wait mlflow         # UI: http://localhost:5050
 | Superset | http://localhost:8088 | `superset:8088` |
 | MLflow | http://localhost:5050 | `mlflow:5000` |
 | Risk API | http://localhost:8000 | `risk-api:8000` |
+| Backend API | http://localhost:8080 | `backend:8080` |
 
 S3 clients talking to RustFS must use **path-style addressing** (see ADR 0002).
 If S3 calls fail with `RequestTimeTooSkewed` after the Mac has slept, Docker's VM clock has drifted more than

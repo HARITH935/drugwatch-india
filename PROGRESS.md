@@ -2,8 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 8 — Model Serving. The risk score as an HTTP service.
-**Next:** Phase 8 sign-off, then Phase 9 — the Spring Boot API.
+**Current phase:** Phase 9 — Backend. The Spring Boot API.
+**Next:** step 1 — the `drugwatch_api` Postgres role and Flyway migrations for the app tables.
 
 ---
 
@@ -2157,6 +2157,89 @@ Approved 2026-11-21. Plan: `DRUGWATCH_PHASES.md` §9 Phase 8. Goal: fast, portab
 **Outcome (2026-11-21): all three met.** The service is healthy in Docker at ~265 MiB resident;
 the ONNX export matches the original on 22,070 real rows with 0 inverted rows and an identical
 top-20; latency is recorded in `docs/benchmarks.md` §2 with its measurement caveats stated.
+✅ **Phase 8 signed off by Harith, 2026-11-21.**
+
+---
+
+## Phase 9 — Backend
+
+Approved 2026-11-21. Plan: `DRUGWATCH_PHASES.md` §9 Phase 9, §10 (endpoints), §8.3 (app tables).
+Goal: the main application API. The project's first Java, so each step introduces its tools.
+
+**Five decisions taken at the start** (Harith, 2026-11-21 — "your recommendations"):
+- **A. Maven + Spotless + ArchUnit, and no coverage gate** — **ADR 0018**. ArchUnit enforces the
+  plan's layering as a test. JaCoCo's 80% gate is deliberately left out: a percentage measures
+  which lines ran, not which behaviours were checked, and the tests that have actually paid for
+  themselves in this project would mostly not have moved it.
+- **B. `pg_trgm` for fuzzy drug search**, built as a dbt index since dbt owns `gold`. The
+  extension ships inside the Postgres image; the alternative was hand-written fuzzy matching over
+  5,651 names in Java.
+- **C. Rate limiting with a small Redis counter** rather than adding Bucket4j — Redis is already
+  in the stack and the counter is ~30 lines.
+- **D. The watchlist watches a search term, not one exact product**, and the API polls daily for
+  an un-notified alert month rather than Airflow calling it. Phase 4 deliberately did not merge
+  the 5,651 printed product names, so an exact-product watch would silently miss the same medicine
+  printed differently — and for someone watching their own medicine, a missed alert is worse than
+  an extra email.
+- **E. Email verification before any watchlist email** (beyond the plan). Without it, anyone can
+  register with a stranger's address and the site emails that stranger about medicine alerts under
+  CDSCO's name. One column and one link.
+
+**Measured before planning** (2026-11-21, against the live `gold`):
+- **40% of batch numbers carry spaces or punctuation** (2,841 of 7,126): `KA/018`, `TETY-01`. So
+  both sides of a batch comparison are normalised, or a user typing `KA018` finds nothing.
+- **…but normalising must not over-merge**: stripping punctuation collapses 6,807 distinct values
+  to 6,766, and leading zeros stay significant (`01` ≠ `1`). CLAUDE.md §5's "a missed merge is
+  better than a wrong merge" applies to batch numbers too.
+- **A sentinel hides in the data**: `"Not applicable"` is the batch number on 22 findings and must
+  never match a user's search.
+- **Very short batch numbers exist** (`1`, `6`, `01`), which is why §4.1's batch checker requires
+  a medicine name *and* a batch, never a batch alone.
+- `pg_trgm` is **not installed** in the Postgres image's database yet (decision B adds it).
+
+**Already settled:** `/api/v1/prices/compare` (§10) **will not be built**. Phase 6's decision A
+found no price data anywhere downstream of `raw/`, and an endpoint cannot serve data that does not
+exist. It belongs to the deferred price phase.
+
+- [x] **Step 0 — the skeleton** (2026-11-21)
+    - **Spring Boot 4.2.0 on Java 21**, built with Maven 3.10.0 pinned by `./mvnw`. 🔍 **The
+      version nearly came out a whole major release stale**: Maven Central's *search API* answers
+      `3.5.3` for `spring-boot-starter-parent`, while its own `maven-metadata.xml` says **4.2.0**.
+      Same class of error as Phase 7's `boto3==1.41.9` pin, which never existed — a plausible
+      version number is not a checked one.
+    - **Packages are organised by feature, with the plan's layering inside each.** A top-level
+      split into `controllers/`, `services/` and `repositories/` puts the three files that change
+      together in three different places.
+    - **The layering is enforced by ArchUnit**, not by convention: a controller may not depend on
+      a repository, a repository may not depend on the layers above it, and only the entry point
+      may sit in the root package. Same instinct as the dbt test that refuses an unreviewed drug
+      class and the test that reads `docker-compose.yml` for stray credentials.
+    - **Actuator exposes health and nothing else, with no component detail.** Left at its defaults
+      it publishes configuration, environment variables and a map of every internal service with
+      its state — and this is the service Phase 12 exposes. Three tests check it: health answers,
+      `components` is absent, and `/actuator/env` and `/actuator/beans` return 404.
+    - **CI gained a `backend` job** running `./mvnw verify` on Temurin 21 with a Maven cache, in
+      parallel with the Python jobs. `ml` and `ml-serving` were also added to the Python matrix —
+      both had been building and testing only on this Mac. Verified they pass with no credentials
+      (91 and 40 tests, integration ones skipping cleanly), which is what CI will see.
+    - 🐛 Four things Spring Boot 4 changed that cost a build each: an XML comment may not contain
+      `--` (my `ruff format --check` aside broke the POM); **ArchUnit fails a rule that matched no
+      classes**, which is right and needed a documented allowance while the skeleton has no
+      controllers; **`TestRestTemplate` no longer exists** (replaced by `RestTestClient`); and
+      `RestTestClient` needs both `@AutoConfigureRestTestClient` **and** a separate
+      `spring-boot-resttestclient` module that `spring-boot-starter-test` does not pull in.
+    - 7 tests passing.
+- [ ] Step 1 — `drugwatch_api` Postgres role + Flyway migrations for the app tables (§8.3)
+- [ ] Step 2 — public endpoints: batch search, drugs, manufacturers, latest alerts
+- [ ] Step 3 — auth: register, login, refresh, roles, email verification
+- [ ] Step 4 — watchlist + notification emails
+- [ ] Step 5 — risk-score proxy to the FastAPI service
+- [ ] Step 6 — Redis caching + rate limiting
+- [ ] Step 7 — Superset guest-token endpoint
+- [ ] Step 8 — CI, Swagger, the done-when demonstration
+
+**Done when:** all endpoints work, the guest-token endpoint returns a valid Superset token,
+watchlist emails arrive in Mailpit, the test suite passes in CI, Swagger docs are live.
 
 ---
 
@@ -2400,3 +2483,8 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-21 | A 100-row batch costs 0.07ms per row against 3.8ms for a single call (51x), because at 100 trees of 7 leaves the time is HTTP and JSON, not the model. Phase 9 should send one batch per page | `docs/benchmarks.md` §2 |
 | 2026-11-21 | `/explain` costs only 1.9ms more than `/predict` - a dividend of step 4's small model; the 127-leaf candidate would have been far slower AND scored worse | step 5 |
 | 2026-11-21 | Benchmark p99 is host noise on this hardware: 29ms to 371ms on one endpoint with no code change, and 2,426ms when run right after an image build. p50/p95 are stable | `docs/benchmarks.md` §2 |
+| 2026-11-21 | ✅ Phase 8 signed off. Phase 9 approved with five decisions: Maven/Spotless/ArchUnit and no coverage gate (ADR 0018), pg_trgm search, Redis rate limiting, term-based watchlist, email verification | Harith |
+| 2026-11-21 | Maven Central's search API reports Spring Boot 3.5.3; its own maven-metadata.xml says 4.2.0. Versions come from the metadata, not the index | ADR 0018 |
+| 2026-11-21 | 40% of batch numbers carry spaces or punctuation (KA/018), but normalising collapses only 6,807 distinct values to 6,766 - and "Not applicable" is a batch number on 22 findings | step 2 design |
+| 2026-11-21 | Actuator publishes config, env and a map of internal services by default; the API exposes health only, with no component detail, checked by three tests | `application.yaml` |
+| 2026-11-21 | 🐛 Spring Boot 4 removed `TestRestTemplate`; `RestTestClient` replaces it and needs its own `spring-boot-resttestclient` module, which starter-test does not pull in | `ApplicationSmokeTest` |

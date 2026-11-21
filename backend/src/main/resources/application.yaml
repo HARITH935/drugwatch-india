@@ -1,0 +1,30 @@
+# Configuration for local development. Production values come from the environment (plan §15):
+# nothing secret may live in this file, and nothing here may default to a working secret.
+spring:
+  application:
+    name: drugwatch-api
+
+server:
+  port: 8080
+  # Do not tell the internet which server this is; it is free information for an attacker.
+  error:
+    whitelabel:
+      enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Health only. Actuator can publish configuration, environment variables and heap dumps,
+        # and this service is the one Phase 12 exposes - so the set is named rather than defaulted.
+        include: health
+  endpoint:
+    health:
+      # "UP" and nothing else by default. Component detail names internal services (database,
+      # Redis, the risk API) and their state, which is operational detail, not public information.
+      show-details: never
+      show-components: never
+
+logging:
+  level:
+    root: INFO
