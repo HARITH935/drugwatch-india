@@ -1,0 +1,41 @@
+# Python project for the LLM extraction fallback (Phase 10). Managed by uv (ADR 0005).
+[project]
+name = "drugwatch-llm"
+version = "0.1.0"
+description = "LoRA fine-tuned fallback that reads a PDF row's raw text where the rule parser is unsure"
+authors = [
+    { name = "Harith", email = "181994424+HARITH935@users.noreply.github.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "drugwatch-ingestion", # the RustFS client, same pattern as extraction/ (path dependency below)
+    "drugwatch-extraction", # read_bronze/from_parquet, and the eval-set manifest format
+    "torch>=2.15,<3", # plan §6/§13: runs on Apple Silicon's MPS backend, no CUDA needed (ADR 0019)
+    "transformers>=5.24,<6", # loads the base model + tokenizer, and runs generation
+    "peft>=0.22,<1", # LoRA: trains a small adapter instead of the whole model (plan §13)
+    "accelerate>=1.16,<2", # device placement + the training loop transformers' Trainer uses
+]
+
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14.0"]
+build-backend = "uv_build"
+
+# Use these packages from this repo's folders, not from PyPI. editable = changes there are seen at once.
+[tool.uv.sources]
+drugwatch-ingestion = { path = "../ingestion", editable = true }
+drugwatch-extraction = { path = "../extraction", editable = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.4", # lint + format rules live in the repo-root ruff.toml
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# "-m 'not model'": model-marked tests need a real download and real compute, so CI's lint job
+# never pulls one on every push (ADR 0019's step 7 plan) - run them explicitly with -m model.
+addopts = "-ra --strict-markers -m 'not model'"
+markers = [
+    "model: downloads/loads a real model (several hundred MB+); skipped by default, incl. in CI",
+]

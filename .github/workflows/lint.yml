@@ -35,7 +35,7 @@ jobs:
     timeout-minutes: 20 # spark/: installing PySpark (450 MB) is slow until uv's cache is warm
     strategy:
       matrix:
-        project: [ingestion, extraction, spark, quality, warehouse, orchestration, analytics, ml, ml-serving]
+        project: [ingestion, extraction, spark, quality, warehouse, orchestration, analytics, ml, ml-serving, llm]
     defaults:
       run:
         working-directory: ${{ matrix.project }} # every `run:` step below starts in this folder

@@ -2,8 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 10 — LLM Extraction (planning).
-**Next:** Harith approves the Phase 10 plan, then step 0.
+**Current phase:** Phase 10 — LLM Extraction.
+**Next:** step 1 — training data (train-split-only; family E excluded; label the 3 unlabelled test rows).
 
 ---
 
@@ -2607,6 +2607,92 @@ exist. It belongs to the deferred price phase.
 watchlist emails arrive in Mailpit, the test suite passes in CI, Swagger docs are live. ✅
 
 ✅ **Phase 9 signed off by Harith, 2026-11-22.**
+
+---
+
+## Phase 10 — LLM Extraction
+
+Approved 2026-11-22. Plan: `DRUGWATCH_PHASES.md` §9 Phase 10, §13 (LLM design).
+Goal: a fine-tuned LLM fallback for the rows the rule-based parser can't handle correctly, used
+only where the parser itself is unsure.
+
+**Finding that reshapes the phase, before any code:** Phase 2's own extraction report had already
+measured this, and I re-checked it against live bronze (2026-11-22, read-only count): of the
+archive's 103 low-confidence records, only **3 are parser mistakes** — the other 100 are low
+because the *PDF itself* prints `NIL`, a placeholder or an Excel day number, which the parser
+copies correctly. In the 9-test-split PDFs' low-confidence rows specifically, only **1** (row 149,
+a two-part pack) is a parser error. So the plan's done-when — beat the baseline on low-confidence
+test rows — comes down to one row, and the harder, more realistic risk is the opposite failure:
+an LLM turning a genuine `NIL` into a plausible-looking invented date, which CLAUDE.md §5
+explicitly forbids ("impossible dates or invented fields are rejected").
+
+**Four decisions taken at the start** (Harith, 2026-11-22 — "go," taking all recommendations):
+- **D1. Train locally, on the Mac, not Colab.** The model has to run monthly in the pipeline and
+  later on a cheap production CPU, so it is capped at ~0.5–1B parameters regardless of where it's
+  trained — Colab's extra GPU headroom buys nothing here. Training locally keeps the fine-tune a
+  `uv run` command in the repo and keeps the labels (git-ignored, ADR 0003) off a third-party
+  service. Cost: Docker (4.8 GB of the Mac's 8 GB, MLflow alone at ~1.9 GB) gets stopped during
+  training runs — measured 1.3 GB free on the Mac side with everything up.
+- **D2. Output schema deviates from plan §13: values exactly as printed; `generic_name` dropped.**
+  **ADR 0019.** Asking for `YYYY-MM` invites the model to normalise (invent) a date; asking for
+  what the cell prints lets the same date parsers that already handle the rule parser's output
+  (Phase 3, proven on 5 formats) handle the LLM's too. `generic_name` has no label and no parser
+  field to score it against.
+- **D3. Two gates, not one.** Gate 1 is the plan's own criterion (beat the baseline on the 9
+  low-confidence test rows), reported honestly including that n=9 and one row decides it — the
+  Phase 7 precedent for a result that may not be a clean win. Gate 2 is new: across the *whole*
+  69-row test split, F1 must not fall below the parser's 99.5%, and **zero invented values** may
+  be accepted. Gate 2 is the one that actually protects the data.
+- **D4. The fallback may only change a field that the parser flagged low-confidence, and only if
+  the LLM's value passes three checks: schema (exactly the 6 fields), grounding (the value appears
+  in the row's own source text — it cannot be invented), and plausibility (any date it gives must
+  be a possible date).** Everywhere else, the parser's value is kept even if the LLM disagrees.
+
+**Also approved:** a reported (non-gating) held-out-layout experiment — train with one whole
+layout family excluded, test on it — because that is the realistic case where an LLM earns its
+place: a new CDSCO layout the rule parser returns nothing for.
+
+**Candidate models to try zero-shot in step 2** (Apache-2.0, confirmed via each model's Hugging
+Face page before writing it down, not assumed from the name):
+- `Qwen/Qwen2.5-0.5B-Instruct` — Apache-2.0, confirmed.
+- others to be checked the same way when step 2 runs.
+
+- [x] **Step 0 — `llm/` project foundations** (2026-11-22)
+    - New `llm/` uv project: torch 2.15, transformers 5.24, peft 0.22, accelerate 1.16, confirmed
+      against PyPI (not assumed) and with a real macOS/cp313/arm64 wheel for torch.
+    - `smoke_test.py` proves four things end to end: PyTorch sees Apple Silicon's GPU (MPS); the
+      first candidate model, `Qwen/Qwen2.5-0.5B-Instruct` (Apache-2.0, confirmed on its own model
+      page), downloads, loads and generates; PEFT wraps it with a LoRA adapter touching only
+      0.11% of its 494M parameters; and the memory cost is this process' own peak RSS, not a
+      guess from how much the Mac appears to have free.
+    - 🐛 **My first memory reading was off by 1024×** (reported "1,045,088 MB"). `ru_maxrss`'s
+      unit depends on the OS (bytes on macOS, KiB on Linux) and my first version guessed the unit
+      from the value's size instead of asking `platform.system()` — the same bug shape as Phase
+      2's Excel-day-number dates: a number in the wrong unit still looks like a plausible number.
+    - 🔍 **"Docker has to be stopped to train" (my own D1 framing) turned out not to be true at
+      this stage, and the reason matters.** `docker compose stop` left Docker Desktop's VM
+      resident — `docker info` still reported it holding 4.8 GB regardless of which containers
+      were running, so only quitting the whole app released anything. But the real test — running
+      the smoke test with the full stack up — passed fine: **375 MB peak RSS** with a warm model
+      cache, vs 1.4 GB on the earlier cold-cache run with Docker quit (that gap was the Hugging
+      Face download, not Docker's absence). A 494M-parameter model's load and one generation fits
+      comfortably either way. Whether a LoRA *training* run (gradients + an optimizer's state,
+      not just a forward pass) needs Docker stopped is still open — measured for real at step 4,
+      not assumed now.
+    - `docs/adr/0019-llm-output-schema-and-training-location.md` records the output-schema
+      deviation from plan §13 (values as printed, `generic_name` dropped) and the local-training
+      decision (D1/D2).
+- [ ] Step 1 — training data (train-split-only; family E excluded; the 3 unlabelled test rows need labelling)
+- [ ] Step 2 — choose the model (zero-shot comparison on validation)
+- [ ] Step 3 — the validator (schema + grounding + date-plausibility checks, with adversarial tests)
+- [ ] Step 4 — LoRA fine-tune, tracked in MLflow
+- [ ] Step 5 — single-use test evaluation (both gates, `docs/llm-extraction-report.md`)
+- [ ] Step 6 — pipeline integration (fallback, `extraction_method = llm`, Airflow task, GE check)
+- [ ] Step 7 — CI (model-dependent tests skip without a model) and the done-when demo
+
+**Done when:** the LLM beats the rule-based baseline on labelled-eval-set F1 for low-confidence
+rows (plan's gate), **and** it never lowers whole-test-split F1 below the parser's baseline or
+accepts an invented value (this phase's added gate).
 
 ---
 

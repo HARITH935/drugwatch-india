@@ -281,6 +281,12 @@ caffeinate -i uv run --env-file ../.env python -u -m drugwatch_ml.train --trials
 caffeinate -i uv run --env-file ../.env python -u -m drugwatch_ml.evaluate
 caffeinate -i uv run --env-file ../.env python -u -m drugwatch_ml.publish  # SHAP + register (docs/model-card.md)
 
+# LLM extraction fallback (from llm/; Phase 10, ADR 0019). No .env needed for the smoke test;
+# later steps add RustFS/MLflow once training data and tracking are wired up.
+uv run python -m drugwatch_llm.smoke_test   # MPS, model load, generation, LoRA wrap, memory cost
+uv run pytest               # fast tests only (model-marked tests are skipped by default)
+uv run pytest -m model      # the slow ones, once a model is actually involved
+
 # Risk service (from ml-serving/, MLflow up with a registered model; ADR 0017)
 # Reads NOTHING from Postgres: Phase 9's API reads gold and posts the 28 features.
 uv sync                                    # fastapi, onnxruntime, onnxmltools (+ ../ml for wording)
