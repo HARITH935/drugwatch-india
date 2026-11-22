@@ -2,8 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 9 — Backend. The Spring Boot API. All 8 steps complete; awaiting Harith's sign-off.
-**Next:** Harith's sign-off on Phase 9, then plan Phase 10 (LLM Extraction).
+**Current phase:** Phase 10 — LLM Extraction (planning).
+**Next:** Harith approves the Phase 10 plan, then step 0.
 
 ---
 
@@ -17,11 +17,11 @@ Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWA
 | 3 | Cleaning (bronze → silver) | ✅ Done |
 | 4 | Warehouse (gold) | ✅ Done |
 | 5 | Automation | ✅ Done |
-| 6 | Analytics | 🟨 In progress |
-| 7 | Data science | ⬜ Not started |
-| 8 | Model serving | ⬜ Not started |
-| 9 | Backend | ⬜ Not started |
-| 10 | LLM extraction | ⬜ Not started |
+| 6 | Analytics | ✅ Done |
+| 7 | Data science | ✅ Done |
+| 8 | Model serving | ✅ Done |
+| 9 | Backend | ✅ Done |
+| 10 | LLM extraction | 🟨 Planning |
 | 11 | Frontend | ⬜ Not started |
 | 12 | Deploy & harden | ⬜ Not started |
 
@@ -2605,6 +2605,8 @@ exist. It belongs to the deferred price phase.
 
 **Done when:** all endpoints work, the guest-token endpoint returns a valid Superset token,
 watchlist emails arrive in Mailpit, the test suite passes in CI, Swagger docs are live. ✅
+
+✅ **Phase 9 signed off by Harith, 2026-11-22.**
 
 ---
 
