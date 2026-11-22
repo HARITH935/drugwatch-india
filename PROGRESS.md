@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 10 — LLM Extraction.
-**Next:** step 3 — the validator (schema + grounding + date-plausibility checks, adversarial tests).
+**Next:** step 4 — LoRA fine-tune of Qwen2.5-1.5B-Instruct, tracked in MLflow (caffeinate; Docker likely needs to be stopped - measure first).
 
 ---
 
@@ -2766,7 +2766,31 @@ Face page before writing it down, not assumed from the name):
     - 22 new tests passing (11 on `prompting.py`'s parsing/grounding logic, including a test that
       initially failed because of MY OWN wrong expectation, not the code - `grounded()` correctly
       doesn't treat a hyphen as whitespace; fixed the test, not the function).
-- [ ] Step 3 — the validator (schema + grounding + date-plausibility checks, with adversarial tests)
+- [x] **Step 3 — the validator** (2026-11-22)
+    - `validator.py`: three checks matching decision D4. **Schema** (exactly the right fields,
+      already built in step 2's `parse_reply`), **grounding** (a value must appear in the row's
+      own source text, `prompting.grounded`), **plausibility** (`plausible`, reusing
+      `confidence.field_problem` - the *same* shape check Phase 2 already runs on the rule
+      parser's own output, so the LLM is held to an identical bar, not a looser one). A genuinely
+      blank value is treated as plausible on purpose: an empty cell is a real, checkable answer,
+      not a hallucination, and rejecting all blanks would make the model unable to ever correctly
+      report one.
+    - `merge()` is D4 itself: the fallback may replace a field **only if the parser flagged it
+      low-confidence**, and only with a value that passes every check. Every other field keeps
+      the parser's value even when the LLM disagrees - a missed correction is accepted, a wrong
+      one is not.
+    - **The adversarial test the plan asked for by name passes**:
+      `test_nil_can_never_become_a_fabricated_date` - a source cell printing `NIL`, with the LLM
+      inventing a plausible-looking `09/2024` that never appears anywhere in the row's text, is
+      rejected on grounding alone, however well-formed the date looks. CLAUDE.md §5's "impossible
+      dates or invented fields are rejected" has a specific test asserting exactly that now,
+      instead of being a sentence nothing checks.
+    - Other adversarial cases covered: an extra invented field (e.g. a smuggled-in
+      `generic_name`) fails the whole reply, not just that one field; a grounded but malformed
+      batch number (copied words with no digit) is rejected on plausibility even though it's real
+      text from the row; a well-formed-looking but never-printed date is rejected on grounding
+      even though it parses as a valid date shape.
+    - 10 new tests, 33 passing overall in `llm/`.
 - [ ] Step 4 — LoRA fine-tune, tracked in MLflow
 - [ ] Step 5 — single-use test evaluation (both gates, `docs/llm-extraction-report.md`)
 - [ ] Step 6 — pipeline integration (fallback, `extraction_method = llm`, Airflow task, GE check)
