@@ -22,6 +22,7 @@ CREATE SCHEMA IF NOT EXISTS gold;
 DROP TABLE IF EXISTS gold.fact_nsq_sample CASCADE;
 DROP TABLE IF EXISTS gold.dim_drug CASCADE;
 DROP TABLE IF EXISTS gold.dim_manufacturer CASCADE;
+DROP TABLE IF EXISTS gold.mart_ml_features CASCADE;
 
 CREATE TABLE gold.dim_drug (
     drug_id      text PRIMARY KEY,
@@ -67,7 +68,10 @@ INSERT INTO gold.dim_drug (drug_id, product_name, generic_name, dosage_form, str
 
 INSERT INTO gold.dim_manufacturer (manufacturer_id, canonical_name, state_name, first_alert_month, last_alert_month, name_variant_count) VALUES
     ('m1', 'Marvex Laboratories Private Limited', 'Himachal Pradesh', '2024-01', '2026-03', 3),
-    ('m2', 'Ostrella Pharma Limited',             'Gujarat',          '2025-06', '2025-06', 1);
+    ('m2', 'Ostrella Pharma Limited',             'Gujarat',          '2025-06', '2025-06', 1),
+    -- A company in the archive with no feature row at all: the risk proxy must say "not
+    -- scoreable" rather than invent a number.
+    ('m2-no-features', 'Verdane Formulations Limited', 'Kerala',       '2026-01', '2026-01', 1);
 
 INSERT INTO gold.fact_nsq_sample
     (sample_id, drug_id, manufacturer_id, batch_no, alert_month, alert_month_start, failure_reason,
@@ -87,3 +91,51 @@ INSERT INTO gold.fact_nsq_sample
     -- A second finding for the same medicine, so "multiple findings" is exercised.
     ('s5', 'd2', 'm1', 'KA 018', '2025-11', DATE '2025-11-01', 'Assay and Dissolution',
      ARRAY['Assay','Dissolution'], false, NULL, 'DTL Shimla', 'State', 'Himachal Pradesh', 'https://example.invalid/alert/2025-11.pdf');
+
+-- The feature table the risk proxy reads. Only the columns it uses, with invented values: the
+-- point of these rows is the shape (a null share, a company with history before the training
+-- cutoff and one without), not the numbers.
+CREATE TABLE gold.mart_ml_features (
+    manufacturer_id               text,
+    as_of_month                   text,
+    reports_3m                    numeric,
+    reports_6m                    numeric,
+    reports_12m                   numeric,
+    reports_24m                   numeric,
+    reports_prior_6m              numeric,
+    reports_trend_6m              numeric,
+    months_since_last_report      numeric,
+    distinct_drugs_12m            numeric,
+    distinct_reporting_states_12m numeric,
+    central_lab_reports_12m       numeric,
+    state_lab_reports_12m         numeric,
+    central_lab_share_12m         numeric,
+    category_mentions_12m         numeric,
+    assay_share_12m               numeric,
+    dissolution_share_12m         numeric,
+    sterility_share_12m           numeric,
+    description_share_12m         numeric,
+    class_mentions_12m            numeric,
+    distinct_drug_classes_12m     numeric,
+    antibiotic_share_12m          numeric,
+    analgesic_share_12m           numeric,
+    gastrointestinal_share_12m    numeric,
+    vitamin_share_12m             numeric,
+    respiratory_share_12m         numeric,
+    cardiovascular_share_12m      numeric,
+    antihistamine_share_12m       numeric,
+    unclassified_share_12m        numeric,
+    share_of_archive_reports_12m  numeric
+);
+
+-- m1: history from before the training cutoff (2024-10), so the model has seen it. The newest
+-- row is 2026-03, which is the scoring case - features known, outcome not yet knowable.
+INSERT INTO gold.mart_ml_features (manufacturer_id, as_of_month, reports_12m, reports_24m, months_since_last_report, assay_share_12m)
+VALUES ('m1', '2024-06', 2, 3, 1, 0.5),
+       ('m1', '2026-03', 3, 5, 0, 0.3);
+
+-- m2: first appears after the cutoff, so it belongs to the group the model is weakest on - and
+-- its assay share is NULL, which is a real value (no findings in the window to divide), not zero.
+INSERT INTO gold.mart_ml_features (manufacturer_id, as_of_month, reports_12m, reports_24m, months_since_last_report, assay_share_12m)
+VALUES ('m2', '2025-06', 1, 1, 0, NULL);
+

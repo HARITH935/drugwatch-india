@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 9 — Backend. The Spring Boot API.
-**Next:** step 5 — the risk-score proxy to the FastAPI service, with a graceful fallback.
+**Next:** step 6 — Redis caching and rate limiting.
 
 ---
 
@@ -2428,7 +2428,45 @@ exist. It belongs to the deferred price phase.
       because the endpoint did not exist yet. Step 4 built it, so the assertion is now the stronger
       one — 200 with an empty list.
     - 159 tests passing.
-- [ ] Step 5 — risk-score proxy to the FastAPI service
+- [x] **Step 5 — the risk-score proxy** (2026-11-22)
+      `GET /api/v1/manufacturers/{id}/risk`. Reads the company's newest row from
+      `gold.mart_ml_features` and asks the Phase 8 service to explain it.
+    - **Verified end to end on a real company**: score 0.193 for "Aurio Pharma Laboratories
+      Private Limited", with Phase 7's approved SHAP wording carried through two services —
+      *"Mainly batches reported in the last 24 months (3) raises it… This reflects how often
+      batches have been reported, not the quality of the company's medicines."*
+    - **The model's own limitations travel to the reader.** Phase 7 attached them to the
+      registered model version, Phase 8 serves them from `/explain`, and this endpoint repeats
+      them verbatim — including "statistically tied with logistic regression" and the
+      under-prediction. Three services, one sentence, no retyping.
+    - 🔍 **The model card's biggest caveat is told to the reader it applies to.** A company whose
+      history begins after the training cutoff gets *"the model is considerably less accurate for
+      such companies"*; one the model trained on is told it is in the group it predicts best. 48%
+      of the test window was in the weaker group (PR-AUC 0.269 against 0.438), and averaging over
+      that difference would have hidden it from exactly the people it affects.
+    - **A score of null, never zero.** When the service cannot answer, `available` is false and
+      `score` is null — a zero would read as "this company is safe", which is the opposite of "we
+      do not know". Same for a company with no findings at all: *"no reported findings… that is
+      not a statement about its medicines."*
+    - **The page survives the model being down**, measured: with `risk-api` stopped the endpoint
+      answered in **165 ms** with `available: false`, and the manufacturer page itself still
+      returned 200. Timeouts are 1 s to connect and 2 s to read, against an endpoint whose
+      measured p95 is 10 ms.
+    - **A null feature stays null.** `getDouble` reads a SQL NULL as 0.0, so the proxy checks
+      `wasNull()`: a share is null when the window held no findings to divide, and Phase 7 trained
+      the model to read that difference. The explanation renders it as "(unknown)".
+    - 🐛 **The worst bug of the phase, and the fallback hid it perfectly.** Java's `HttpClient`
+      defaults to offering an HTTP/2 upgrade — `Connection: Upgrade`, `Upgrade: h2c`, body in
+      chunked transfer encoding — and **uvicorn answers that with 422 "body: Field required"**:
+      the headers arrive, the body does not. The client turned the 422 into "no score today",
+      which is *identical* to the service being down, so in production this would have been a
+      permanently missing score with nothing logged as an error. Found by capturing the raw
+      request with `nc` after ruling out the content type, the request factory, a string body and
+      IPv6 in turn. Fixed by pinning HTTP/1.1, with a regression test that fails loudly if the pin
+      is removed.
+    - The live tests are what caught it. They run against the real Phase 8 container and skip
+      without it, so CI stays green while this machine checks the thing CI cannot.
+    - 171 tests passing.
 - [ ] Step 6 — Redis caching + rate limiting
 - [ ] Step 7 — Superset guest-token endpoint
 - [ ] Step 8 — CI, Swagger, the done-when demonstration
@@ -2701,3 +2739,6 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-22 | A watch term is interpolated into a word-boundary regex, so anything a regex engine reads as syntax is refused at the edge rather than escaped later | `WatchTerm` |
 | 2026-11-22 | The notification row is written before the email is sent, so the UNIQUE constraint makes a duplicate impossible; the stated cost is that a failed send is lost rather than retried | `WatchlistNotifier` |
 | 2026-11-22 | Verified on the real archive: watch "telmisartan" baselined at 2026-09 sent nothing; backdated to 2026-07 it sent 2 emails (6 and 8 batches) and recorded 2 rows | step 4 |
+| 2026-11-22 | 🐛 Java's HttpClient offers an HTTP/2 upgrade and sends the body chunked; uvicorn replies 422 with the body missing. The fallback reported "no score today", identical to an outage - a silent permanent failure. Pinned to HTTP/1.1 | `RiskClient` |
+| 2026-11-22 | The risk endpoint tells a reader whether the model was trained on their company: 48% of the test window was not, and scores there are PR-AUC 0.269 against 0.438 | `RiskService` |
+| 2026-11-22 | An unavailable score is null, never 0: a zero reads as "this company is safe", the opposite of "we do not know". Measured 165ms to fail with risk-api stopped | step 5 |

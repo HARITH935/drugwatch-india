@@ -302,6 +302,9 @@ curl -s localhost:8080/api/v1/watchlist -H "Authorization: Bearer $TOKEN"
 # Notifications run on a daily cron and only cover alert months AFTER a watch was created, so
 # adding one never emails the back catalogue. Override the schedule locally with:
 #   --drugwatch.watchlist.cron='0/30 * * * * *'
+# Risk score (step 5). Proxies to the Phase 8 service; needs risk-api up, else "unavailable".
+# RISK_API_URL=http://127.0.0.1:8000 locally (http://risk-api:8000 inside Docker).
+curl -s localhost:8080/api/v1/manufacturers/<id>/risk | python3 -m json.tool
 # First run only: the drugwatch_api role (SELECT on gold, owns the `app` schema, nothing else)
 set -a && . ./.env && set +a && docker compose exec -T postgres psql -U drugwatch -v ON_ERROR_STOP=1 -v api_password="$API_DB_PASSWORD" -f - < infra/postgres/api_role.sql
 # Flyway migrates `app` at startup. The privilege tests need the real DB and skip without it:

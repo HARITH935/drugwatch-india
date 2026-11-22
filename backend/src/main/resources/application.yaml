@@ -83,6 +83,9 @@ drugwatch:
     jwt-secret: ${JWT_SECRET}
   mail:
     from: ${SMTP_FROM:alerts@drugwatch.local}
+  risk:
+    # The Phase 8 service. Inside Docker it is risk-api:8000; from this Mac, the published port.
+    base-url: ${RISK_API_URL:http://localhost:8000}
   # Where the links in emails point. Not a secret, but wrong by default is worse than absent:
   # a verification link to the wrong host is a link that cannot be used.
   site-url: ${SITE_URL:http://localhost:3000}
