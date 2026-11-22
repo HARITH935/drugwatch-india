@@ -151,19 +151,34 @@ class PublicApiHttpTest {
     }
 
     @Test
-    void an_unknown_path_is_a_404_not_a_500() {
-        // Regression. A catch-all @ExceptionHandler(Exception.class) swallows Spring's own
-        // status-carrying exceptions, so every unknown path started answering "500, quote this
-        // reference". That hides real errors, and tells anyone probing for paths that the one
-        // they guessed did something.
+    void an_unknown_path_under_a_public_prefix_is_a_404_not_a_500() {
+        // Regression for the catch-all handler bug: @ExceptionHandler(Exception.class) swallows
+        // Spring's own status-carrying exceptions, so unknown paths answered "500, quote this
+        // reference" - which hides real errors and tells anyone probing that the path they
+        // guessed did something.
+        //
+        // The path is under /api/v1/alerts/**, which the filter chain permits, because a path
+        // outside every permitted prefix is refused with 401 before routing - so only a public
+        // prefix can reach the 404 this is about.
         client.get()
-                .uri("/api/v1/there-is-no-such-thing")
+                .uri("/api/v1/alerts/no-such-thing")
                 .exchange()
                 .expectStatus()
                 .isNotFound()
                 .expectBody()
                 .jsonPath("$.error")
                 .isEqualTo("No such endpoint");
+    }
+
+    @Test
+    void a_path_outside_every_public_prefix_is_refused_before_routing() {
+        // Deny by default: an endpoint added later is closed until somebody opens it, and the
+        // path space is not enumerable by watching 404s and 401s.
+        client.get()
+                .uri("/api/v1/there-is-no-such-thing")
+                .exchange()
+                .expectStatus()
+                .isUnauthorized();
     }
 
     @Test

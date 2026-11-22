@@ -60,7 +60,12 @@ class ApplicationSmokeTest {
     void only_health_is_exposed_over_http() {
         // /actuator/env prints configuration, which in production includes the shape of every
         // secret the service was given. It must not be reachable.
-        client.get().uri("/actuator/env").exchange().expectStatus().isNotFound();
-        client.get().uri("/actuator/beans").exchange().expectStatus().isNotFound();
+        //
+        // 401, not 404, since step 3 added the filter chain: anything not explicitly permitted is
+        // refused before routing happens. That is the better answer - a 404 would confirm the
+        // endpoint is absent rather than present-and-protected, and the difference is exactly
+        // what somebody mapping the service is looking for.
+        client.get().uri("/actuator/env").exchange().expectStatus().isUnauthorized();
+        client.get().uri("/actuator/beans").exchange().expectStatus().isUnauthorized();
     }
 }

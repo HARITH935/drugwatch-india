@@ -120,9 +120,39 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Accounts, password hashing, and the filter chain that protects the watchlist. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!--
+          JWT support, from Spring Security itself rather than a third-party library. `oauth2-jose`
+          brings Nimbus, which is what Spring's own JwtEncoder/JwtDecoder are built on - so "Spring
+          Security + JWT" (plan §6) needs no library outside the approved stack, and no hand-rolled
+          signing or parsing.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+        </dependency>
+
+        <!-- Verification and watchlist email. Mailpit locally, Brevo in production (plan §8). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Test-only: drives the filter chain with a logged-in user without issuing real tokens. -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
 

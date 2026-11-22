@@ -26,6 +26,20 @@ spring:
         default_schema: app
     open-in-view: false # see the note below
 
+  mail:
+    # Mailpit locally; Brevo in production (plan §8). Both are reached the same way, so only
+    # these values change between them.
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${SMTP_AUTH:false}
+          starttls:
+            enable: ${SMTP_STARTTLS:false}
+
   flyway:
     enabled: true
     schemas: app
@@ -47,12 +61,31 @@ management:
         # Health only. Actuator can publish configuration, environment variables and heap dumps,
         # and this service is the one Phase 12 exposes - so the set is named rather than defaulted.
         include: health
+  health:
+    mail:
+      # Off, and not only because a mocked sender breaks it in tests. Actuator's mail check opens
+      # an SMTP connection on every health poll, and a failing one turns the whole service DOWN -
+      # so an outage at the mail provider would make Docker restart a perfectly working API, and
+      # take the public batch checker down with it. Mail failures are logged where they happen.
+      enabled: false
   endpoint:
     health:
       # "UP" and nothing else by default. Component detail names internal services (database,
       # Redis, the risk API) and their state, which is operational detail, not public information.
       show-details: never
       show-components: never
+
+drugwatch:
+  auth:
+    # No default. A signing secret that falls back to a known value means anybody can mint a token
+    # for any account - so the application refuses to start without one (plan §15).
+    # Generate: openssl rand -hex 32
+    jwt-secret: ${JWT_SECRET}
+  mail:
+    from: ${SMTP_FROM:alerts@drugwatch.local}
+  # Where the links in emails point. Not a secret, but wrong by default is worse than absent:
+  # a verification link to the wrong host is a link that cannot be used.
+  site-url: ${SITE_URL:http://localhost:3000}
 
 logging:
   level:

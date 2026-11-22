@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 9 — Backend. The Spring Boot API.
-**Next:** step 3 — auth: register, login, refresh, roles, and email verification.
+**Next:** step 4 — the watchlist and its notification emails.
 
 ---
 
@@ -2325,7 +2325,59 @@ exist. It belongs to the deferred price phase.
       exists, so the fixture cannot drift quietly.
     - 88 tests passing (BatchNumber 23, batch search 12, public endpoints 12, HTTP 11, schema 13,
       privileges 6, gold contract 3, architecture 5, smoke 3).
-- [ ] Step 3 — auth: register, login, refresh, roles, email verification
+- [x] **Step 3 — accounts, tokens and email verification** (2026-11-22)
+      Register, login, refresh, logout, verify. **JWT from Spring Security itself** (`oauth2-jose`
+      brings Nimbus), so "Spring Security + JWT" needs no library outside the approved stack and
+      nothing is hand-rolled.
+    - 🔒 **Registering never reveals whether an address already has an account.** A site about the
+      medicines people take is one where "does this person have an account here" is itself
+      private, and a public endpoint that answers it is an oracle anybody can query. So
+      registration returns **202 with byte-identical text** either way, and when the address is
+      taken it emails *that address* a note instead of creating anything. Verified against the
+      real stack: two registrations, one account, two emails — both to the owner.
+    - **Login fails identically for a wrong password and an unknown address**, and the password is
+      hashed even when no user was found. Skipping the hash would make the unknown-address case
+      measurably faster, and a stopwatch would then answer the question registration refuses.
+    - **Refresh tokens are single-use and rotate**, and **reuse revokes every session that user
+      has** — a revoked token presented twice means somebody has a copy, and which holder is the
+      real user cannot be known.
+    - 🐛 **That protection silently did nothing at first, and a test caught it.** The reuse branch
+      revoked every session and then threw — and a thrown exception rolls the transaction back, so
+      the revocations were undone and the stolen token kept working. Fixed with
+      `noRollbackFor = InvalidCredentialsException`, which is load-bearing rather than tidiness:
+      **a security response has to survive the rejection that triggers it.** Confirmed end to end
+      on the real stack.
+    - **Nothing is stored that can be presented to the API.** Passwords BCrypt (plan §15); refresh
+      and verification tokens as SHA-256 of 256 random bits. SHA-256 rather than BCrypt for the
+      tokens *because* BCrypt is slow on purpose — that cost is worth paying against a
+      human-chosen password and pointless against 256 bits of `SecureRandom`, where it would just
+      tax every refresh. Checked in the database: 64-char hashes, `$2a$` password prefix.
+    - **Verification links are single-use and expire in 24 hours** — a link that keeps working is
+      a credential sitting in an inbox, and inboxes get forwarded, backed up and breached.
+      Access tokens live **15 minutes**; they are not checked against a database, so expiry is the
+      only limit on a stolen one. The refresh token is the long half, and it *can* be revoked.
+    - **The filter chain denies by default.** Public paths are listed; everything else needs a
+      token, so an endpoint added later is closed until somebody opens it. Tested: an invented
+      token, a token signed with the wrong key, and an anonymous caller are all refused, while a
+      real token gets through.
+    - 🔍 **Two earlier test expectations were wrong once security existed**, and the code was
+      right: an unknown path now answers **401, not 404**, because nothing routes before
+      authorisation. That is the better answer — a 404 confirms a path is absent rather than
+      present-and-protected, which is exactly what somebody mapping the service wants. The
+      catch-all regression test was rewritten to use a path under a *public* prefix, where a 404
+      can still be reached.
+    - **Time is a `Clock` bean**, so expiry is tested by moving the clock rather than by sleeping
+      for thirty days or weakening the assertion to "not null".
+    - 🐛 Actuator's **mail health check** broke the context, and turning it off is right in
+      production too: it opens an SMTP connection on every poll and a failure flips the service to
+      DOWN — so an outage at the mail provider would have Docker restart a working API and take
+      the public batch checker down with it.
+    - 🐛 A test class that never loaded the gold fixture passed or failed **depending on which
+      test ran first** (the container is shared). Fixed by loading it there too, which is the real
+      fix rather than reordering.
+    - 119 tests passing. Verified end to end against the real stack: register → two identical
+      responses → verification email in Mailpit → verify → link rejected on reuse → login →
+      refresh rotates → old token revokes everything.
 - [ ] Step 4 — watchlist + notification emails
 - [ ] Step 5 — risk-score proxy to the FastAPI service
 - [ ] Step 6 — Redis caching + rate limiting
@@ -2591,3 +2643,8 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-21 | Verified on real data: batch GTE1350A appears both as a genuine finding (manufacturer named) and as spurious (manufacturer null, copied brand in nameOnPack) | step 2 |
 | 2026-11-21 | The pg_trgm index is 11x faster when used (2.4ms vs 27.6ms) but Postgres prefers a seq scan at 5,651 rows; built by dbt as a post-hook so a monthly rebuild cannot drop it | `macros/search_indexes.sql` |
 | 2026-11-21 | 🐛 `@ExceptionHandler(Exception)` swallows Spring's status-carrying exceptions, turning every 404 into "500, quote this reference" | `GlobalExceptionHandler` |
+| 2026-11-22 | Registration answers 202 with byte-identical text whether or not the address is taken, and emails the owner instead - a public endpoint that says who has an account is an oracle | `AuthService` |
+| 2026-11-22 | 🐛 Revoking every session and then throwing rolled the revocations back, so reuse detection silently did nothing. A security response must survive the rejection that triggers it | `noRollbackFor` |
+| 2026-11-22 | Tokens are stored as SHA-256 of 256 random bits, not BCrypt: BCrypt's slowness is worth paying against a guessable password and pointless against random bits | `TokenHash` |
+| 2026-11-22 | Once the filter chain exists an unknown path answers 401, not 404, which hides whether a path is absent or protected. Two test expectations were updated, not the code | `SecurityConfig` |
+| 2026-11-22 | Actuator's mail health check opens SMTP on every poll and a failure flips the service DOWN, so a mail outage would restart a working API | `application.yaml` |

@@ -1,5 +1,6 @@
 package in.drugwatch.api.config;
 
+import in.drugwatch.api.auth.domain.InvalidCredentialsException;
 import in.drugwatch.api.shared.NotFoundException;
 import in.drugwatch.api.shared.PublicNotes;
 import jakarta.validation.ConstraintViolationException;
@@ -11,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.ErrorResponseException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -49,6 +51,28 @@ public class GlobalExceptionHandler {
             fields.put(path.substring(path.lastIndexOf('.') + 1), violation.getMessage());
         });
         return problem(HttpStatus.BAD_REQUEST, "One or more parameters are not valid", fields);
+    }
+
+    /**
+     * Login, refresh or verification failed.
+     *
+     * <p>401 with one message for every cause: saying "no such account" and "wrong password"
+     * separately is a way for anybody to find out who has an account on a site about the medicines
+     * people take.
+     */
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<Map<String, Object>> invalidCredentials(InvalidCredentialsException error) {
+        return problem(HttpStatus.UNAUTHORIZED, error.getMessage(), Map.of());
+    }
+
+    /** A request body failed validation. */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<Map<String, Object>> invalidBody(MethodArgumentNotValidException error) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        error.getBindingResult()
+                .getFieldErrors()
+                .forEach(field -> fields.put(field.getField(), field.getDefaultMessage()));
+        return problem(HttpStatus.BAD_REQUEST, "One or more fields are not valid", fields);
     }
 
     /** Asked for by id, does not exist. A plain 404 with no detail about what else might. */
