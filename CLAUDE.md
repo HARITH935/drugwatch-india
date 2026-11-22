@@ -289,6 +289,12 @@ uv run pytest -m model      # the slow ones, once a model is actually involved
 # Training data (step 1; RustFS up, the labelled eval set present on this Mac - ADR 0003).
 # Writes real CDSCO text to ../data/ (git-ignored); never commit that file.
 uv run --env-file ../.env python -m drugwatch_llm.training_data
+# Zero-shot model comparison (step 2). Needs ../data/llm-training/validation.jsonl built first.
+# Loads real models: quit Docker Desktop first if trying more than one (not just `compose stop` -
+# that doesn't release the VM's reserved memory). Wrap in caffeinate -i; takes several minutes.
+uv run --env-file ../.env python -m drugwatch_llm.validation_data
+caffeinate -i uv run python -m drugwatch_llm.zero_shot                       # all candidates
+caffeinate -i uv run python -m drugwatch_llm.zero_shot --models <id> --limit 5  # a quick check
 
 # Risk service (from ml-serving/, MLflow up with a registered model; ADR 0017)
 # Reads NOTHING from Postgres: Phase 9's API reads gold and posts the 28 features.

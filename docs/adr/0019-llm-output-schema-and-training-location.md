@@ -64,3 +64,42 @@ fits both this training setup and the eventual production host.
 - Training runs are not reproducible on a machine without Apple Silicon without re-deriving a
   CUDA/CPU training path; this is accepted because the production target is also a small CPU
   host, not a GPU server.
+
+---
+
+## Amendment, 2026-11-22 — the 0.5–1B production cap is lifted to 1.5B
+
+**Context.** Step 2's zero-shot comparison (three Apache-2.0 candidates, scored on the
+validation split, never the test split) measured:
+
+| Model | JSON valid | Right schema | Grounded | Overall field F1 | Time/row (MPS, bf16) |
+|---|---|---|---|---|---|
+| Qwen2.5-0.5B-Instruct | 100% | 98.1% | 97.2% | 19.7% | 1.20s |
+| **Qwen2.5-1.5B-Instruct** | 100% | 100% | 93.7% | **41.1%** | 4.42s |
+| SmolLM2-360M-Instruct | 49.1% | 7.5% | 91.7% | 2.3% | 2.42s |
+
+SmolLM2-360M is eliminated outright: it cannot reliably produce parseable JSON zero-shot, let
+alone the right fields. Between the two Qwen sizes, 1.5B roughly doubles 0.5B's field F1.
+
+**The 0.5–1B cap's original reasoning no longer fits this candidate's actual job.** It assumed
+"has to run every month in the pipeline" meant a bulk-size workload worth optimising per-row cost
+for. But the fallback only ever runs on **low-confidence rows** — about 103 archive-wide, a
+handful a month — not a bulk pass over every row. At 4.42s/row even on a modest CPU host (this
+measurement is on Apple Silicon's MPS backend; a slower CPU-only server would still be seconds,
+not minutes, for a handful of rows), the per-row cost this cap was protecting against is not the
+real constraint.
+
+**Decision (Harith, 2026-11-22, choosing between keeping the cap, lifting it, or fine-tuning both
+sizes before deciding):** lift the production cap to **Qwen2.5-1.5B-Instruct**. Step 4 fine-tunes
+this model only, not both sizes — the zero-shot gap is already large enough, and a volume-driven
+cost concern that doesn't apply to a rarely-invoked fallback isn't a reason to double step 4's
+training cost to re-confirm it with LoRA adapters too.
+
+**Caveat worth carrying into step 4's report:** `manufacturer` and `product_name` scored near 0%
+F1 on **every** candidate despite grounding staying above 90% throughout — the models are not
+inventing values, they are producing text that fails the strict whitespace-collapsed exact-match
+`outcome()` scoring (the same rule the parser is held to) on long, multi-line, multi-word fields.
+A parser that copies a cell verbatim either matches exactly or doesn't; a generative model
+producing a slightly different line-wrap or word order on a long address gets zero credit for
+being close. This is reported as a finding about the metric's harshness on long fields, not
+evidence that fine-tuning on these fields is hopeless.

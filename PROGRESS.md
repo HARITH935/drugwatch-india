@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 10 — LLM Extraction.
-**Next:** step 2 — choose the model (zero-shot comparison of 2-3 candidates on the validation split).
+**Next:** step 3 — the validator (schema + grounding + date-plausibility checks, adversarial tests).
 
 ---
 
@@ -2718,7 +2718,54 @@ Face page before writing it down, not assumed from the name):
       reopening a frozen, tested artifact.
     - 11 tests passing (7 on `target_fields`'s decision logic, 1 constant, 1 memory-unit, 2 from
       step 0; plus the real-file leakage test, which ran against the actual 737-row output above).
-- [ ] Step 2 — choose the model (zero-shot comparison on validation)
+- [x] **Step 2 — choose the model** (2026-11-22)
+    - **53 validation examples** built (`validation_data.py`) — every validation-split row that
+      has a readable label, scored against the label only (never the parser's own output: scoring
+      a model against the parser would be circular, a model that copies the parser's mistakes
+      would look perfect). Family E never appears in validation/test at all, so there was nothing
+      to additionally exclude here, unlike step 1's train set.
+    - **Zero-shot comparison, 3 Apache-2.0 candidates** (`zero_shot.py`, scoring reused directly
+      from Phase 2's own `evaluate.Counts`/`outcome` — one comparison method for the parser and
+      every LLM candidate):
+
+      | Model | JSON valid | Right schema | Grounded | Overall field F1 | Time/row |
+      |---|---|---|---|---|---|
+      | Qwen2.5-0.5B-Instruct | 100% | 98.1% | 97.2% | 19.7% | 1.20s |
+      | **Qwen2.5-1.5B-Instruct** | 100% | 100% | 93.7% | **41.1%** | 4.42s |
+      | SmolLM2-360M-Instruct | 49.1% | 7.5% | 91.7% | 2.3% | 2.42s |
+
+    - **SmolLM2-360M eliminated outright**: half the time it can't even produce parseable JSON.
+      Not a contest between it and the Qwen models - it simply cannot follow the task's format.
+    - 🔍 **`manufacturer` and `product_name` score near 0% F1 on every single candidate**, despite
+      grounding staying above 90% throughout. Not the models inventing values - the strict
+      whitespace-collapsed exact-match scoring (the same rule the rule parser is held to) gives
+      zero credit for a long, multi-line address or bracketed product name that's almost right
+      but not byte-identical. A parser that copies a cell verbatim either matches or doesn't; a
+      generative model producing a slightly different line-wrap gets nothing for being close.
+      Reported as a metric-harshness finding to carry into step 4/5, not swept under the rug.
+    - 🐛 **The first full run stalled for 30+ minutes and had to be killed.** All three models were
+      loaded in **float32** (the 1.5B candidate alone needs ~6 GB of weights at 4 bytes/param) with
+      nothing freed between runs, on a Mac where Docker Desktop's VM was separately holding ~4.8 GB
+      — total demand far past 8 GB, and the process sat in an uninterruptible-sleep state burning
+      almost no CPU for 30 real minutes while it thrashed. Fixed three ways: **bf16** instead of
+      float32 (halves memory, inference-only so it costs nothing this phase trains against),
+      explicit `del model; gc.collect(); torch.mps.empty_cache()` between candidates (MPS caches
+      allocations even after Python frees the tensors), and Docker Desktop fully quit for the
+      run - this is the real answer to step 0's open question about whether heavy LLM work needs
+      Docker stopped: a single forward pass didn't; three sequential models generating 53 rows
+      each in float32 did.
+    - 🐛 **My own stall-visibility fix was itself invisible to the monitoring it was built for.**
+      Added a per-row progress print using `end="\r"` (a nice overwriting counter at a live
+      terminal) - but a line with no trailing newline is invisible to `tail -f | grep`, which is
+      exactly how a backgrounded run gets watched. Changed to a real newline every 5th row.
+    - **Decision (Harith, choosing between keeping the 0.5-1B cap, lifting it, or fine-tuning both
+      sizes before deciding): lift the cap to Qwen2.5-1.5B-Instruct.** ADR 0019 amended: the cap's
+      original reasoning assumed a bulk workload, but the fallback only ever runs on ~103
+      low-confidence rows archive-wide - a handful a month, not every row - so 4.42s/row is cheap
+      in absolute terms even on a modest CPU server. Step 4 fine-tunes 1.5B only.
+    - 22 new tests passing (11 on `prompting.py`'s parsing/grounding logic, including a test that
+      initially failed because of MY OWN wrong expectation, not the code - `grounded()` correctly
+      doesn't treat a hyphen as whitespace; fixed the test, not the function).
 - [ ] Step 3 — the validator (schema + grounding + date-plausibility checks, with adversarial tests)
 - [ ] Step 4 — LoRA fine-tune, tracked in MLflow
 - [ ] Step 5 — single-use test evaluation (both gates, `docs/llm-extraction-report.md`)
