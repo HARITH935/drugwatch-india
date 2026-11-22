@@ -296,6 +296,12 @@ uv run python -m drugwatch_serving.benchmark --url http://localhost:8000  # p50/
 # Auth (step 3). Register -> the verification link arrives in Mailpit (http://localhost:8025).
 curl -s -X POST localhost:8080/api/v1/auth/register -H 'Content-Type: application/json' -d '{"email":"you@example.com","password":"a-long-enough-password"}'
 curl -s -X POST localhost:8080/api/v1/auth/login -H 'Content-Type: application/json' -d '{"email":"you@example.com","password":"a-long-enough-password"}'
+# Watchlist (step 4). Needs the access token from login, and a VERIFIED address to be emailed.
+curl -s -X POST localhost:8080/api/v1/watchlist -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"term":"telmisartan"}'
+curl -s localhost:8080/api/v1/watchlist -H "Authorization: Bearer $TOKEN"
+# Notifications run on a daily cron and only cover alert months AFTER a watch was created, so
+# adding one never emails the back catalogue. Override the schedule locally with:
+#   --drugwatch.watchlist.cron='0/30 * * * * *'
 # First run only: the drugwatch_api role (SELECT on gold, owns the `app` schema, nothing else)
 set -a && . ./.env && set +a && docker compose exec -T postgres psql -U drugwatch -v ON_ERROR_STOP=1 -v api_password="$API_DB_PASSWORD" -f - < infra/postgres/api_role.sql
 # Flyway migrates `app` at startup. The privilege tests need the real DB and skip without it:

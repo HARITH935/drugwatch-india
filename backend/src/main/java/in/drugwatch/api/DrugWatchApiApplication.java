@@ -2,6 +2,7 @@ package in.drugwatch.api;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * Entry point for the DrugWatch India API (Phase 9).
@@ -16,6 +17,9 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * <p>{@code ArchitectureTest} enforces the layering so it cannot decay quietly (ADR 0018).
  */
 @SpringBootApplication
+// The watchlist notifier runs on a daily cron (Phase 9 decision D: the API polls rather than
+// Airflow calling in). Without this the schedule is parsed and never fires.
+@EnableScheduling
 public class DrugWatchApiApplication {
 
     public static void main(String[] args) {

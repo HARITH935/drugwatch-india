@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 9 — Backend. The Spring Boot API.
-**Next:** step 4 — the watchlist and its notification emails.
+**Next:** step 5 — the risk-score proxy to the FastAPI service, with a graceful fallback.
 
 ---
 
@@ -2378,7 +2378,56 @@ exist. It belongs to the deferred price phase.
     - 119 tests passing. Verified end to end against the real stack: register → two identical
       responses → verification email in Mailpit → verify → link rejected on reuse → login →
       refresh rotates → old token revokes everything.
-- [ ] Step 4 — watchlist + notification emails
+- [x] **Step 4 — the watchlist and its notification emails** (2026-11-22)
+      `GET`/`POST`/`DELETE /api/v1/watchlist`, plus a daily job that emails a watcher when a new
+      alert month names what they are watching.
+    - 🔍 **A new watch must not email the back catalogue, and that needed a migration.** "Watch
+      telmisartan" matches findings across most of the archive's 101 published months — so without
+      a baseline, adding one watch would have sent about a hundred emails at once, which is
+      indistinguishable from spam and would get the sending domain blocked before anybody read
+      one. `V2__watchlist_baseline.sql` adds `since_alert_month`, set to the archive's newest month
+      when the watch is created. **Verified on the real stack: a new watch recorded `2026-09` and
+      sent nothing.** The default is `'9999-12'`, deliberately in the far future, so a row that
+      somehow missed its baseline notifies about *nothing* rather than everything — failing closed
+      is the right direction for a column that decides whether to email somebody.
+    - **A watch is a term, not a product** (decision D), matched on **whole words** against the
+      printed product and generic names. Phase 4 left the 5,651 printed names unmerged, so a watch
+      pinned to one row would silently miss the same medicine printed another way. Whole words
+      because a substring match makes "ace" match "Paracetamol" — tested.
+    - **A term can never become a regex.** It is interpolated into a `\y…\y` word-boundary
+      pattern, so anything a regex engine would read as syntax is refused at the edge rather than
+      escaped later — the same rule ADR 0014's ingredient phrases follow. Tested against `.*`,
+      `a|b`, `[abc]`, `^para` and six more.
+    - **Nothing is emailed to an unverified address** (decision E), and that is enforced in the
+      query rather than in Java, so a bug in the notifier cannot reach an unconfirmed address.
+    - **A row is written before the email is sent**, so the UNIQUE constraint on (watch, alert
+      month) makes a second send impossible — two overlapping runs, a retry, or a redeploy
+      mid-send all collide with the database. The cost is stated rather than hidden: if the row
+      commits and the send fails, that one notification is lost rather than retried. For a monthly
+      digest, one missed email beats an unbounded number of duplicates.
+    - **The API polls; Airflow does not call in.** A webhook between them would need a shared
+      secret, a retry policy and a protected endpoint, for a job whose trigger is "is there a month
+      we have not told anybody about". A daily query answers that with no new coupling.
+    - **Ownership comes from the token, never the request.** There is no user id to tamper with;
+      the watch id is scoped by owner, and "not yours" answers 404 because the difference between
+      that and "does not exist" is itself information. Tested from both sides.
+    - **Every email carries the caveats**: one specific batch, not the medicine or the company; a
+      batch absent from an alert is not a guarantee it is safe; the disclaimer; and a link to stop
+      watching.
+    - **Verified end to end on the real archive**: register → verify → watch "telmisartan"
+      (baseline 2026-09, nothing sent) → backdate to 2026-07 → the cron sent **two** emails,
+      "6 batches reported in the 2026-09 CDSCO alert" and "8 batches reported in the 2026-08
+      alert", with two rows recorded.
+    - 🐛 A 50-watch ceiling per account, because every watch is a monthly email and a row in a
+      query that runs for every user — and "watch everything" is what the drug pages are for.
+    - 🐛 The API answered `"createdAt": null` for a field it advertises: the column is
+      database-defaulted and, with `insertable = false`, the saved object never learned the value.
+      Now written by the application from the `Clock`, with the column default kept as a backstop.
+      Regression test added.
+    - 🐛 A step-3 test asserted an authenticated call to `/api/v1/watchlist` returned **404**,
+      because the endpoint did not exist yet. Step 4 built it, so the assertion is now the stronger
+      one — 200 with an empty list.
+    - 159 tests passing.
 - [ ] Step 5 — risk-score proxy to the FastAPI service
 - [ ] Step 6 — Redis caching + rate limiting
 - [ ] Step 7 — Superset guest-token endpoint
@@ -2648,3 +2697,7 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-22 | Tokens are stored as SHA-256 of 256 random bits, not BCrypt: BCrypt's slowness is worth paying against a guessable password and pointless against random bits | `TokenHash` |
 | 2026-11-22 | Once the filter chain exists an unknown path answers 401, not 404, which hides whether a path is absent or protected. Two test expectations were updated, not the code | `SecurityConfig` |
 | 2026-11-22 | Actuator's mail health check opens SMTP on every poll and a failure flips the service DOWN, so a mail outage would restart a working API | `application.yaml` |
+| 2026-11-22 | A watch needs a baseline or adding one emails the back catalogue: "telmisartan" matches most of 101 published months. V2 adds `since_alert_month`, defaulting to '9999-12' so a row without one notifies about nothing | `V2__watchlist_baseline.sql` |
+| 2026-11-22 | A watch term is interpolated into a word-boundary regex, so anything a regex engine reads as syntax is refused at the edge rather than escaped later | `WatchTerm` |
+| 2026-11-22 | The notification row is written before the email is sent, so the UNIQUE constraint makes a duplicate impossible; the stated cost is that a failed send is lost rather than retried | `WatchlistNotifier` |
+| 2026-11-22 | Verified on the real archive: watch "telmisartan" baselined at 2026-09 sent nothing; backdated to 2026-07 it sent 2 emails (6 and 8 batches) and recorded 2 rows | step 4 |

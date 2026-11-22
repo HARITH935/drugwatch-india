@@ -185,8 +185,7 @@ class AuthHttpTest {
 
     @Test
     void an_authenticated_endpoint_refuses_an_anonymous_caller() {
-        // /api/v1/watchlist is built in step 4. It is already protected, because the filter chain
-        // denies by default - which is the property being checked here, not the endpoint.
+        // The property being checked is the filter chain denying by default, not the endpoint.
         client.get().uri("/api/v1/watchlist").exchange().expectStatus().isUnauthorized();
     }
 
@@ -221,13 +220,17 @@ class AuthHttpTest {
         register("reader@example.com", "a-long-enough-password");
         String token = loginAndGetAccessToken("reader@example.com", "a-long-enough-password");
 
-        // Step 4 has not built the watchlist yet, so the endpoint does not exist - but the point
-        // is that the request gets past authentication: 404, not 401.
+        // Step 3 asserted 404 here, because the watchlist did not exist yet and the point was
+        // only that the request got past authentication. Step 4 built it, so the stronger
+        // assertion is available: the token identifies the caller and the endpoint answers.
         client.get()
                 .uri("/api/v1/watchlist")
                 .header("Authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isOk()
+                .expectBody()
+                .jsonPath("$.watches")
+                .isEmpty();
     }
 }

@@ -3,6 +3,7 @@ package in.drugwatch.api.config;
 import in.drugwatch.api.auth.domain.InvalidCredentialsException;
 import in.drugwatch.api.shared.NotFoundException;
 import in.drugwatch.api.shared.PublicNotes;
+import in.drugwatch.api.watchlist.domain.WatchlistService;
 import jakarta.validation.ConstraintViolationException;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -73,6 +74,12 @@ public class GlobalExceptionHandler {
                 .getFieldErrors()
                 .forEach(field -> fields.put(field.getField(), field.getDefaultMessage()));
         return problem(HttpStatus.BAD_REQUEST, "One or more fields are not valid", fields);
+    }
+
+    /** A watch term that cannot be used, or one already watched. The caller can fix it. */
+    @ExceptionHandler(WatchlistService.InvalidWatchException.class)
+    public ResponseEntity<Map<String, Object>> invalidWatch(WatchlistService.InvalidWatchException error) {
+        return problem(HttpStatus.BAD_REQUEST, error.getMessage(), Map.of());
     }
 
     /** Asked for by id, does not exist. A plain 404 with no detail about what else might. */
