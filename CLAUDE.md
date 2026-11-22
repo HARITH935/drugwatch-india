@@ -297,6 +297,7 @@ uv run python -m drugwatch_serving.benchmark --url http://localhost:8000  # p50/
 ./mvnw spotless:apply          # format the code (the Java equivalent of `ruff format`)
 ./mvnw test -Dtest=ArchitectureTest   # just the layering rules
 ./mvnw spring-boot:run         # run the API on http://localhost:8080 (health: /actuator/health)
+curl -s localhost:8080/v3/api-docs | python3 -m json.tool   # OpenAPI document; browse it at /swagger-ui.html (step 8)
 # Auth (step 3). Register -> the verification link arrives in Mailpit (http://localhost:8025).
 curl -s -X POST localhost:8080/api/v1/auth/register -H 'Content-Type: application/json' -d '{"email":"you@example.com","password":"a-long-enough-password"}'
 curl -s -X POST localhost:8080/api/v1/auth/login -H 'Content-Type: application/json' -d '{"email":"you@example.com","password":"a-long-enough-password"}'

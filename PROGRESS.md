@@ -2,8 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 9 — Backend. The Spring Boot API.
-**Next:** step 8 — CI, Swagger docs, and the Phase 9 done-when demonstration.
+**Current phase:** Phase 9 — Backend. The Spring Boot API. All 8 steps complete; awaiting Harith's sign-off.
+**Next:** Harith's sign-off on Phase 9, then plan Phase 10 (LLM Extraction).
 
 ---
 
@@ -2561,10 +2561,50 @@ exist. It belongs to the deferred price phase.
       dashboards, and the number of Redis keys other classes had flushed. Both now assert the
       property instead, which is the better assertion anyway.
     - 200 tests passing.
-- [ ] Step 8 — CI, Swagger, the done-when demonstration
+- [x] **Step 8 — CI, Swagger, the done-when demonstration** (2026-11-22)
+    - **springdoc-openapi 3.2.1**, the first release built against our exact Spring Boot parent
+      (4.2.0) rather than 4.1.x — chosen by checking its own POM, not assumed. Publishes
+      `/v3/api-docs` (OpenAPI 3.1) and a Swagger UI at `/swagger-ui.html`, generated from the
+      controllers themselves so the document can't drift from what the API does. Already listed
+      in the locked stack (plan §6), so no ADR — this is implementing it, not adding a tool.
+    - `OpenApiConfig` writes the one thing springdoc can't infer: *why*. The `info.description`
+      quotes `PublicNotes` verbatim — the same disclaimer, "not found" caveat and spurious-pack
+      explanation the JSON responses carry — so CLAUDE.md §6's wording reaches whoever finds the
+      API before the website, from one source rather than a second copy that drifts.
+    - Every one of the 15 operations across all 8 controllers got an `@Operation` summary and
+      `@Tag`; the watchlist controller additionally carries `@SecurityRequirement("bearer-token")`.
+      `/v3/api-docs` and `/swagger-ui.html` opened in `SecurityConfig` — public, because the API
+      underneath is: a description of already-open endpoints leaks nothing.
+    - 🔍 **No global security requirement.** A bearer scheme is declared in `components` but never
+      applied document-wide — only per-operation on the watchlist. A global requirement would
+      label the batch checker as needing an account, which is backwards for a public-interest
+      site whose whole point is working for a logged-out visitor.
+    - **`OpenApiTest`** (10 tests, `RestTestClient` against the real `/v3/api-docs`) is the test
+      with teeth here: it asserts every published operation has a summary *and* a tag, so adding
+      an endpoint without documenting it fails the build instead of quietly shipping a less-true
+      page — the same "rot silently" failure mode step 7 already fixed twice elsewhere. Also
+      checks: OpenAPI 3.1, the plan's 15 paths all present, the disclaimer text present, the
+      batch-search minimum-length validation rule surfaced in the schema, `/actuator/health`
+      *not* published as API, and the Swagger page reachable with no token.
+    - CI already runs `./mvnw -B verify` as its own `backend` job (added step 0) — step 8 is
+      confirming that job now also runs `OpenApiTest`, not adding a workflow.
+    - **Phase 9 done-when, demonstrated live** against the real stack (Postgres, Redis, Mailpit,
+      the risk service, Superset — all already running, nothing started just for this):
+      - All endpoints answer: `batches/search` → `NOT_FOUND` with the full disclaimer,
+        `alerts/latest` → 200, `drugs/search` → 200.
+      - `POST /api/v1/dashboards/states/guest-token` → a real Superset JWT, decoded:
+        `type: guest`, one resource (the `states` dashboard's UUID), `exp` 300s out.
+      - `POST /api/v1/auth/register` → the verification email landed in Mailpit, subject
+        "Confirm your email address", addressed to the registered account — the same pipeline
+        the watchlist's own notification email rides on, already proven end-to-end in step 4.
+      - `GET /v3/api-docs` → 200, `title: DrugWatch India API`, 15 paths. `/swagger-ui.html` →
+        302 → 200 (serves the page).
+      - Full suite: **210 tests passing**, `spotless:check` clean, `mvn verify` green.
+    - **Phase 9 is done.** All eight steps complete; the done-when criteria are demonstrated above,
+      not just asserted.
 
 **Done when:** all endpoints work, the guest-token endpoint returns a valid Superset token,
-watchlist emails arrive in Mailpit, the test suite passes in CI, Swagger docs are live.
+watchlist emails arrive in Mailpit, the test suite passes in CI, Swagger docs are live. ✅
 
 ---
 
@@ -2844,3 +2884,7 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-22 | 🐛 An unconfigured dashboard sat in the allowlist with an empty UUID and would have minted a token for "" - a failure that looks like an outage | `SupersetProperties` |
 | 2026-11-22 | 🐛 Spring's status-carrying exceptions share no base class, so naming them one at a time was whack-a-mole; the handler now asks for the ErrorResponse interface | `GlobalExceptionHandler` |
 | 2026-11-22 | Superset's guest-token POST needs bearer token + CSRF token + the session cookie issued with it - exactly what Phase 6's superset_api.py predicted | `GuestTokenService` |
+| 2026-11-22 | springdoc-openapi 3.2.1 chosen by checking its POM for the Boot parent it was built against (4.2.0), not assumed from the version number | pom.xml |
+| 2026-11-22 | No global OpenAPI security requirement - only the watchlist operations carry one, so the published document doesn't label the public batch checker as needing an account | `OpenApiConfig` |
+| 2026-11-22 | OpenApiTest asserts every published operation has a summary and a tag, so an undocumented new endpoint fails the build instead of quietly shipping a less-true API page | `OpenApiTest` |
+| 2026-11-22 | **Phase 9 (Backend) complete - all 8 steps, done-when demonstrated live against the real stack** | PROGRESS.md §Phase 9 |

@@ -117,6 +117,24 @@ drugwatch:
   # a verification link to the wrong host is a link that cannot be used.
   site-url: ${SITE_URL:http://localhost:3000}
 
+# OpenAPI (springdoc). The document itself is generated from the controllers; these are the only
+# choices worth making about it.
+springdoc:
+  api-docs:
+    version: openapi_3_1 # the current spec; springdoc still defaults to 3.0 for older clients
+  swagger-ui:
+    # Endpoints grouped by tag, and the tags and operations in the order the code declares them -
+    # which puts the batch checker first, where it belongs. Alphabetical would bury it under
+    # "Accounts".
+    tags-sorter: alpha
+    operations-sorter: method
+    # Nothing is pre-expanded: the page opens as a readable list of endpoints rather than a wall
+    # of schemas.
+    doc-expansion: none
+    # Swagger's own "Try it out" sends requests to this API, which is the point of the page.
+    try-it-out-enabled: true
+  show-actuator: false # springdoc's default, set explicitly: /actuator/health is not public API
+
 logging:
   level:
     root: INFO

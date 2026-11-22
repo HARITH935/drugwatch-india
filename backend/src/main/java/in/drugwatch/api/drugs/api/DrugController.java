@@ -1,6 +1,8 @@
 package in.drugwatch.api.drugs.api;
 
 import in.drugwatch.api.drugs.domain.DrugService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** Plan §10: {@code GET /api/v1/drugs/{id}} and {@code GET /api/v1/drugs/search}. */
 @RestController
+@Tag(name = "Drugs", description = "One medicine: its alert history, and the search that finds it")
 @RequestMapping("/api/v1/drugs")
 @Validated
 public class DrugController {
@@ -24,11 +27,20 @@ public class DrugController {
         this.drugs = drugs;
     }
 
+    @Operation(
+            summary = "One medicine's alert history",
+            description = "Every finding reported against this product name, newest alert month first,"
+                    + " each with its batch number and a link to the CDSCO document it came from.")
     @GetMapping("/{id}")
     public DrugService.DrugPage page(@PathVariable @NotBlank @Size(max = 64) String id) {
         return drugs.page(id);
     }
 
+    @Operation(
+            summary = "Find a medicine by name",
+            description = "Trigram search, so a near miss or a different spelling still finds the"
+                    + " product. Ranked by similarity; it does not rank by how many findings a"
+                    + " product has.")
     @GetMapping("/search")
     public DrugService.DrugSearchResult search(
             // Three characters minimum: shorter matches most of the archive and the result is a

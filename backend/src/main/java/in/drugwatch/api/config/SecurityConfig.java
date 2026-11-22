@@ -53,6 +53,13 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers("/actuator/health")
                         .permitAll()
+                        // The API's own documentation. Public because the API is: a document
+                        // describing endpoints that anybody may call leaks nothing, and locking
+                        // it would only mean nobody finds out how to call them.
+                        .requestMatchers(HttpMethod.GET, "/v3/api-docs", "/v3/api-docs/**")
+                        .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/swagger-ui.html", "/swagger-ui/**")
+                        .permitAll()
                         // Everything else, including the watchlist and anything added later.
                         .anyRequest()
                         .authenticated())

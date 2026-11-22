@@ -1,6 +1,8 @@
 package in.drugwatch.api.auth.api;
 
 import in.drugwatch.api.auth.domain.AuthService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** Plan §10's auth endpoints. */
 @RestController
+@Tag(name = "Accounts", description = "Registering, verifying an email, and getting a token")
 @RequestMapping("/api/v1/auth")
 public class AuthController {
 
@@ -30,6 +33,11 @@ public class AuthController {
      * <p>The response is identical in both cases on purpose - see {@code AuthService}. 202 rather
      * than 201 because "created" would itself be the answer this endpoint refuses to give.
      */
+    @Operation(
+            summary = "Create an account",
+            description = "Sends a verification link to the address. The reply never says whether the"
+                    + " address was already registered, because that answer would turn this endpoint"
+                    + " into a way to test whether somebody has an account here.")
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.ACCEPTED)
     public Map<String, String> register(@Valid @RequestBody RegisterRequest request) {
@@ -40,22 +48,35 @@ public class AuthController {
                         + " to finish creating the account.");
     }
 
+    @Operation(
+            summary = "Exchange an email and password for tokens",
+            description = "Returns a 15-minute access token and a refresh token. A wrong password and"
+                    + " an unknown address give the same 401 and the same message.")
     @PostMapping("/login")
     public AuthService.Tokens login(@Valid @RequestBody LoginRequest request) {
         return auth.login(request.email(), request.password());
     }
 
+    @Operation(
+            summary = "Trade a refresh token for a new pair",
+            description = "The old refresh token stops working. Presenting one twice is treated as a"
+                    + " stolen token: every session for that account is revoked.")
     @PostMapping("/refresh")
     public AuthService.Tokens refresh(@Valid @RequestBody RefreshRequest request) {
         return auth.refresh(request.refreshToken());
     }
 
+    @Operation(summary = "Revoke one refresh token")
     @PostMapping("/logout")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void logout(@Valid @RequestBody RefreshRequest request) {
         auth.logout(request.refreshToken());
     }
 
+    @Operation(
+            summary = "Confirm an email address",
+            description = "The token from the emailed link. An address must be verified before the"
+                    + " watchlist will email it, so that nobody can sign somebody else up for mail.")
     @PostMapping("/verify")
     public Map<String, String> verify(@Valid @RequestBody VerifyRequest request) {
         auth.verifyEmail(request.token());

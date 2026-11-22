@@ -35,6 +35,7 @@
         <spotless.version>3.12.0</spotless.version>
         <archunit.version>1.5.1</archunit.version>
         <testcontainers.version>2.0.5</testcontainers.version>
+        <springdoc.version>3.2.1</springdoc.version>
     </properties>
 
     <!--
@@ -60,6 +61,22 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!--
+          OpenAPI (plan section 6, "OpenAPI"): springdoc reads the controllers, the records they
+          return and the Jakarta validation annotations, and publishes the result as an OpenAPI
+          document at /v3/api-docs plus a Swagger UI page. Generated from the code rather than
+          hand-written, because a hand-written spec is wrong the first time somebody renames a
+          field and nothing fails.
+
+          3.2.1 is the first release built against Spring Boot 4.2; 3.2.0 was built against 4.1.2.
+          Boot 4 moved to Jackson 3, so the pairing matters more than usual here.
+        -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>${springdoc.version}</version>
         </dependency>
 
         <!-- Actuator publishes /actuator/health, which is what Docker's healthcheck will poll. -->

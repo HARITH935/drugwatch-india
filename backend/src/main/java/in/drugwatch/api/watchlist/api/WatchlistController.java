@@ -1,6 +1,9 @@
 package in.drugwatch.api.watchlist.api;
 
 import in.drugwatch.api.watchlist.domain.WatchlistService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -26,6 +29,8 @@ import org.springframework.web.bind.annotation.RestController;
  * number, and no amount of validation fixes that shape.
  */
 @RestController
+@Tag(name = "Watchlist", description = "Terms to be emailed about when a new alert month lands")
+@SecurityRequirement(name = "bearer-token")
 @RequestMapping("/api/v1/watchlist")
 public class WatchlistController {
 
@@ -35,6 +40,7 @@ public class WatchlistController {
         this.watchlist = watchlist;
     }
 
+    @Operation(summary = "What this account is watching")
     @GetMapping
     public Map<String, Object> list(@AuthenticationPrincipal Jwt token) {
         List<WatchlistService.Watch> watches = watchlist.list(userId(token));
@@ -47,12 +53,17 @@ public class WatchlistController {
                         + " pages show what was reported before that.");
     }
 
+    @Operation(
+            summary = "Watch a medicine or manufacturer name",
+            description = "Only alert months published after the watch was created are emailed, so"
+                    + " adding a term never sends the back catalogue. Fifty watches per account.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public WatchlistService.Watch add(@AuthenticationPrincipal Jwt token, @Valid @RequestBody AddRequest request) {
         return watchlist.add(userId(token), request.term());
     }
 
+    @Operation(summary = "Stop watching a term")
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void remove(@AuthenticationPrincipal Jwt token, @PathVariable Long id) {
