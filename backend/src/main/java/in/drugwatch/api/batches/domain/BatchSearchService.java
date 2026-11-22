@@ -1,6 +1,8 @@
 package in.drugwatch.api.batches.domain;
 
+import in.drugwatch.api.config.CacheConfig;
 import java.util.List;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 /**
@@ -20,6 +22,7 @@ public class BatchSearchService {
         this.findings = findings;
     }
 
+    @Cacheable(cacheNames = CacheConfig.BATCH_SEARCHES, keyGenerator = "dataVersionKeyGenerator")
     public BatchSearchResult search(String drug, String batch) {
         return BatchNumber.normalise(batch)
                 .map(normalised -> searchFor(drug, batch, normalised))

@@ -26,6 +26,13 @@ spring:
         default_schema: app
     open-in-view: false # see the note below
 
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      # Host 6380, because OpsPilot's Redis already uses 6379 (CLAUDE.md §10). Inside Docker it
+      # is redis:6379.
+      port: ${REDIS_PORT:6380}
+
   mail:
     # Mailpit locally; Brevo in production (plan §8). Both are reached the same way, so only
     # these values change between them.
@@ -83,6 +90,10 @@ drugwatch:
     jwt-secret: ${JWT_SECRET}
   mail:
     from: ${SMTP_FROM:alerts@drugwatch.local}
+  rate-limit:
+    # Requests per minute per caller, on the public lookups. 60 is generous for a person using
+    # the site and cheap to exceed for a script, which is the distinction worth drawing.
+    per-minute: ${RATE_LIMIT_PER_MINUTE:60}
   risk:
     # The Phase 8 service. Inside Docker it is risk-api:8000; from this Mac, the published port.
     base-url: ${RISK_API_URL:http://localhost:8000}

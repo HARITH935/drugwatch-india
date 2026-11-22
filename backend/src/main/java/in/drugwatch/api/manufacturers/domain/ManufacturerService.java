@@ -1,11 +1,13 @@
 package in.drugwatch.api.manufacturers.domain;
 
+import in.drugwatch.api.config.CacheConfig;
 import in.drugwatch.api.shared.NotFoundException;
 import in.drugwatch.api.shared.PublicNotes;
 import java.sql.ResultSet;
 import java.util.List;
 import java.util.Optional;
 import javax.sql.DataSource;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
@@ -35,6 +37,7 @@ public class ManufacturerService {
         this.jdbc = JdbcClient.create(dataSource);
     }
 
+    @Cacheable(cacheNames = CacheConfig.MANUFACTURER_PAGES, keyGenerator = "dataVersionKeyGenerator")
     public ManufacturerPage page(String manufacturerId) {
         Manufacturer manufacturer = find(manufacturerId).orElseThrow(() -> new NotFoundException("No such company"));
         return new ManufacturerPage(

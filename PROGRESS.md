@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 9 — Backend. The Spring Boot API.
-**Next:** step 6 — Redis caching and rate limiting.
+**Next:** step 7 — the Superset guest-token endpoint.
 
 ---
 
@@ -2467,7 +2467,50 @@ exist. It belongs to the deferred price phase.
     - The live tests are what caught it. They run against the real Phase 8 container and skip
       without it, so CI stays green while this machine checks the thing CI cannot.
     - 171 tests passing.
-- [ ] Step 6 — Redis caching + rate limiting
+- [x] **Step 6 — Redis caching and rate limiting** (2026-11-22)
+    - 🔍 **Cache keys carry the warehouse's alert month**, so the monthly pipeline run invalidates
+      every entry by producing a newer month. Nothing has to remember to flush anything, and the
+      failure mode that actually matters — the site serving last month's answers while claiming to
+      be current — cannot happen. Verified on the real stack: the key is
+      `drugSearches::2026-09:search:[telmisartan, 20]`, and **192 ms cold became 17 ms cached**.
+      The alternative, a flush endpoint Airflow calls after each run, is one more moving part whose
+      silent failure is exactly that worst case.
+    - 🐛 **The cache would have broken every endpoint on its second call, and my first two tests
+      missed it.** A generic JSON serializer writes an object without its type and hands back a
+      `LinkedHashMap`, so the second request to a cached endpoint fails with `ClassCastException`.
+      Both passing tests only checked that a *key existed*; the one that read a value back is what
+      found it. Each cache now declares the single type it holds. The other fix — Jackson's default
+      typing — writes class names into Redis and makes deserialisation polymorphic, a well-known
+      attack surface, for a cache where every entry has exactly one possible type anyway.
+    - **`disableCreateOnMissingCache`**: a cache name that is not declared fails rather than
+      quietly getting a generic serializer, which is how the bug above would come back.
+    - **Nulls are never cached.** A miss stored as a hit means a medicine added next month keeps
+      answering "no such medicine" until the TTL expires.
+    - **The rate limiter is ~30 lines of Redis `INCR` + `EXPIRE`** (decision C, no Bucket4j). Only
+      the first request in a window sets the expiry, so the window starts at the first request
+      rather than sliding forward forever — tested with a real TTL, which an in-memory map could
+      not have checked. Verified on the real stack: counts down, 429 at the limit, and
+      `Retry-After: 53` rather than "try again later".
+    - ⚠️ **It fails open**, deliberately: the limiter sits in front of the batch checker, which is
+      why the site exists. Failing closed would let a Redis blip take down the public service —
+      trading a real outage for a hypothetical abuser. The warning is logged so the outage is
+      visible.
+    - 🔒 **The caller is the socket address, not `X-Forwarded-For`.** That header is trivially
+      forged, so trusting it here would hand every caller a fresh identity per request — a limit an
+      attacker opts out of is worse than none, because it looks like protection. Phase 12 adds the
+      reverse proxy, and `server.forward-headers-strategy` belongs there, at a boundary that can
+      actually be trusted.
+    - **Login and the watchlist are deliberately not limited by IP**, and a test says so: a shared
+      office or college address would otherwise lock everybody out of their accounts after a few
+      attempts. Brute-force protection belongs per-account. `/actuator/health` is exempt too, or
+      the service would fail its own monitoring.
+    - 🐛 Boot 4 ships **Jackson 3** (`tools.jackson`), so `GenericJackson2JsonRedisSerializer`
+      compiles and then dies at startup with `NoClassDefFoundError` on a Jackson 2 class. The
+      Jackson 3 equivalents drop the version from the name.
+    - 🐛 A 5-per-minute test limit spent the budget for **the whole suite** — all the HTTP tests
+      share one Redis — so three unrelated tests started failing with 429. The limit is now high by
+      default and lowered only in the class where it is the subject.
+    - 187 tests passing.
 - [ ] Step 7 — Superset guest-token endpoint
 - [ ] Step 8 — CI, Swagger, the done-when demonstration
 
@@ -2742,3 +2785,8 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-22 | 🐛 Java's HttpClient offers an HTTP/2 upgrade and sends the body chunked; uvicorn replies 422 with the body missing. The fallback reported "no score today", identical to an outage - a silent permanent failure. Pinned to HTTP/1.1 | `RiskClient` |
 | 2026-11-22 | The risk endpoint tells a reader whether the model was trained on their company: 48% of the test window was not, and scores there are PR-AUC 0.269 against 0.438 | `RiskService` |
 | 2026-11-22 | An unavailable score is null, never 0: a zero reads as "this company is safe", the opposite of "we do not know". Measured 165ms to fail with risk-api stopped | step 5 |
+| 2026-11-22 | Cache keys carry the alert month, so a monthly load invalidates everything by itself - no flush job whose silent failure would serve last month's answers as current. 192ms cold to 17ms cached | `DataVersionKeyGenerator` |
+| 2026-11-22 | 🐛 A generic JSON cache serializer returns LinkedHashMap, breaking every cached endpoint on its SECOND call. Two tests passed because they only checked a key existed | `CacheConfig` |
+| 2026-11-22 | The rate limiter fails open: it fronts the batch checker, and failing closed would trade a real Redis outage for a hypothetical abuser | `RateLimiter` |
+| 2026-11-22 | The caller is the socket address, never X-Forwarded-For: a limit an attacker can opt out of looks like protection and is not. Phase 12's proxy is where forwarded headers belong | `RateLimitFilter` |
+| 2026-11-22 | Login and the watchlist are NOT IP-limited - a shared office address would lock everyone out of their accounts | `RateLimitHttpTest` |

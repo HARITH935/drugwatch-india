@@ -137,6 +137,21 @@
             <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
         </dependency>
 
+        <!--
+          Redis, for two different jobs: caching the public lookups, and counting requests for the
+          rate limit (Phase 9 decision C - a counter rather than adding Bucket4j).
+          `spring-boot-starter-cache` brings the @Cacheable machinery; the starter above brings
+          the Redis client it is backed by.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-cache</artifactId>
+        </dependency>
+
         <!-- Verification and watchlist email. Mailpit locally, Brevo in production (plan §8). -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -170,6 +185,16 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers-postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!--
+          A real Redis for the cache and rate-limit tests, for the same reason as Postgres.
+          Testcontainers 2.0 publishes no Redis module, so the core project's GenericContainer
+          runs the official image - see TestRedis.
+        -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

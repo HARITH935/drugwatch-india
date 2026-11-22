@@ -1,9 +1,11 @@
 package in.drugwatch.api.alerts.domain;
 
+import in.drugwatch.api.config.CacheConfig;
 import in.drugwatch.api.shared.PublicNotes;
 import java.sql.ResultSet;
 import java.util.List;
 import javax.sql.DataSource;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
@@ -24,6 +26,7 @@ public class AlertService {
         this.jdbc = JdbcClient.create(dataSource);
     }
 
+    @Cacheable(cacheNames = CacheConfig.LATEST_ALERTS, keyGenerator = "dataVersionKeyGenerator")
     public LatestAlerts latest() {
         String month = jdbc.sql("SELECT max(alert_month) FROM gold.fact_nsq_sample")
                 .query(String.class)
