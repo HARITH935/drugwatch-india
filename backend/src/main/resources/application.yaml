@@ -94,6 +94,22 @@ drugwatch:
     # Requests per minute per caller, on the public lookups. 60 is generous for a person using
     # the site and cheap to exceed for a script, which is the distinction worth drawing.
     per-minute: ${RATE_LIMIT_PER_MINUTE:60}
+  superset:
+    # Inside Docker it is superset:8088; from this Mac, the published port.
+    base-url: ${SUPERSET_URL:http://localhost:8088}
+    # The service account that may only mint guest tokens - one permission, nothing else
+    # (infra/superset/configure_embedding.py). No password default: the API must refuse to start
+    # rather than try a guessable one.
+    username: ${SUPERSET_EMBED_USERNAME:embed_service}
+    password: ${SUPERSET_EMBED_PASSWORD}
+    # The allowlist: public key -> Superset's embedded UUID. A dashboard not listed here cannot be
+    # embedded, so one added later is private until somebody lists it on purpose. The UUIDs come
+    # from configure_embedding.py.
+    dashboards:
+      manufacturer-reporting: ${SUPERSET_DASHBOARD_MANUFACTURER:}
+      states: ${SUPERSET_DASHBOARD_STATES:}
+      drug-classes: ${SUPERSET_DASHBOARD_DRUG_CLASSES:}
+      spurious-reports: ${SUPERSET_DASHBOARD_SPURIOUS:}
   risk:
     # The Phase 8 service. Inside Docker it is risk-api:8000; from this Mac, the published port.
     base-url: ${RISK_API_URL:http://localhost:8000}

@@ -252,6 +252,10 @@ set -a && . ./.env && set +a && python3 infra/superset/verify_charts.py  # every
 # list APIs filter by datasource_access, so an ungranted dataset is invisible even to the admin.
 docker compose exec -T superset python - < infra/superset/configure_public_role.py
 python3 infra/superset/public_access_test.py   # what a logged-out stranger can and cannot do
+# Embedding (Phase 9 step 7): the EmbeddedViewer role (copied from Public), a service account
+# holding ONLY can_grant_guest_token, and the dashboards that may be embedded + their UUIDs.
+# MUST be re-run after adding a dashboard, and after configure_public_role.py changes.
+set -a && . ./.env && set +a && docker compose exec -T -e SUPERSET_EMBED_USERNAME -e SUPERSET_EMBED_PASSWORD superset python - < infra/superset/configure_embedding.py
 # A dashboard with NO charts is invisible even to an admin (Superset resolves dashboard access
 # through the datasources of its charts), so a build that died before attaching them leaves a
 # dashboard whose slug is taken and which nothing can find. This brings it back:
@@ -305,6 +309,9 @@ curl -s localhost:8080/api/v1/watchlist -H "Authorization: Bearer $TOKEN"
 # Risk score (step 5). Proxies to the Phase 8 service; needs risk-api up, else "unavailable".
 # RISK_API_URL=http://127.0.0.1:8000 locally (http://risk-api:8000 inside Docker).
 curl -s localhost:8080/api/v1/manufacturers/<id>/risk | python3 -m json.tool
+# Guest tokens for embedded dashboards (step 7). Public, rate-limited, allowlisted.
+curl -s localhost:8080/api/v1/dashboards                              # which keys may be embedded
+curl -s -X POST localhost:8080/api/v1/dashboards/states/guest-token   # a 5-minute token for one
 # Caching + rate limiting (step 6). Cache keys carry the alert month, so a monthly load
 # invalidates everything by itself - nothing to flush. Inspect or clear:
 docker compose exec redis redis-cli --scan --pattern 'drugPages*'

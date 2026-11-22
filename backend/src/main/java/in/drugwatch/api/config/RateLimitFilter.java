@@ -48,7 +48,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
         return !(path.startsWith("/api/v1/batches/")
                 || path.startsWith("/api/v1/drugs/")
                 || path.startsWith("/api/v1/manufacturers/")
-                || path.startsWith("/api/v1/alerts/"));
+                || path.startsWith("/api/v1/alerts/")
+                // Plan §9 step 10 names this one specifically: it mints a credential and makes an
+                // outbound call to Superset per request, so it is the easiest endpoint here to
+                // turn into a denial of service against a third service.
+                || path.startsWith("/api/v1/dashboards"));
     }
 
     @Override

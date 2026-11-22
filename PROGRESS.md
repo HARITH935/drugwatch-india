@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 9 — Backend. The Spring Boot API.
-**Next:** step 7 — the Superset guest-token endpoint.
+**Next:** step 8 — CI, Swagger docs, and the Phase 9 done-when demonstration.
 
 ---
 
@@ -2511,7 +2511,56 @@ exist. It belongs to the deferred price phase.
       share one Redis — so three unrelated tests started failing with 429. The limit is now high by
       default and lowered only in the class where it is the subject.
     - 187 tests passing.
-- [ ] Step 7 — Superset guest-token endpoint
+- [x] **Step 7 — the Superset guest-token endpoint** (2026-11-22)
+      `POST /api/v1/dashboards/{key}/guest-token`, public and rate-limited, plus
+      `GET /api/v1/dashboards` listing what may be embedded.
+    - **Verified end to end against the real Superset**, token decoded rather than taken on trust:
+      `type: guest`, exactly one resource (`09493340-…` for `states`), and
+      `user: {username: guest}` — so Superset resolves it to the read-only role rather than to the
+      service account's.
+    - 🔒 **The service account holds exactly one permission.** Confirmed in Superset's own tables:
+      `embed_service` → role `GuestTokenIssuer` → **1 permission**,
+      `can_grant_guest_token on SecurityRestApi`. It cannot read a dashboard, run a query or see a
+      dataset, so a leak of that password buys the ability to mint tokens for dashboards that are
+      already public — and nothing else. Phase 6 refused `can_grant_guest_token` to anonymous
+      visitors and left a note that Phase 9 would do this server-side; this is that.
+    - 🔍 **The `EmbeddedViewer` role is built by copying the Public role's permissions**, not by
+      restating them. An embedded dashboard should do exactly what an anonymous visitor can, and
+      copying keeps that true when Phase 12 tightens Public — rather than two lists drifting apart,
+      one of which somebody forgets. It is still a *separate* role, so the two remain separate
+      decisions.
+    - **The allowlist is a map from a public key to Superset's UUID**, so a caller cannot ask for a
+      dashboard nobody listed — one added later is private until somebody lists it. Verified: an
+      unlisted key is 404. And `GET /api/v1/dashboards` publishes **keys only**; a published UUID
+      would let anybody holding a stolen service password skip the discovery step.
+    - 🐛 **An unconfigured dashboard was in the allowlist with an empty UUID.** `application.yaml`
+      declares all four keys with empty defaults so the shape is visible, and without filtering,
+      an unset one was published as embeddable and would have minted a token for the UUID `""` —
+      failing in a way that looks like an outage. A test caught it; blank values are now dropped.
+    - 🐛 **The catch-all handler was still swallowing statuses, and this time I fixed the family
+      rather than the instance.** A GET to the POST-only token endpoint answered "500, quote this
+      reference" instead of 405. Spring's status-carrying exceptions do not share a base class —
+      `ErrorResponseException` is one, but a wrong method only implements `ErrorResponse` — so
+      step 2's fix for 404 did not cover it. The handler now asks for the **interface**, which
+      covers the whole family instead of being whack-a-mole.
+    - **POST, not GET**, because it mints a credential: a GET would be cached by a browser, a proxy
+      or a CDN, and a cached bearer token is a token handed to whoever asks next. Tested.
+    - **Five-minute tokens, signed with their own secret.** Superset falls back to `SECRET_KEY`
+      when `GUEST_TOKEN_JWT_SECRET` is unset, which would mean one leaked value forged both session
+      cookies and guest tokens.
+    - 🐛 **Two Superset specifics found by running it.** The permission is on `SecurityRestApi`, not
+      `Superset` — the script stopped with "does not exist in this build" rather than silently
+      granting nothing, the same habit as Phase 6's invented `can_read on ChartDataRestApi`. And
+      the guest-token POST needs the **full CSRF handshake**: bearer token, CSRF token, *and* the
+      session cookie issued with it. Phase 6's `superset_api.py` docstring had predicted exactly
+      this: "the same one Phase 9's guest-token endpoint will have to do".
+    - **The endpoint is rate-limited**, named specifically by plan §9 step 10: it mints a credential
+      and makes an outbound call per request, so it is the easiest endpoint here to turn into a
+      denial of service against a third service.
+    - 🐛 Two tests asserted on counts that depended on the machine — the number of configured
+      dashboards, and the number of Redis keys other classes had flushed. Both now assert the
+      property instead, which is the better assertion anyway.
+    - 200 tests passing.
 - [ ] Step 8 — CI, Swagger, the done-when demonstration
 
 **Done when:** all endpoints work, the guest-token endpoint returns a valid Superset token,
@@ -2790,3 +2839,8 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-22 | The rate limiter fails open: it fronts the batch checker, and failing closed would trade a real Redis outage for a hypothetical abuser | `RateLimiter` |
 | 2026-11-22 | The caller is the socket address, never X-Forwarded-For: a limit an attacker can opt out of looks like protection and is not. Phase 12's proxy is where forwarded headers belong | `RateLimitFilter` |
 | 2026-11-22 | Login and the watchlist are NOT IP-limited - a shared office address would lock everyone out of their accounts | `RateLimitHttpTest` |
+| 2026-11-22 | The guest-token service account holds exactly ONE Superset permission (can_grant_guest_token on SecurityRestApi), confirmed in Superset's tables - a leaked password mints tokens for already-public dashboards and nothing else | `configure_embedding.py` |
+| 2026-11-22 | The EmbeddedViewer role is built by COPYING Public's permissions, so tightening Public in Phase 12 tightens embedding too instead of two lists drifting | step 7 |
+| 2026-11-22 | 🐛 An unconfigured dashboard sat in the allowlist with an empty UUID and would have minted a token for "" - a failure that looks like an outage | `SupersetProperties` |
+| 2026-11-22 | 🐛 Spring's status-carrying exceptions share no base class, so naming them one at a time was whack-a-mole; the handler now asks for the ErrorResponse interface | `GlobalExceptionHandler` |
+| 2026-11-22 | Superset's guest-token POST needs bearer token + CSRF token + the session cookie issued with it - exactly what Phase 6's superset_api.py predicted | `GuestTokenService` |

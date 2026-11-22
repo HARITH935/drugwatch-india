@@ -46,6 +46,11 @@ public class SecurityConfig {
                         // before there is a token to present.
                         .requestMatchers("/api/v1/auth/**")
                         .permitAll()
+                        // Embedded dashboards are public, so the token endpoint is too - plan §10
+                        // lists it as "Public (rate-limited)". The protection is the allowlist and
+                        // the rate limit, not an account.
+                        .requestMatchers("/api/v1/dashboards", "/api/v1/dashboards/**")
+                        .permitAll()
                         .requestMatchers("/actuator/health")
                         .permitAll()
                         // Everything else, including the watchlist and anything added later.

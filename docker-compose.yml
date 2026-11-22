@@ -107,6 +107,9 @@ services:
         condition: service_started
     environment:
       SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:?Set SUPERSET_SECRET_KEY in .env}
+      # Signs guest tokens for embedding (Phase 9 step 7). Its own secret, so one leaked value
+      # cannot forge both a session cookie and a guest token.
+      SUPERSET_GUEST_TOKEN_SECRET: ${SUPERSET_GUEST_TOKEN_SECRET:?Set SUPERSET_GUEST_TOKEN_SECRET in .env}
       POSTGRES_USER: ${POSTGRES_USER:-drugwatch}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py # where it looks for the mounted config
@@ -138,6 +141,7 @@ services:
         condition: service_healthy
     environment:
       SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:?Set SUPERSET_SECRET_KEY in .env}
+      SUPERSET_GUEST_TOKEN_SECRET: ${SUPERSET_GUEST_TOKEN_SECRET:?Set SUPERSET_GUEST_TOKEN_SECRET in .env}
       POSTGRES_USER: ${POSTGRES_USER:-drugwatch}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py

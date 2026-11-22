@@ -1,6 +1,7 @@
 package in.drugwatch.api.config;
 
 import in.drugwatch.api.auth.domain.InvalidCredentialsException;
+import in.drugwatch.api.dashboards.domain.GuestTokenService;
 import in.drugwatch.api.shared.NotFoundException;
 import in.drugwatch.api.shared.PublicNotes;
 import in.drugwatch.api.watchlist.domain.WatchlistService;
@@ -12,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.ErrorResponseException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -76,6 +78,18 @@ public class GlobalExceptionHandler {
         return problem(HttpStatus.BAD_REQUEST, "One or more fields are not valid", fields);
     }
 
+    /**
+     * Superset could not be reached, or refused.
+     *
+     * <p>503 with a flat message: the detail is in the log, because a client does not need to
+     * learn that the dashboard service exists, where it is, or what it said.
+     */
+    @ExceptionHandler(GuestTokenService.DashboardUnavailableException.class)
+    public ResponseEntity<Map<String, Object>> dashboardUnavailable(
+            GuestTokenService.DashboardUnavailableException error) {
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, error.getMessage(), Map.of());
+    }
+
     /** A watch term that cannot be used, or one already watched. The caller can fix it. */
     @ExceptionHandler(WatchlistService.InvalidWatchException.class)
     public ResponseEntity<Map<String, Object>> invalidWatch(WatchlistService.InvalidWatchException error) {
@@ -119,6 +133,17 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> unexpected(Exception error) {
+        // Spring raises a family of exceptions that already know their HTTP status, and they do
+        // not share one base class - ErrorResponseException is one, but a wrong HTTP method or an
+        // unsupported media type only implements ErrorResponse. Naming them one at a time was
+        // whack-a-mole: the 404 case was fixed in step 2 and a GET to a POST-only endpoint still
+        // answered "500, quote this reference". Asking for the interface covers the family.
+        if (error instanceof ErrorResponse carriesStatus) {
+            return problem(
+                    HttpStatus.valueOf(carriesStatus.getStatusCode().value()),
+                    carriesStatus.getBody().getTitle(),
+                    Map.of());
+        }
         String reference = Long.toHexString(System.nanoTime());
         log.error("unhandled error [{}]", reference, error);
         return problem(

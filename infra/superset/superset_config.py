@@ -54,7 +54,29 @@ SUPERSET_WEBSERVER_TIMEOUT = 60
 SQLLAB_TIMEOUT = 60
 # Embedding (EMBEDDED_SUPERSET) belongs to Phase 9's guest-token endpoint. Not enabled here: a
 # feature flag switched on "ready for later" is a feature nobody has tested.
-FEATURE_FLAGS: dict[str, bool] = {}
+FEATURE_FLAGS: dict[str, bool] = {
+    # Lets a dashboard be embedded in another site with a short-lived guest token, which is how
+    # Phase 11's Next.js pages will show them. Without it, /api/v1/security/guest_token/ answers
+    # 404 and the embedding SDK has nothing to present.
+    "EMBEDDED_SUPERSET": True,
+}
+
+# --- embedding ------------------------------------------------------------------------------------
+# The role a guest token carries. A dedicated role rather than the default "Public": embedding is a
+# separate grant, and Phase 12 must be able to lock down anonymous browsing without silently
+# changing what an embedded dashboard can do, or the other way round.
+# infra/superset/configure_embedding.py builds it by COPYING the Public role's permissions, so the
+# two stay identical in content while remaining separate decisions.
+GUEST_ROLE_NAME = "EmbeddedViewer"
+
+# Five minutes. A guest token is a bearer credential in a browser and cannot be withdrawn once
+# issued, so its lifetime is the only limit on a copied one. Phase 9's endpoint hands out a fresh
+# one on request, and the embedding SDK refreshes before expiry - so short costs nothing.
+GUEST_TOKEN_JWT_EXP_SECONDS = 300
+
+# Signed with its own secret, not reused from SECRET_KEY. Superset falls back to SECRET_KEY when
+# this is unset, which would mean one leaked value forged both session cookies and guest tokens.
+GUEST_TOKEN_JWT_SECRET = os.environ["SUPERSET_GUEST_TOKEN_SECRET"]
 
 # --- local HTTP ----------------------------------------------------------------------------------
 # Talisman sets HTTPS-only security headers (HSTS, secure cookies) and the Content Security Policy.

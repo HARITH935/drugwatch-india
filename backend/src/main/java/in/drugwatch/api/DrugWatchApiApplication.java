@@ -2,6 +2,7 @@ package in.drugwatch.api;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
@@ -20,6 +21,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 // The watchlist notifier runs on a daily cron (Phase 9 decision D: the API polls rather than
 // Airflow calling in). Without this the schedule is parsed and never fires.
 @EnableScheduling
+// Binds the @ConfigurationProperties records (currently Superset's embedding settings).
+@ConfigurationPropertiesScan
 public class DrugWatchApiApplication {
 
     public static void main(String[] args) {
