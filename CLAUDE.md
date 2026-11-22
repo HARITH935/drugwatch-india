@@ -286,6 +286,9 @@ caffeinate -i uv run --env-file ../.env python -u -m drugwatch_ml.publish  # SHA
 uv run python -m drugwatch_llm.smoke_test   # MPS, model load, generation, LoRA wrap, memory cost
 uv run pytest               # fast tests only (model-marked tests are skipped by default)
 uv run pytest -m model      # the slow ones, once a model is actually involved
+# Training data (step 1; RustFS up, the labelled eval set present on this Mac - ADR 0003).
+# Writes real CDSCO text to ../data/ (git-ignored); never commit that file.
+uv run --env-file ../.env python -m drugwatch_llm.training_data
 
 # Risk service (from ml-serving/, MLflow up with a registered model; ADR 0017)
 # Reads NOTHING from Postgres: Phase 9's API reads gold and posts the 28 features.

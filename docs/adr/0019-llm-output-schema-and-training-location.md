@@ -41,7 +41,7 @@ caps it at roughly 0.5–1B parameters regardless of where fine-tuning happens.
 ## Decision
 
 **Option B.** The fallback outputs `product_name`, `batch_no`, `mfg_date`, `expiry_date`,
-`manufacturer`, `failure_reason` — the same 6 fields minus `generic_name` — each exactly as the
+`manufacturer`, `failure_reason` — plan §13's 7 fields minus `generic_name` — each exactly as the
 source cell prints it, spaces and line breaks collapsed the same way the labelling tool already
 does (`docs/eval-set.md` §4). Its output is then run through the **same** date/placeholder/Excel-
 day-number normalisation Phase 3 already built and tested, so an LLM-filled field is cleaned

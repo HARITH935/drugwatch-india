@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 10 — LLM Extraction.
-**Next:** step 1 — training data (train-split-only; family E excluded; label the 3 unlabelled test rows).
+**Next:** step 2 — choose the model (zero-shot comparison of 2-3 candidates on the validation split).
 
 ---
 
@@ -2682,7 +2682,42 @@ Face page before writing it down, not assumed from the name):
     - `docs/adr/0019-llm-output-schema-and-training-location.md` records the output-schema
       deviation from plan §13 (values as printed, `generic_name` dropped) and the local-training
       decision (D1/D2).
-- [ ] Step 1 — training data (train-split-only; family E excluded; the 3 unlabelled test rows need labelling)
+- [x] **Step 1 — training data** (2026-11-22)
+    - **737 examples** written to `data/llm-training/train.jsonl` (git-ignored, real CDSCO text:
+      ADR 0003) — 175 from the labelled eval set's train rows, 562 from high-confidence parser
+      output, both from train-split PDFs only, family E excluded. 33 rows skipped: unlabelled and
+      not high-confidence, or a label with an unreadable ("/u") field.
+    - **INPUT has no column assignment on purpose.** `row_text()` reuses `second_reader.row_strips`
+      (Phase 2, already built and tested to crop the label pictures) to find the header strip and
+      the row's own strip(s), then dumps every word pdfplumber finds inside them in reading order
+      (top to bottom, then left to right) — the same jumbled-across-columns text a rule parser
+      would see before its own column-alignment step runs. Teaching the model on pre-aligned cells
+      would train it on the one thing it doesn't need to learn.
+    - 🔍 **`second_reader.row_strips()` already solved the hard part of this step**, built for a
+      different reason (cropping label pictures) months earlier. No change to any Phase 2 file was
+      needed — confirmed first by checking every call site of `ExtractedRow` (one, in
+      `table_parser.py`) before considering touching it, and finding the bbox data was already
+      computed and already exposed.
+    - **OUTPUT is a label where one exists, else the parser's value only where the parser itself
+      was high-confidence** (`target_fields`). An unlabelled low-confidence row is left out
+      entirely: training the model on the parser's own uncertain guess there would risk teaching
+      it exactly the mistake this phase exists to catch.
+    - **Leakage checked twice**: inside `training_data.py` itself (refuses to write a file
+      containing a family-E example) and in a test that reads the real written file back and
+      confirms every source PDF is train-split and no family-E row is present. Both pass.
+    - **Found and declined to chase: 3 more low-confidence test-split rows exist beyond the
+      sampled 69** (`state-nsq/2024-06/11467` p1 S.No 5; `state-nsq/2025-06/12926` p6 S.No 59 and
+      p10 S.No 100) — my own Phase 10 plan had proposed labelling these to thicken Gate 1's thin
+      n=9. Checked their confidence reasons first: all 3 are `missing`/`not stated` — the
+      PDF-prints-nothing category that Phase 2 found accounts for ~97% of low-confidence rows
+      archive-wide, not the `parser warning` category a real parser mistake would show up as.
+      Also: appending them to `eval/manifest.csv` would break two of Phase 2's own signed-off
+      regression tests, which hard-assert 309 rows. Recommending Harith skip labelling these three
+      — Gate 1 stays at its honest n=6 (test-split, labelled, low-confidence rows already in the
+      manifest) rather than growing by rows unlikely to carry a parser mistake, at the cost of
+      reopening a frozen, tested artifact.
+    - 11 tests passing (7 on `target_fields`'s decision logic, 1 constant, 1 memory-unit, 2 from
+      step 0; plus the real-file leakage test, which ran against the actual 737-row output above).
 - [ ] Step 2 — choose the model (zero-shot comparison on validation)
 - [ ] Step 3 — the validator (schema + grounding + date-plausibility checks, with adversarial tests)
 - [ ] Step 4 — LoRA fine-tune, tracked in MLflow
