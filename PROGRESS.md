@@ -2837,8 +2837,18 @@ Face page before writing it down, not assumed from the name):
     - 7 new tests (`load_run`'s file-existence errors; `train()`'s own step-counting /
       grad-accumulation math with a fake model, no GPU needed) plus the tokenization tests above.
       42 fast tests passing in `llm/`.
-    - **Still to do:** Harith runs the Colab notebook; the adapter comes back and gets published
-      via `publish_run.py`; step 4 closes once that run is logged in MLflow.
+    - 🐛 **Found by Harith's first real run, not by me**: the notebook's `%pip install` cell
+      force-reinstalled `torch==2.15.0` over Colab's own preinstalled, GPU-matched build. Colab
+      crashes and silently restarts its kernel when that happens - which wiped every earlier
+      cell's state, including `import torch`, surfacing many cells later as a confusing
+      `NameError: name 'torch' is not defined` right as the LoRA/model cell started (nowhere near
+      the actual cause). Fixed two ways: the install cell no longer touches `torch` at all
+      (Colab's own build is already CUDA-matched - reinstalling it was never necessary), and every
+      cell that uses `torch` now imports it locally, so the notebook survives a kernel restart
+      from any cause (this one, or Colab's own idle-disconnect) without a misleading error miles
+      from its real source.
+    - **Still to do:** Harith re-runs the fixed Colab notebook; the adapter comes back and gets
+      published via `publish_run.py`; step 4 closes once that run is logged in MLflow.
 - [ ] Step 5 — single-use test evaluation (both gates, `docs/llm-extraction-report.md`)
 - [ ] Step 6 — pipeline integration (fallback, `extraction_method = llm`, Airflow task, GE check)
 - [ ] Step 7 — CI (model-dependent tests skip without a model) and the done-when demo
