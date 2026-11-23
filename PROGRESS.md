@@ -2847,8 +2847,24 @@ Face page before writing it down, not assumed from the name):
       cell that uses `torch` now imports it locally, so the notebook survives a kernel restart
       from any cause (this one, or Colab's own idle-disconnect) without a misleading error miles
       from its real source.
-    - **Still to do:** Harith re-runs the fixed Colab notebook; the adapter comes back and gets
-      published via `publish_run.py`; step 4 closes once that run is logged in MLflow.
+    - 🐛 **The first real end-to-end run completed training (loss 0.57 → 0.027 over 1,668
+      micro-batches, ~39 minutes on a T4) and then lost its own result.** A single browser
+      download (`files.download()`) was the only path for the trained adapter to leave Colab's
+      ephemeral `/content/` storage, and it had no backup: the runtime disconnected (free-tier
+      GPU quota, likely exhausted by the run that had just finished) before the download
+      actually completed, and `/content/` - adapter included - died with the session. Also
+      found: **181 of 737 examples (24.6%) were dropped** for exceeding `MAX_LENGTH=512` tokens -
+      worth revisiting if step 5 shows `manufacturer` is still weak, since long addresses are the
+      likely rows being dropped.
+    - **Fixed the actual design flaw, not just retried:** the save cell now mounts the
+      notebook-runner's own Google Drive and copies the raw adapter files there FIRST - a step
+      that succeeds or fails on the spot, with nothing async or browser-dependent to silently
+      lose later - and only THEN attempts a convenience browser download, catching and reporting
+      any failure there without losing the Drive copy. A single fragile step with no backup is
+      exactly the kind of thing worth fixing generally, not just rerunning past.
+    - **Still to do:** Harith re-runs the Colab notebook (now saving to Drive first); the adapter
+      comes back and gets published via `publish_run.py`; step 4 closes once that run is logged
+      in MLflow.
 - [ ] Step 5 — single-use test evaluation (both gates, `docs/llm-extraction-report.md`)
 - [ ] Step 6 — pipeline integration (fallback, `extraction_method = llm`, Airflow task, GE check)
 - [ ] Step 7 — CI (model-dependent tests skip without a model) and the done-when demo
