@@ -3,10 +3,10 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 10 — LLM Extraction.
-**Next:** step 4 is waiting on Harith — open `llm/notebooks/colab_train.ipynb` in Google Colab
-(GPU runtime), upload `data/llm-training/train.jsonl`, run all cells, download the adapter zip
-back into `data/llm-training/runs/<run_name>/`, then (Docker up) run
-`uv run --env-file ../.env python -m drugwatch_llm.publish_run <run_name>` from `llm/`.
+**Next:** step 4 is waiting on Harith: run `llm/notebooks/colab_train.ipynb` on **Kaggle** (Colab's
+free GPU allowance is used up; ADR 0019's third amendment), with `train.jsonl` attached as a private
+dataset and a T4 GPU. Then download the zip into `data/llm-training/runs/<run_name>/` and (Docker up)
+run `uv run --env-file ../.env python -m drugwatch_llm.publish_run <run_name>` from `llm/`.
 
 ---
 
@@ -2862,9 +2862,33 @@ Face page before writing it down, not assumed from the name):
       lose later - and only THEN attempts a convenience browser download, catching and reporting
       any failure there without losing the Drive copy. A single fragile step with no backup is
       exactly the kind of thing worth fixing generally, not just rerunning past.
-    - **Still to do:** Harith re-runs the Colab notebook (now saving to Drive first); the adapter
-      comes back and gets published via `publish_run.py`; step 4 closes once that run is logged
-      in MLflow.
+    - 🐛 **The second run (2026-11-23) found two more bugs, and lost its result to the second.**
+      (1) Colab's `files.upload()` does not overwrite: a repeat upload in the same session
+      arrives as `train (1).jsonl`, so the cell's assert on the exact filename killed a
+      complete, byte-perfect upload (768,578 bytes, matching the Mac). Cell 4 now ignores the
+      name and writes the bytes it received to a fixed path, which also stops the training cell
+      silently reading a stale first attempt. (2) **My Drive-first fix had the order backwards.**
+      `drive.mount()` was the save cell's *first* statement, and it raised
+      `ValueError: mount failed`, so a finished run saved nothing at all. The step that needs a
+      permission prompt and the network ran before the one that needs neither. Now the adapter is
+      written to local disk and zipped first, and Drive and the browser download are guarded
+      fallbacks after it. The weights were still in memory, but recovering them meant pasting
+      code into a live session, and the session was gone before that worked.
+    - 🔍 **One full run uses about a day of Colab's free GPU allowance.** The retry got
+      "cannot connect to GPU backend due to usage limits". Decision (Harith, 2026-11-23, over
+      paying for Colab compute units or waiting for the reset): **Kaggle Notebooks as a second
+      host**, recorded as ADR 0019's third amendment. It is the **same notebook**: it detects
+      `/kaggle/input` and only the data-in cell and the save cell differ. On Kaggle it reads
+      `train.jsonl` in place from a **private** dataset (never copied into `/kaggle/working/`,
+      which Kaggle keeps as output) and writes the run to `/kaggle/working/`, where the Output
+      pane offers it for download. Cell 1 also refuses a P100 (compute capability 6.0, no native
+      bf16), because Kaggle offers one beside the T4. Both Kaggle branches were run locally
+      against a stand-in `/kaggle` tree before any GPU time was spent: the dataset was found at
+      a nested path (768,578 bytes, 737 rows), and the saved `run_info.json` has every key
+      `publish_run.py` reads.
+    - **Still to do:** Harith runs the notebook on Kaggle (about 40 minutes on a T4, going by the
+      first run); the zip comes back into `data/llm-training/runs/<run_name>/` and gets
+      published via `publish_run.py`; step 4 closes once that run is logged in MLflow.
 - [ ] Step 5 — single-use test evaluation (both gates, `docs/llm-extraction-report.md`)
 - [ ] Step 6 — pipeline integration (fallback, `extraction_method = llm`, Airflow task, GE check)
 - [ ] Step 7 — CI (model-dependent tests skip without a model) and the done-when demo
@@ -3155,3 +3179,6 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-22 | No global OpenAPI security requirement - only the watchlist operations carry one, so the published document doesn't label the public batch checker as needing an account | `OpenApiConfig` |
 | 2026-11-22 | OpenApiTest asserts every published operation has a summary and a tag, so an undocumented new endpoint fails the build instead of quietly shipping a less-true API page | `OpenApiTest` |
 | 2026-11-22 | **Phase 9 (Backend) complete - all 8 steps, done-when demonstrated live against the real stack** | PROGRESS.md §Phase 9 |
+| 2026-11-23 | 🐛 Colab renames a repeat upload (`train (1).jsonl`), so the upload cell reads the bytes it was given and ignores the name | `colab_train.ipynb` cell 4 |
+| 2026-11-23 | 🐛 Mounting Drive before saving lost a finished run when the mount failed. Now: local disk and zip first, then Drive and the download as guarded fallbacks | `colab_train.ipynb` cell 14 |
+| 2026-11-23 | One full training run uses about a day of Colab's free GPU allowance, so Kaggle Notebooks is a second host for the SAME notebook (private dataset in, `/kaggle/working` out, P100 refused) | Harith; ADR 0019 |

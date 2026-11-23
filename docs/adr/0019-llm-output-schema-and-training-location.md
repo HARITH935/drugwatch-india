@@ -172,3 +172,32 @@ on this Mac" decision from local-only to local-inference-plus-remote-training:
 - If a future phase needs CI to retrain this model automatically, that CI job cannot run on
   GitHub's standard runners either (no GPU) - it would need its own remote-GPU step, which is
   explicitly out of scope for this project.
+
+## Amendment, 2026-11-23 (third) — Kaggle Notebooks as a second training host
+
+**Context.** One full training run (737 examples x 3 epochs on a T4, about 40 minutes) used about a
+day of Colab's free GPU allowance. The next attempt got "You cannot currently connect to a GPU due
+to usage limits". Two runs have already been lost to notebook bugs, so a retry that depends on a
+daily reset turns each mistake into a lost day.
+
+**Decision (Harith, 2026-11-23, choosing over paying for Colab compute units and over waiting for
+the reset):** add **Kaggle Notebooks** (free GPU, rationed weekly rather than daily) as a second
+host. This is a new service under CLAUDE.md §4, so it is recorded here.
+
+- **One notebook, not two.** `llm/notebooks/colab_train.ipynb` detects `/kaggle/input` and differs
+  in exactly two places: how `train.jsonl` gets in (Colab's upload widget, or a Kaggle dataset)
+  and how the run gets out (Colab's disk, Drive and a download, or `/kaggle/working/` and Kaggle's
+  Output pane). The prompt, tokenization, LoRA config and training loop are shared. A second
+  notebook would be a second hand-synced copy of `prompting.py` and `dataset.py`, and that copy is
+  the one that drifts. The filename keeps "colab" so existing links and history still resolve.
+- **The data trade-off is the same one, made a second time, and stated again.** Kaggle has no
+  upload widget, so `train.jsonl` (real CDSCO text, ADR 0003) has to become a Kaggle **dataset**,
+  which must be created **Private**. That copy outlives the session, unlike Colab's, so it should
+  be deleted from Kaggle once the adapter is safely published. The notebook reads it in place from
+  the read-only `/kaggle/input/` and never copies it into `/kaggle/working/`, because Kaggle saves
+  that folder as the notebook's output.
+- **P100 is refused in cell 1.** Kaggle offers a P100 beside the T4. It has compute capability
+  6.0 and no native bfloat16, and recent PyTorch CUDA builds have dropped Pascal kernels, so it
+  would fail late and confusingly. The T4 is what the first run actually trained on.
+- `run_info.json` gains a `platform` field (`colab` / `kaggle`) beside `device`, so step 5's report
+  can say which host produced the published adapter.
