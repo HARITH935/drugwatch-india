@@ -3,7 +3,10 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 10 — LLM Extraction.
-**Next:** step 4 — LoRA fine-tune of Qwen2.5-1.5B-Instruct, tracked in MLflow (caffeinate; Docker likely needs to be stopped - measure first).
+**Next:** step 4 is waiting on Harith — open `llm/notebooks/colab_train.ipynb` in Google Colab
+(GPU runtime), upload `data/llm-training/train.jsonl`, run all cells, download the adapter zip
+back into `data/llm-training/runs/<run_name>/`, then (Docker up) run
+`uv run --env-file ../.env python -m drugwatch_llm.publish_run <run_name>` from `llm/`.
 
 ---
 
@@ -2791,7 +2794,51 @@ Face page before writing it down, not assumed from the name):
       text from the row; a well-formed-looking but never-printed date is rejected on grounding
       even though it parses as a valid date shape.
     - 10 new tests, 33 passing overall in `llm/`.
-- [ ] Step 4 — LoRA fine-tune, tracked in MLflow
+- [~] **Step 4 — LoRA fine-tune, tracked in MLflow** (in progress, 2026-11-23: pipeline built and
+  proven at small scale; the real run needs Harith's hands in Colab, then `publish_run.py`)
+    - `dataset.py`: loss-masked tokenization — the model is trained only to predict the JSON
+      answer, with every prompt token labelled -100. 10 tests (4 need the real tokenizer,
+      network-only, no weights).
+    - `train.py`: a LoRA fine-tune of Qwen2.5-1.5B-Instruct (step 2's choice). Attention-only
+      LoRA (`q_proj,k_proj,v_proj,o_proj`, r=8) to keep the optimizer's own memory small.
+    - 🐛 **My first diagnosis was wrong, and I'm recording the correction rather than quietly
+      fixing it.** The first full smoke test (10 rows) took 25m57s on `transformers.Trainer`,
+      which I diagnosed as Trainer-specific MPS overhead and "fixed" by hand-writing a plain
+      training loop instead. The plain loop was JUST AS SLOW (111s/example) on the real data —
+      Trainer was never the cause. The real cause, found by timing forward+backward at
+      increasing sequence lengths directly: a **cliff**, not a curve, in PyTorch's MPS backward
+      pass — 200 tokens took 2.5s, 400 tokens took 135s (53x for 2x the length; normal O(n²)
+      attention scaling predicts ~4x). `attn_implementation="eager"` softens it (43.7s at 400
+      tokens) but the cliff is still there. Real training rows average 360-505 tokens — squarely
+      past it. At the measured rate the full run (737 rows x 3 epochs) would have taken ~60
+      hours. (A repo-wide lesson worth naming: I jumped from "found *a* plausible cause" to
+      "fixed it" without re-measuring against the real failure case first. The thing that
+      actually settled it was timing the SAME operation at increasing sequence lengths in
+      isolation, not reasoning about what Trainer might be doing differently.)
+    - **Decision (Harith, choosing between chasing more MPS-specific fixes, shrinking every
+      sequence to fit under the cliff, or moving training elsewhere): train on Google Colab's
+      free GPU.** `docs/adr/0019-...md` amended a second time — this reverses the ADR's original
+      "trains on this Mac" half, keeping everything else (schema, prompt, LoRA config,
+      production target) unchanged. `llm/notebooks/colab_train.ipynb` inlines copies of
+      `prompting.py`'s and `dataset.py`'s logic (a one-off training environment, not worth
+      installing the monorepo's cross-package plumbing into) and runs the real 737-example,
+      3-epoch job on a T4.
+    - **The data trade-off is named, not glossed over**: `train.jsonl` holds real CDSCO text,
+      kept off git per ADR 0003; using it in Colab means a private, personal upload — not
+      publishing it (ADR 0003's actual concern is the public live site), but a real exception to
+      "stays on the Mac," recorded as such. Deleted with the Colab runtime; only the adapter (a
+      few MB of LoRA weights, no row text) comes back.
+    - **`tracking.py` + `publish_run.py`**: the lightweight half of this step, deliberately
+      separate from `train.py`. A training run needs the memory a model plus gradients plus an
+      optimizer's state takes, competing with Docker's resident VM for the same 8 GB (as amended
+      above); `publish_run.py` loads no model at all, so it is the one allowed to need Docker up
+      — logs params/metrics to MLflow and uploads the adapter as an artifact, reading only
+      `run_info.json` and the small `adapter/` directory a finished run leaves behind.
+    - 7 new tests (`load_run`'s file-existence errors; `train()`'s own step-counting /
+      grad-accumulation math with a fake model, no GPU needed) plus the tokenization tests above.
+      42 fast tests passing in `llm/`.
+    - **Still to do:** Harith runs the Colab notebook; the adapter comes back and gets published
+      via `publish_run.py`; step 4 closes once that run is logged in MLflow.
 - [ ] Step 5 — single-use test evaluation (both gates, `docs/llm-extraction-report.md`)
 - [ ] Step 6 — pipeline integration (fallback, `extraction_method = llm`, Airflow task, GE check)
 - [ ] Step 7 — CI (model-dependent tests skip without a model) and the done-when demo

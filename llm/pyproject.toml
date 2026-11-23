@@ -14,6 +14,7 @@ dependencies = [
     "transformers>=5.24,<6", # loads the base model + tokenizer, and runs generation
     "peft>=0.22,<1", # LoRA: trains a small adapter instead of the whole model (plan §13)
     "accelerate>=1.16,<2", # device placement + the training loop transformers' Trainer uses
+    "mlflow>=3.18,<4", # plan §6: run tracking - same pin as ml/ (ADR 0016: the server runs in Docker)
 ]
 
 [build-system]
@@ -38,4 +39,5 @@ testpaths = ["tests"]
 addopts = "-ra --strict-markers -m 'not model'"
 markers = [
     "model: downloads/loads a real model (several hundred MB+); skipped by default, incl. in CI",
+    "integration: needs the local MLflow server (skipped automatically if it's unreachable)",
 ]

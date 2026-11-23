@@ -295,6 +295,14 @@ uv run --env-file ../.env python -m drugwatch_llm.training_data
 uv run --env-file ../.env python -m drugwatch_llm.validation_data
 caffeinate -i uv run python -m drugwatch_llm.zero_shot                       # all candidates
 caffeinate -i uv run python -m drugwatch_llm.zero_shot --models <id> --limit 5  # a quick check
+# LoRA fine-tune (step 4; ADR 0019's 2nd amendment: the real run trains on Colab, not the Mac -
+# MPS has a severe backward-pass cliff past ~200 tokens, and real rows average 360-505). train.py
+# stays here as the proven-correct small-scale reference the notebook's copies match by hand.
+caffeinate -i uv run python -u -m drugwatch_llm.train --limit 4 --epochs 1 --grad-accum 1  # smoke test ONLY on this Mac
+# The real run: open llm/notebooks/colab_train.ipynb in Google Colab (Runtime -> GPU), upload
+# ../data/llm-training/train.jsonl, Run all, download the adapter zip, unzip into
+# ../data/llm-training/runs/<run_name>/ on the Mac. Then, Docker up, no model loaded:
+uv run --env-file ../.env python -m drugwatch_llm.publish_run <run_name>   # logs params/metrics/adapter to MLflow
 
 # Risk service (from ml-serving/, MLflow up with a registered model; ADR 0017)
 # Reads NOTHING from Postgres: Phase 9's API reads gold and posts the 28 features.

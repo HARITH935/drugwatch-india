@@ -1,6 +1,7 @@
-# ADR 0019 — The LLM fallback outputs raw printed values, trained on the Mac, not the plan's `YYYY-MM` schema
+# ADR 0019 — The LLM fallback outputs raw printed values; LoRA trains on Colab, not the plan's `YYYY-MM` schema
 
-- **Status:** Accepted
+- **Status:** Accepted (amended 2026-11-22, 2026-11-23 — see below; the training-location half of
+  the original decision is reversed by the second amendment)
 - **Date:** 2026-11-22
 - **Decided by:** Harith (project owner), during Phase 10
 - **Affects:** `llm/`, `extraction/` (the Phase 10 fallback integration), `docs/llm-extraction-report.md`
@@ -103,3 +104,71 @@ A parser that copies a cell verbatim either matches exactly or doesn't; a genera
 producing a slightly different line-wrap or word order on a long address gets zero credit for
 being close. This is reported as a finding about the metric's harshness on long fields, not
 evidence that fine-tuning on these fields is hopeless.
+
+---
+
+## Amendment, 2026-11-23 — training moves to Colab; the "train locally" half of this ADR's
+## original decision is reversed
+
+**Context.** Step 2 only measured *forward*-pass speed on Apple Silicon's MPS backend before
+picking Qwen2.5-1.5B-Instruct (4.42s/row). Step 4 needed the *backward* pass, and its actual
+cost turned out not to scale the way the forward pass had:
+
+| Sequence length | MPS, `sdpa` attention (the default) | MPS, `eager` attention |
+|---|---|---|
+| 200 tokens | 2.52s | 1.64s |
+| 400 tokens | **134.90s** | **43.68s** |
+
+That is a **cliff, not a curve** — ordinary attention cost scales with the *square* of sequence
+length, which predicts roughly a 4x slowdown from 200 to 400 tokens, not 27–53x. Real training
+rows (step 1's 737 examples) average 360–505 tokens once the prompt and chat template are
+applied, which lands every one of them past the cliff. The eager-attention path is measurably
+better but still on the wrong side of it. A plain training loop (no `transformers.Trainer`) made
+no difference either — an earlier working note in this project's own history had pinned the
+blame on `Trainer`'s overhead, which this amendment corrects: removing it changed nothing
+(~111s/example either way). The actual cause is specific to how this version of PyTorch's MPS
+backend handles the backward pass at this sequence-length range, most likely a kernel silently
+falling back to a slow path past some internal threshold - a known general class of MPS rough
+edge, not a bug in this project's code. At the measured rate, the planned run (737 examples x 3
+epochs) would take roughly 60 hours on this Mac.
+
+**Decision (Harith, 2026-11-23, choosing between chasing further MPS-specific fixes, shrinking
+every training sequence to fit under the cliff, or moving the training step to a different
+machine):** train on Google Colab's free GPU tier instead. A CUDA GPU's attention kernels do not
+share this MPS-specific fallback behaviour. This reverses this ADR's original "fine-tuning runs
+on this Mac" decision from local-only to local-inference-plus-remote-training:
+
+- **What stays the same:** the output schema (values as printed), the prompt format
+  (`prompting.py`), the LoRA configuration, and the eventual production target (a small model
+  that still has to run inference on a modest CPU host - training location and inference
+  location are independent choices, and only the first one is changing here).
+- **What moves:** only the training *run* itself (`llm/notebooks/colab_train.ipynb`, inlining
+  copies of `prompting.py`'s and `dataset.py`'s logic rather than installing the monorepo's
+  cross-package plumbing into a one-off Colab environment). `train.py` stays in the repo as the
+  tool that proved the pipeline correct at small scale and as the reference implementation the
+  notebook's copies are kept in sync with by hand.
+- **The data trade-off, named rather than glossed over:** `data/llm-training/train.jsonl`
+  contains real CDSCO text and was deliberately kept off this Mac's git history (ADR 0003). Using
+  it in Colab means uploading it to a private, personal Colab session - not publishing it (the
+  concern ADR 0003 and `docs/permissions.md` actually govern is the *public live site*, not a
+  researcher's own private tooling), but a real, conscious exception to "stays on the Mac" that
+  this ADR records rather than leaves implicit. The file is deleted with the Colab runtime; only
+  the trained adapter (a few MB of LoRA weights, no row-level text) comes back.
+- **`publish_run.py`** is the seam between the two machines: it reads a finished run's
+  `run_info.json` and `adapter/` directory (produced by either `train.py` locally or downloaded
+  from Colab) and logs the run to MLflow. It never loads a model, so - unlike `train.py` - it is
+  allowed to need Docker up.
+
+## Consequences (this amendment)
+
+- Phase 10 is no longer trainable end-to-end from a single `uv run` command on the Mac; step 4's
+  real run needs a human to open the notebook, select a GPU runtime, and run it - closer to the
+  project's existing "manual_drop" pattern for steps that need a person's hands than to the rest
+  of the pipeline's automation.
+- `docs/llm-extraction-report.md` (step 5) should record which device actually trained the
+  published adapter (`run_info.json`'s `device` field), since Colab's and the Mac's bf16 numerics
+  can differ in the last few bits - unlikely to matter at the field-level F1 this phase reports,
+  but worth being able to say rather than assume.
+- If a future phase needs CI to retrain this model automatically, that CI job cannot run on
+  GitHub's standard runners either (no GPU) - it would need its own remote-GPU step, which is
+  explicitly out of scope for this project.
