@@ -3,8 +3,8 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 10 — LLM Extraction.
-**Next:** step 5 ran; both gates FAIL (see Phase 10 step 5). Waiting on Harith's decision on
-step 6 (pipeline integration) before continuing - the done-when is not met as measured.
+**Next:** step 6, part 2 - wire the (now-guarded) fallback into the pipeline: where it runs
+relative to `extract.py`/`bronze.py`, the Airflow task, and the GE check.
 
 ---
 
@@ -3001,7 +3001,23 @@ Face page before writing it down, not assumed from the name):
       the merged score, an ungrounded invention costing nothing (not even a penalty), and the
       multi-part-pack mechanism above - all with made-up rows, no real CDSCO text, before the
       real run. 50 fast tests passing in `llm/`.
-- [ ] Step 6 — pipeline integration (fallback, `extraction_method = llm`, Airflow task, GE check)
+- [~] **Step 6 — pipeline integration** (in progress, 2026-11-24)
+    - **Decision (Harith, after step 5's result): guard against multi-part packs, then
+      integrate.** `validator.merge` gains a row-level check before its three per-field ones -
+      a row whose own parser warning names a multi-part pack (`family_d.MULTI_PART_PACK_WARNING`,
+      exported, not retyped) is never offered to the LLM at all; every field keeps the parser's
+      value. The new `warnings` parameter defaults to `()`, so it can only ever REFUSE a
+      correction, never grant one a caller wouldn't already get - every existing caller and test
+      is unaffected (13 of 13 pass unchanged).
+    - **Verified without touching the model or the test split a second time** (CLAUDE.md §5): a
+      made-up row shaped exactly like the one that regressed both gates proves the guard by
+      construction, plus a regression test that an ordinary low-confidence row behaves exactly
+      as before. Naming the already-existing literal in `family_d.py` doesn't reopen Phase 2 -
+      confirmed against all 138 of its tests, unaffected.
+    - **Still to do**: wire the fallback into the actual pipeline (where it runs relative to
+      `extract.py`/`bronze.py`, which both stay Phase-2-owned and `llm/`-unaware), mark
+      `extraction_method = "llm"` on rows it actually changed, an Airflow task, and the GE
+      check (`quality/suite.py`'s `EXPECTED_METHODS` already has a comment reserving the value).
 - [ ] Step 7 — CI (model-dependent tests skip without a model) and the done-when demo
 
 **Done when:** the LLM beats the rule-based baseline on labelled-eval-set F1 for low-confidence
@@ -3300,3 +3316,4 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-24 | Phase 9's "passes in CI" criterion was not met at sign-off; recorded as a correction under Phase 9 rather than rewritten | PROGRESS Phase 9 |
 | 2026-11-24 | ⚠️ Step 5 (single-use test, both gates): Gate 1 92.3%→85.7%, Gate 2 99.5%→99.0%, 0 ungrounded. Both FAIL. All 4 substitutions are the same multi-part-pack row, whose label joins two printed values with " \| " - a grounded, well-formed, half-right answer is not the compound label under exact-match scoring | `docs/llm-extraction-report.md` |
 | 2026-11-24 | Phase 10's done-when not met as measured; nothing invented, no retry, no widened gate after seeing the number. Decision on step 6 (integrate anyway / don't / special-case multi-part packs) left to Harith | PROGRESS Phase 10 step 5 |
+| 2026-11-24 | Harith's call: guard against multi-part packs, then integrate. `merge()` gains a row-level check (before its 3 per-field ones) that refuses the LLM entirely on a row flagged as an unsplit multi-part pack; verified without a second real model/test-split run | Harith; `1fab67d` |
