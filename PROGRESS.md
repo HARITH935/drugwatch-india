@@ -3,8 +3,8 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 10 — LLM Extraction.
-**Next:** step 5, the single-use test evaluation (both gates, `docs/llm-extraction-report.md`). CI is
-green on `main` again (all 13 jobs, 2026-11-24).
+**Next:** step 5 ran; both gates FAIL (see Phase 10 step 5). Waiting on Harith's decision on
+step 6 (pipeline integration) before continuing - the done-when is not met as measured.
 
 ---
 
@@ -2946,7 +2946,61 @@ Face page before writing it down, not assumed from the name):
       (see the correction under Phase 9). One correction to this note: by `2f8368d` it was still
       all six classes, not one. An earlier log read was cut short.
 
-- [ ] Step 5 — single-use test evaluation (both gates, `docs/llm-extraction-report.md`)
+- [x] **Step 5 — the test window, scored once. ⚠️ Both gates FAIL** (2026-11-24)
+    - `evaluate.py`: built the 69-row test split the same way `validation_data.py` builds
+      validation (label where readable, parser's own fields and per-field low-confidence flags
+      alongside it), loaded the Kaggle adapter for inference only (no training: the MPS cliff
+      that sent step 4 to Colab/Kaggle is backward-pass-only, and step 0 already measured a
+      forward pass as fine on this Mac), generated a reply per row with the same `zero_shot.py`
+      code step 2 used, and ran it through `validator.merge` exactly as step 6 will.
+    - **Honest n = 6, not the plan's assumed 9** (test-split, labelled, low-confidence rows) -
+      reusing step 2's own prior check (`PROGRESS.md` step 1) rather than re-deriving it.
+
+      | | TP | FP | FN | F1 |
+      |---|---|---|---|---|
+      | Gate 1 baseline (6 rows, 28 values) | 24 | 0 | 4 | **92.3%** |
+      | Gate 1 merged | 24 | 4 | 4 | **85.7%** |
+      | Gate 2 baseline (all 69 rows, 406 values) | 402 | 0 | 4 | **99.5%** |
+      | Gate 2 merged | 402 | 4 | 4 | **99.0%** |
+
+    - **Gate 1: FAIL** (85.7% < 92.3%) - not just "no improvement", a REAL regression. **Gate 2:
+      FAIL** (99.0% < 99.5%). **0 of 4 accepted substitutions were ungrounded** - CLAUDE.md §5's
+      rule held throughout; nothing was invented.
+    - **Why it got worse, not just flat, and all four at once**: all 4 substitutions are the
+      SAME one row - the archive's only genuine parser mistake in the whole test split, found
+      independently while planning this phase, before any adapter existed (step 4's planning
+      note). It is a two-part pack: one row, two batches, so the PDF really does print two batch
+      numbers/dates/manufacturers in one cell, the parser's own warning says so
+      (`"a label appears twice (a multi-part pack): not split"`), and it left those 4 fields
+      blank. **The label records the honest answer as both values joined with `" | "`.** The LLM
+      read the row and named ONE of the two real, printed values per field - correctly grounded
+      (it really is printed), correctly plausible (a well-formed value) - but half of a compound
+      answer is not the compound answer under exact-match scoring, so a clean miss (FN) became a
+      confident wrong answer (FP+FN) on all 4 fields. Precision falls; recall is UNCHANGED
+      (85.7%/85.7%, 99.0%/99.0%) - the model never touched a field it was right about or
+      correctly left blank, only the one row it was allowed to touch, and on that row grounding
+      cannot tell "half the real answer" from "the whole real answer" because both halves are
+      genuinely printed text. Mechanism unit-tested in advance
+      (`test_a_grounded_but_partial_value_on_a_multi_part_row_can_cost_an_extra_false_positive`),
+      before the real adapter was ever scored.
+    - 🔍 **The LLM's reply parsed as exactly the right schema on 67 of 69 rows (97.1%)** - the
+      model behaves correctly in FORM on rows the gates don't depend on; the 2 schema misses
+      never mattered because `merge` only consults a reply at all where the parser flagged a
+      field low-confidence, which happens on only 6 of 69 rows.
+    - **Metric harshness, carried forward from step 2's finding**: `manufacturer`/`product_name`
+      are held to the same exact, whitespace-collapsed match the parser is held to, so a reply
+      that is grounded and almost right scores zero credit for not being byte-identical. Not
+      triggered by this result (both stayed at 100%/98.6%, matching the parser), but the same
+      sharp edge that cost gate 1 its points here on a different field.
+    - **Phase 10's own done-when, read literally against this result: NOT MET.** Reported as-is,
+      exactly as the module's own docstring pre-committed ("the result as-is, whichever way it
+      comes out") - no second look, no retrying the generation, no widening either gate after
+      seeing the number.
+    - 9 new tests (`test_evaluate.py`): `low_confidence_fields`'s per-field vs per-row distinction,
+      a correct merge scoring as a true positive both ways, a low-confidence fix improving only
+      the merged score, an ungrounded invention costing nothing (not even a penalty), and the
+      multi-part-pack mechanism above - all with made-up rows, no real CDSCO text, before the
+      real run. 50 fast tests passing in `llm/`.
 - [ ] Step 6 — pipeline integration (fallback, `extraction_method = llm`, Airflow task, GE check)
 - [ ] Step 7 — CI (model-dependent tests skip without a model) and the done-when demo
 
@@ -3244,3 +3298,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-24 | ⚠️ CI red on `main` since `ac38e30` (Phase 9 sign-off): backend Redis test + `E501` in `configure_embedding.py`. Phase 9's "passes in CI" was not met at sign-off. Reported, not fixed | PROGRESS Phase 10 step 4 |
 | 2026-11-24 | ✅ CI green on `main` for the first time since 2026-11-13: tests start their own Redis (`TestDatabase` imports `TestRedis`; tests point Redis at a dead port), `CachingTest` waits for writes that land after the method returns, `AppSchemaTest` allows the fixture's gold tables by name. Backend 210 tests, 0 failures | Harith; `da0d9bf`, `641703e` |
 | 2026-11-24 | Phase 9's "passes in CI" criterion was not met at sign-off; recorded as a correction under Phase 9 rather than rewritten | PROGRESS Phase 9 |
+| 2026-11-24 | ⚠️ Step 5 (single-use test, both gates): Gate 1 92.3%→85.7%, Gate 2 99.5%→99.0%, 0 ungrounded. Both FAIL. All 4 substitutions are the same multi-part-pack row, whose label joins two printed values with " \| " - a grounded, well-formed, half-right answer is not the compound label under exact-match scoring | `docs/llm-extraction-report.md` |
+| 2026-11-24 | Phase 10's done-when not met as measured; nothing invented, no retry, no widened gate after seeing the number. Decision on step 6 (integrate anyway / don't / special-case multi-part packs) left to Harith | PROGRESS Phase 10 step 5 |
