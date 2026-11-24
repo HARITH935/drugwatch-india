@@ -3,8 +3,9 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 10 — LLM Extraction.
-**Next:** step 6, part 2 - wire the (now-guarded) fallback into the pipeline: where it runs
-relative to `extract.py`/`bronze.py`, the Airflow task, and the GE check.
+**Next:** step 6 is built, wired and was run for real - and the archive-wide audit found it
+NET-HARMFUL (see Phase 10 step 6). Bronze and silver are reverted to the canonical 7,126-row
+state. Waiting on Harith: don't integrate (recommended), or harden the validator and re-audit.
 
 ---
 
@@ -3014,10 +3015,76 @@ Face page before writing it down, not assumed from the name):
       construction, plus a regression test that an ordinary low-confidence row behaves exactly
       as before. Naming the already-existing literal in `family_d.py` doesn't reopen Phase 2 -
       confirmed against all 138 of its tests, unaffected.
-    - **Still to do**: wire the fallback into the actual pipeline (where it runs relative to
-      `extract.py`/`bronze.py`, which both stay Phase-2-owned and `llm/`-unaware), mark
-      `extraction_method = "llm"` on rows it actually changed, an Airflow task, and the GE
-      check (`quality/suite.py`'s `EXPECTED_METHODS` already has a comment reserving the value).
+    - **Built and wired** (`41a092e`, `716324f`, `f83f959`): the adapter registered in MLflow as
+      `drugwatch-extraction-fallback` with a `"production"` alias (`registry.py`, the same idiom
+      `ml-serving` uses, so no host needs a hand-typed local run path); `fallback.py` as the
+      pipeline task, reading and rewriting bronze from OUTSIDE `extraction/` (Phase 2 stays
+      closed and `llm/`-unaware); `"llm"` added to `quality/suite.py`'s `EXPECTED_METHODS`; and
+      a task between `extract_pdf_bronze` and `build_silver` in the shared `processing_chain()`,
+      verified against a real DagBag (both DAGs get it at once).
+    - 🐛 **The first real run stalled, and the diagnosis was initially wrong.** The process sat
+      in `stuck` state at 1.5% CPU for 27 minutes with 3.8 GB in swap - the same thrashing shape
+      step 2 hit with float32. My first reading ("72 MB free") was a MISREAD of macOS metrics:
+      `vm_stat`'s "pages free" is near-zero by design because free RAM is used as cache, and the
+      meaningful figure (`memory_pressure`'s "System-wide memory free percentage") was never
+      checked. The pressure was real, but the dominant consumer turned out to be
+      `opspilot-control-plane` - a DIFFERENT project's container at 2.5 GB and growing - not
+      anything in this one. Fixed by `registry.load_from_dir()` + `--adapter-dir`: download the
+      adapter once while MLflow is up, then run inference with it stopped, the same split ADR
+      0019 already applies to `train.py` vs `publish_run.py`.
+    - **Ran for real against the whole archive**: 101 candidates in 18 files, 2 multi-part-pack
+      rows never offered to the model, **18 rows corrected** (19 in bronze, one from the aborted
+      attempt - same deterministic path, a legitimate correction). **Idempotency proven on real
+      data, not asserted**: re-running the file that had 5 of 9 rows corrected reported **0 of 8
+      changed** (9 candidates became 8 because one corrected row is now high-confidence; the
+      other four stay flagged but their merges are no-ops). Silver rebuilt, GE passed.
+    - ⚠️🛑 **THEN I audited all 19 changes against the rule parser's own output, re-derived from
+      `raw/`, and the fallback is NET-HARMFUL ON REAL DATA. Bronze and silver are reverted.**
+      Roughly 2 changes were improvements; several destroyed information; at least 6 were
+      outright wrong. The full audit is **regenerable rather than committed** (this project's own
+      "row IDs only, no CDSCO text" instinct for git artifacts): re-extract an affected file from
+      `raw/` with `extract_pdf`, re-run `fallback.py --key <bronze-key>`, and diff field by field.
+      The worst of what it found, quoted because it is what makes the finding legible:
+
+      | row | rule parser had | the LLM wrote |
+      |---|---|---|
+      | `central-nsq/2025-06` p3 | `B.no: IEW1480C, IEW-1480B` | **`09/2024`** - two real batch numbers replaced by a date |
+      | `nsq-bulk` p2 | `--` | **`UVi.aPl-s 2R0e1c0e0iv9ed`** - two interleaved text columns mashed together |
+      | `nsq-bulk` p4 (x3) | `Spurious` | **`Not of Standard`**, `Purported to be manufactured by SIIPL` |
+      | `state-nsq/2025-02` p6 | `45352` (= 2024-02-19) | **`02/26`** - a different date |
+      | `state-nsq/2025-01` p5 | `46266` (an Excel date Phase 3 parses) | **`''`** |
+      | `state-nsq/2025-02` p10 | `NO EXPIRY` | **`''`** |
+
+    - **The `Spurious` rows break CLAUDE.md §6 specifically**: that sentinel means the real maker
+      is UNKNOWN because the pack is fake. Replacing it with prose - and with a failure-reason
+      fragment - attributes a counterfeit to something that reads like a manufacturer.
+    - 🔍 **Why three checks that all worked still weren't enough** - the finding worth keeping:
+      **grounding only asks "do these words appear in this row?"** `09/2024` does appear, as the
+      mfg date; interleaved column garbage appears too, because that is genuinely what
+      pdfplumber's word order produces. Grounding catches **invention**; it cannot catch a REAL
+      value copied into the WRONG FIELD. And plausibility is per-field shape only: `batch_no`
+      needs a digit (a date has one), `manufacturer` needs three letters (`Not of Standard` has
+      them), and blank is always plausible by design - so a sentinel or a parseable Excel date
+      becoming `''` passes everything while losing information.
+    - **Reverted the project's own documented way** (CLAUDE.md §5: "any fix means reprocessing
+      from raw"): `bronze --all` rebuilt all 44 files from the untouched `raw/`
+      (`extraction_method: {'rule': 1317}`), `build_silver` rebuilt silver to **7,126 rows - the
+      exact canonical count** recorded in PROGRESS Phase 3, `docs/benchmarks.md` and
+      `docs/analytics-findings.md` - and GE passed. The LLM-corrupted build had 7,127: one row
+      deduplicated differently because of a changed value, which is its own small lesson about
+      how far a single bad field reaches.
+    - **Step 5's gate 2 was right and my guard was not sufficient.** The multi-part-pack guard
+      fixed the one shape there was evidence for; the archive-wide run found five or six more
+      with the same character. Patching shapes as they are discovered is a treadmill, not a
+      strategy - so this is a decision for Harith, not something to iterate on quietly.
+    - **⏳ OPEN - Harith's decision**: (a) **don't integrate** (my recommendation now that there
+      is evidence) - Phase 10 closes as a documented negative result, keeping the training
+      pipeline, validator, registry, evaluation harness and this audit as the real work; or
+      (b) harden the validator with field-specific rules (a batch number may not parse as a
+      date; a manufacturer may not equal a failure-reason phrase; a sentinel may never become
+      blank) and re-audit, with no guarantee the next audit is clean. **The Airflow task stays
+      wired but has NOT been left to run against real data** - any future run needs that
+      decision first.
 - [ ] Step 7 — CI (model-dependent tests skip without a model) and the done-when demo
 
 **Done when:** the LLM beats the rule-based baseline on labelled-eval-set F1 for low-confidence
@@ -3317,3 +3384,7 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-24 | ⚠️ Step 5 (single-use test, both gates): Gate 1 92.3%→85.7%, Gate 2 99.5%→99.0%, 0 ungrounded. Both FAIL. All 4 substitutions are the same multi-part-pack row, whose label joins two printed values with " \| " - a grounded, well-formed, half-right answer is not the compound label under exact-match scoring | `docs/llm-extraction-report.md` |
 | 2026-11-24 | Phase 10's done-when not met as measured; nothing invented, no retry, no widened gate after seeing the number. Decision on step 6 (integrate anyway / don't / special-case multi-part packs) left to Harith | PROGRESS Phase 10 step 5 |
 | 2026-11-24 | Harith's call: guard against multi-part packs, then integrate. `merge()` gains a row-level check (before its 3 per-field ones) that refuses the LLM entirely on a row flagged as an unsplit multi-part pack; verified without a second real model/test-split run | Harith; `1fab67d` |
+| 2026-11-24 | Adapter registered in MLflow as `drugwatch-extraction-fallback` @production; `registry.py` resolves it by alias so no host needs a hand-typed run path. `create_model_version`, not `register_model`: MLflow 3's wrapper needs a "logged model" that `log_artifacts` never creates | `41a092e` |
+| 2026-11-24 | 🐛 A 27-minute `stuck`-state stall was memory thrashing dominated by ANOTHER project's container (opspilot, 2.5 GB), not drugwatch's. My "72 MB free" reading misused macOS metrics - "pages free" is near-zero by design; `memory_pressure`'s free PERCENTAGE is the real figure | PROGRESS Phase 10 step 6 |
+| 2026-11-24 | ⚠️🛑 The fallback ran on the real archive (18 rows corrected, idempotency proven) and an audit against raw found it NET-HARMFUL: a date written over two real batch numbers, interleaved column garbage, and `Spurious` replaced with prose (breaking CLAUDE.md §6). Bronze + silver REVERTED from raw to the canonical 7,126 rows; GE passes | PROGRESS Phase 10 step 6 |
+| 2026-11-24 | 🔍 Grounding catches invention but NOT a real value copied into the wrong field; plausibility is shape-only (a date satisfies `batch_no`, `Not of Standard` satisfies `manufacturer`, and blank is always plausible). Three checks that each worked were still not enough | PROGRESS Phase 10 step 6 |
