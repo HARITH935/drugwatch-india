@@ -5,6 +5,7 @@ One run does what Phases 1-4 built, in order:
     download the portal's NSQ and spurious tabs + any new alert PDFs
         -> verify raw/ against its recorded hashes
         -> extract PDF rows and portal rows into bronze
+        -> the LLM fallback corrects what the rule parser flagged low-confidence (Phase 10)
         -> clean bronze into silver with PySpark
         -> validate silver with Great Expectations
         -> load silver into Postgres
@@ -17,6 +18,10 @@ idempotent**, and each for a different reason worth knowing:
 - **downloads**: a month already stored is skipped without even a request; with `--refresh` it is
   re-fetched but stored only if the bytes differ. So re-running costs nothing and cannot duplicate.
 - **bronze**: one Parquet file per source document, rewritten in place.
+- **the LLM fallback**: reads bronze, not raw, and only a row still flagged low-confidence is a
+  candidate - a field it already fixed is reassessed as high-confidence on the same run, so a
+  second run has nothing left to re-offer the model (greedy, deterministic generation anyway:
+  the same text and family always produce the same reply, so it cannot drift between runs).
 - **silver**: `build_silver` writes `mode("overwrite")`, so silver is replaced wholesale, never
   appended to. This is the step that would otherwise double the archive on every run.
 - **Postgres**: the loader is `TRUNCATE` + `COPY` in one transaction (ADR 0011).

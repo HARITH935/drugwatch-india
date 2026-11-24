@@ -53,11 +53,24 @@ VOCABULARIES: dict[str, Vocabulary] = {
 }
 
 
-def row_text(document: Any, page_no: int, serial: str, pages: list[int], family: str) -> str:
+def row_text(
+    document: Any,
+    page_no: int,
+    serial: str,
+    pages: list[int],
+    family: str,
+    vocabularies: dict[str, Vocabulary] = VOCABULARIES,
+) -> str:
     """The header strip's words, then the row's own strip(s)' words, each in reading order (top
     to bottom, then left to right) - one line per strip, exactly as `row_strips` cut the label
-    pictures, so a human checking this against a label's picture is checking the same region."""
-    strips = row_strips(document, page_no, serial, pages, VOCABULARIES[family])
+    pictures, so a human checking this against a label's picture is checking the same region.
+
+    `vocabularies` defaults to this module's own train/validation/test-safe dict (deliberately
+    missing "E" - see the module docstring), which every existing caller here keeps relying on.
+    The real pipeline (`fallback.py`) passes its own COMPLETE dict (A-F): production has no
+    leakage concern, a family-E row can be genuinely low-confidence, and skipping it there would
+    just be a worse fallback for no reason."""
+    strips = row_strips(document, page_no, serial, pages, vocabularies[family])
     lines = []
     for number, (x0, top, x1, bottom) in strips:
         page = document.pages[number - 1]

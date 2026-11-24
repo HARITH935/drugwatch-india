@@ -2,9 +2,9 @@
 
 The monthly DAG and the backfill DAG differ only in what they fetch: one asks for the month that
 just ended, the other for a range a person chose. Everything after the download - verify, extract,
-clean, validate, load, build gold - is identical, so it is built once here.
+the LLM fallback, clean, validate, load, build gold - is identical, so it is built once here.
 
-That is not just tidiness. If the two DAGs each carried their own copy of those seven tasks, a fix
+That is not just tidiness. If the two DAGs each carried their own copy of those eight tasks, a fix
 to one (a new validation step, a changed timeout) would silently not apply to the other, and the
 backfill would quietly stop matching the monthly run it is supposed to reproduce.
 
@@ -94,7 +94,7 @@ def check_month_range(params: dict) -> list[str]:
 
 
 def processing_chain() -> tuple[BaseOperator, BaseOperator]:
-    """The seven tasks that turn raw/ into gold, wired up. Returns (first, last).
+    """The eight tasks that turn raw/ into gold, wired up. Returns (first, last).
 
     Must be called inside a `with DAG(...)` block; the operators attach themselves to it.
     """
@@ -119,6 +119,20 @@ def processing_chain() -> tuple[BaseOperator, BaseOperator]:
         project="extraction",
         module="drugwatch_extraction.portal_bronze",
         arguments="--all",
+    )
+
+    # Phase 10 step 6. Only after the PDF bronze it corrects exists, and only this bronze - the
+    # portal's rows have their own extraction_method ("api") and no rule-parser low-confidence
+    # flag to fall back on. A quiet month (most of them - ~103 low-confidence rows archive-wide)
+    # loads no model at all (fallback.py's own first pass), so this is cheap far more often than
+    # not; the timeout is sized for the loud months; a model load plus the handful of rows CPU
+    # inference can reach in step 2's measured 4.42s/row.
+    llm_fallback = uv_task(
+        task_id="llm_extraction_fallback",
+        project="llm",
+        module="drugwatch_llm.fallback",
+        arguments="--all",
+        execution_timeout=timedelta(minutes=30),
     )
 
     # The heaviest task: a JVM, ~2.7 GB peak, 152.9 s measured. It rebuilds the WHOLE silver table
@@ -160,6 +174,8 @@ def processing_chain() -> tuple[BaseOperator, BaseOperator]:
         execution_timeout=timedelta(minutes=10),
     )
 
-    verify_raw >> [extract_pdfs, extract_portal] >> build_silver
+    verify_raw >> [extract_pdfs, extract_portal]
+    extract_pdfs >> llm_fallback
+    [llm_fallback, extract_portal] >> build_silver
     build_silver >> validate_silver >> load_silver >> build_gold >> summarise
     return verify_raw, summarise

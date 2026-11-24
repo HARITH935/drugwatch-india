@@ -38,7 +38,7 @@ EXPECTED_CATEGORIES = frozenset(
         "Uniformity", "Water", "pH",
     }
 )  # fmt: skip
-EXPECTED_METHODS = ["api", "rule"]  # portal JSON / PDF parser (an `llm` row joins in Phase 10)
+EXPECTED_METHODS = ["api", "rule", "llm"]  # portal JSON / PDF parser / Phase 10's fallback
 EXPECTED_DATASETS = ["central-nsq", "state-nsq", "nsq", "spurious", "combined"]
 # Silver only grows, by roughly 100-300 rows a month. Below the floor means data was lost; above
 # the ceiling, within this phase, means de-duplication regressed.
