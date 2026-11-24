@@ -3,8 +3,8 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 10 — LLM Extraction.
-**Next:** step 5, the single-use test evaluation (both gates). Before it, a decision for Harith: CI has
-been red since the Phase 9 sign-off (backend Redis test plus one lint error; see Phase 10 step 4).
+**Next:** step 5, the single-use test evaluation (both gates, `docs/llm-extraction-report.md`). CI is
+green on `main` again (all 13 jobs, 2026-11-24).
 
 ---
 
@@ -2609,6 +2609,33 @@ watchlist emails arrive in Mailpit, the test suite passes in CI, Swagger docs ar
 
 ✅ **Phase 9 signed off by Harith, 2026-11-22.**
 
+⚠️ → ✅ **Corrected 2026-11-24: the "test suite passes in CI" criterion was NOT met at sign-off, and
+is now.** CI had been red on every commit from the sign-off (`ac38e30`) on; nobody had looked at the
+run. Three causes, found during Phase 10 and fixed with Harith's OK (`da0d9bf`, `641703e`):
+- **13 Spring test classes never started the test Redis.** They passed on the Mac only because the
+  dev Redis listens on the default port 6380; in CI nothing does, so every cached public lookup
+  returned 500. `TestDatabase` now imports `TestRedis` (a new test cannot forget it), and the test
+  properties point Redis at port 1, so a test that somehow skips it fails on the Mac too, not only
+  in CI. Reproduced first: with that port dead, the Mac failed the same six classes CI did.
+- **`CachingTest` was flaky everywhere**, about every other run, a different test each time. Not the
+  `FLUSHALL` (removing it changed nothing). Measured: the cache write reaches Redis a few
+  milliseconds **after** the cached method returns, so asserting at once lost a race. It now waits
+  up to 2 s with Awaitility, which ships in `spring-boot-starter-test`. 8 of 8 reruns green.
+- **`AppSchemaTest` depended on test order.** It counted every table outside `app`, and other classes
+  load the gold fixture into the same container, so it failed (`but was: 4`) when one of them ran
+  first. Reproduced with `-Dsurefire.runOrder=reversealphabetical`. Now the fixture's four tables
+  are allowed **by name**, so a migration that writes into dbt's `gold` still fails it.
+  Mutation-checked with a planted `public.planted_leak`.
+- Plus `E501` in `configure_embedding.py`, whose docstring run command was also **wrong**: it lacked
+  the `-e` flags for the credentials the script reads.
+
+**CI run 45377157554 on `641703e`: all 13 jobs green; backend 210 tests, 0 failures, 18 skipped
+(the ones that need live services, by design), 1 min 20 s.**
+- 🔍 Worth knowing: each distinct `@Import` set on a test class is its own Spring context with its
+  own containers, so a full local run starts ~16 test containers. On this Mac's 4.8 GB Docker VM,
+  beside the dev stack, Postgres once timed out starting. CI's clean runner is unaffected. Stopping
+  MLflow or Superset before a full local `./mvnw verify` avoids it.
+
 ---
 
 ## Phase 10 — LLM Extraction
@@ -2915,8 +2942,9 @@ Face page before writing it down, not assumed from the name):
       `2f8368d` it is `AuthHttpTest.the_public_data_needs_no_account`, a 500 because step 6's
       Redis cache tries `localhost:6380` and CI has no Redis. (2) **repo-checks**: `E501` at
       `infra/superset/configure_embedding.py:28`. So Phase 9's done-when ("test suite passes in
-      CI") was not actually met when it was signed off. **Not fixed here.** It is Phase 9's code,
-      and whether to reopen Phase 9 is Harith's decision.
+      CI") was not actually met when it was signed off. ✅ **Fixed 2026-11-24 with Harith's OK**
+      (see the correction under Phase 9). One correction to this note: by `2f8368d` it was still
+      all six classes, not one. An earlier log read was cut short.
 
 - [ ] Step 5 — single-use test evaluation (both gates, `docs/llm-extraction-report.md`)
 - [ ] Step 6 — pipeline integration (fallback, `extraction_method = llm`, Airflow task, GE check)
@@ -3214,3 +3242,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-24 | Training runs through Kaggle's CLI (`kernels push --accelerator NvidiaTeslaT4 -t 7200`, private), polled and fetched without a browser; the token stays in `~/.kaggle/`, the CLI is used via `uvx` and not added to any project | Harith; PROGRESS Phase 10 step 4 |
 | 2026-11-24 | Step 4 done: 556 examples, 1,668 micro-batches in 38.6 min on a T4, loss 0.574 → 0.027 (reproduces the lost first run); MLflow run 977340e5…, adapter read back 6/6 SHA-256 identical | MLflow `llm-extraction-fallback` |
 | 2026-11-24 | ⚠️ CI red on `main` since `ac38e30` (Phase 9 sign-off): backend Redis test + `E501` in `configure_embedding.py`. Phase 9's "passes in CI" was not met at sign-off. Reported, not fixed | PROGRESS Phase 10 step 4 |
+| 2026-11-24 | ✅ CI green on `main` for the first time since 2026-11-13: tests start their own Redis (`TestDatabase` imports `TestRedis`; tests point Redis at a dead port), `CachingTest` waits for writes that land after the method returns, `AppSchemaTest` allows the fixture's gold tables by name. Backend 210 tests, 0 failures | Harith; `da0d9bf`, `641703e` |
+| 2026-11-24 | Phase 9's "passes in CI" criterion was not met at sign-off; recorded as a correction under Phase 9 rather than rewritten | PROGRESS Phase 9 |
