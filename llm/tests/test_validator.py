@@ -4,7 +4,8 @@ No real CDSCO text (ADR 0003): every row here is made up, chosen to exercise one
 a time.
 """
 
-from drugwatch_llm.validator import accepted_fields, merge, plausible
+from drugwatch_extraction.family_d import MULTI_PART_PACK_WARNING
+from drugwatch_llm.validator import accepted_fields, is_unsplittable_multi_part, merge, plausible
 
 B_FIELDS = ("product_name", "batch_no", "mfg_date", "expiry_date", "manufacturer", "failure_reason")
 
@@ -141,3 +142,58 @@ def test_merge_with_an_unparseable_reply_keeps_every_parser_value():
         parser_fields, "not json at all", "B", "anything", low_confidence_fields={"batch_no"}
     )
     assert merged == parser_fields
+
+
+# ------------------------------------------------------------------ the multi-part-pack guard
+# (added after step 5's single-use test measured this exact shape make the gates WORSE, not
+# merely unhelpful - PROGRESS.md Phase 10 step 5)
+
+
+def test_is_unsplittable_multi_part_recognises_the_real_warning():
+    assert is_unsplittable_multi_part([MULTI_PART_PACK_WARNING]) is True
+    assert is_unsplittable_multi_part(["some unrelated parser warning"]) is False
+    assert is_unsplittable_multi_part([]) is False
+
+
+def test_merge_refuses_every_field_on_a_multi_part_pack_even_when_grounded_and_plausible():
+    # The real shape from the test split: the parser left every split field blank and warned;
+    # the LLM names ONE of the two real, printed values per field - genuinely grounded, genuinely
+    # well-formed, and exactly the pattern step 5 measured to cost a false positive, not fix one.
+    source = "S.No Batch 2. 911805 WB7L20 Mfg 03/2018 12/2017"
+    parser_fields = {
+        "product_name": "Ceftriaxone",
+        "batch_no": "",
+        "mfg_date": "",
+        "expiry_date": "",
+        "manufacturer": "",
+        "failure_reason": "Assay",
+    }
+    reply = _reply(batch_no="911805", mfg_date="03/2018")
+    merged = merge(
+        parser_fields,
+        reply,
+        "B",
+        source,
+        low_confidence_fields={"batch_no", "mfg_date", "expiry_date", "manufacturer"},
+        warnings=[MULTI_PART_PACK_WARNING],
+    )
+    # Every field stays exactly as the parser left it - the LLM is never even consulted for this
+    # row, not field by field: the guard is row-level, not a fourth per-field check.
+    assert merged == parser_fields
+
+
+def test_merge_without_the_warning_behaves_exactly_as_before():
+    # The guard must change nothing for an ordinary low-confidence row: it can only ever REFUSE
+    # a correction, never grant one it wouldn't otherwise have (the default `warnings=()`).
+    source = "Batch No: TB-1201-CORRECTED Mfg 09/2024"
+    parser_fields = {
+        "product_name": "",
+        "batch_no": "TB-1201",
+        "mfg_date": "09/2024",
+        "expiry_date": "",
+        "manufacturer": "",
+        "failure_reason": "",
+    }
+    reply = _reply(batch_no="TB-1201-CORRECTED", mfg_date="09/2024")
+    merged = merge(parser_fields, reply, "B", source, low_confidence_fields={"batch_no"})
+    assert merged["batch_no"] == "TB-1201-CORRECTED"

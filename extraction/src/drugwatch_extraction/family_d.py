@@ -10,6 +10,11 @@ A cell where a label appears twice is NOT split: in 2018 that means a two-part p
 the liquid it's mixed with), each part with its own batch, dates and maker, and once without a
 "Mfd by:" label. Guessing could pair a batch with the wrong maker, so the split fields stay empty,
 the original is kept, and the row gets a warning (a "hard row" for the Phase 10 LLM fallback).
+
+Phase 10 step 5 found WHY it stays hard rather than becoming the LLM's win: the row's own LABEL
+joins both real values with " | ", and a single grounded value can never equal a joined pair under
+exact-match scoring. `MULTI_PART_PACK_WARNING` is exported so `drugwatch_llm.validator` can
+recognise this exact shape and skip offering a correction, rather than retyping the string there.
 """
 
 import dataclasses
@@ -35,6 +40,8 @@ LABELS = (  # field, the label CDSCO prints before its value
 )
 SPLIT_FIELDS = tuple(field for field, _ in LABELS)
 
+MULTI_PART_PACK_WARNING = "a label appears twice (a multi-part pack): not split"
+
 
 def split_batch_details(cell: str) -> tuple[dict[str, str], str | None]:
     """Cut a combined cell at its labels. Returns (values, problem): values is empty when the
@@ -46,7 +53,7 @@ def split_batch_details(cell: str) -> tuple[dict[str, str], str | None]:
     )
     counts = Counter(field for _, _, field in found)
     if any(count > 1 for count in counts.values()):
-        return {}, "a label appears twice (a multi-part pack): not split"
+        return {}, MULTI_PART_PACK_WARNING
     missing = [field for field in SPLIT_FIELDS if field not in counts]
     if missing:
         return {}, f"labels missing for {missing}: not split"
