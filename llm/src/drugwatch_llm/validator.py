@@ -30,10 +30,23 @@ disagrees with it - a missed correction is accepted; a wrong one is not.
 """
 
 from collections.abc import Sequence
+from typing import Any
 
-from drugwatch_extraction.confidence import field_problem
+from drugwatch_extraction.confidence import REQUIRED, field_problem
 from drugwatch_extraction.family_d import MULTI_PART_PACK_WARNING
 from drugwatch_llm.prompting import expected_fields, grounded, parse_reply
+
+
+def low_confidence_fields(record: dict[str, Any]) -> list[str]:
+    """Which of this record's own fields the parser itself would flag - the same per-field check
+    `confidence.assess` runs, applied field by field so `merge` has exactly what D4 asks for: a
+    field the parser flagged, not a row the parser flagged. Shared by the real pipeline
+    (`fallback.py`) and the single-use test (`evaluate.py`), so the two can never score a
+    different definition of "the parser flagged this field" than production actually uses."""
+    family = record["family"]
+    return sorted(
+        f for f in REQUIRED.get(family, ()) if field_problem(f, record.get(f)) is not None
+    )
 
 
 def plausible(field: str, value: str) -> bool:

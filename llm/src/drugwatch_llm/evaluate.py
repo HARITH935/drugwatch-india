@@ -21,6 +21,16 @@ Reuses, rather than rebuilds: `drugwatch_extraction.evaluate`'s `outcome`/`Count
 scoring the parser's own baseline is measured with) and `zero_shot.generate` (the same generation
 code step 2's zero-shot comparison used).
 
+**The multi-part-pack guard (`validator.is_unsplittable_multi_part`), added after the run below,
+is wired in here for any FUTURE run of this script - but the numbers already in
+`docs/llm-extraction-report.md` were measured BEFORE it existed and are not re-run to confirm the
+fix.** CLAUDE.md §5 and this module's own original docstring both commit to reading the test split
+exactly once; re-scoring now, specifically because of what the first score showed, would be
+tuning against the test set in substance even though the fix is a named, row-identified guard
+rather than a hyperparameter. The guard's correctness is argued instead by construction
+(`test_validator.py`) and by deduction from the already-published numbers (every one of the first
+run's substitutions came from the one row shape the guard now excludes).
+
 Run (from llm/, RustFS up, the labelled eval set present, a published adapter in
 ../data/llm-training/runs/<run>/adapter):
     uv run --env-file ../.env python -m drugwatch_llm.evaluate --run kaggle-20261124-043743
@@ -38,14 +48,14 @@ import torch
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from drugwatch_extraction.confidence import REQUIRED, field_problem
+from drugwatch_extraction.confidence import REQUIRED
 from drugwatch_extraction.eval_set import bronze_files, load_labels, read_manifest, row_id
 from drugwatch_extraction.evaluate import Counts, outcome, table
 from drugwatch_ingestion.store import RawStore
 from drugwatch_llm.prompting import build_prompt, grounded, parse_reply
 from drugwatch_llm.train import MODEL_ID, RUN_DIR
 from drugwatch_llm.training_data import row_text
-from drugwatch_llm.validator import merge
+from drugwatch_llm.validator import low_confidence_fields, merge
 from drugwatch_llm.zero_shot import device_for, generate
 
 TEST_PATH = Path("../data/llm-training/test.jsonl")  # real CDSCO text: git-ignored (ADR 0003)
@@ -56,16 +66,6 @@ EXCLUDED_FAMILY = "E"  # never in validation/test at all (docs/eval-set.md); che
 FIELD_ORDER = (
     "product_name", "batch_no", "mfg_date", "expiry_date", "manufacturer", "failure_reason",
 )  # fmt: skip
-
-
-def low_confidence_fields(record: dict[str, Any]) -> list[str]:
-    """Which of this record's own fields the parser itself would flag - the same per-field check
-    `confidence.assess` runs, applied field by field so `validator.merge` has exactly what D4
-    asks for: a field the parser flagged, not a row the parser flagged."""
-    family = record["family"]
-    return sorted(
-        f for f in REQUIRED.get(family, ()) if field_problem(f, record.get(f)) is not None
-    )
 
 
 def build_test_examples(manifest: list[dict], labels: dict, s3: Any) -> list[dict[str, Any]]:
@@ -98,6 +98,7 @@ def build_test_examples(manifest: list[dict], labels: dict, s3: Any) -> list[dic
                         "fields": {f: label["fields"].get(f, "") for f in fields},
                         "parser_fields": {f: record.get(f) or "" for f in fields},
                         "low_confidence_fields": low_confidence_fields(record),
+                        "warnings": record.get("warnings") or [],
                         "confidence": record["confidence"],
                         "source_key": key,
                         "page": record["page"],
@@ -147,7 +148,9 @@ def score_one(
     needed, the same way `test_validator.py` exercises `merge` with made-up replies."""
     family, text = example["family"], example["text"]
     low_fields = set(example["low_confidence_fields"])
-    merged = merge(example["parser_fields"], reply, family, text, low_fields)
+    merged = merge(
+        example["parser_fields"], reply, family, text, low_fields, example.get("warnings", ())
+    )
     is_low = example["confidence"] == "low"
     substitutions = []
     for field in REQUIRED.get(family, ()):
