@@ -2,10 +2,9 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 10 — LLM Extraction.
-**Next:** all 7 steps done; the done-when is NOT met (a documented negative result - see Phase 10
-step 7) and the fallback is not integrated. Waiting on Harith to sign off closing the phase on
-that basis, then Phase 11 — the Next.js frontend.
+**Current phase:** Phase 11 — Frontend. The public Next.js website.
+**Next:** Phase 11 planning - pages, design direction and the decisions that need Harith's approval
+before any code.
 
 ---
 
@@ -23,8 +22,8 @@ that basis, then Phase 11 — the Next.js frontend.
 | 7 | Data science | ✅ Done |
 | 8 | Model serving | ✅ Done |
 | 9 | Backend | ✅ Done |
-| 10 | LLM extraction | 🟨 Steps done; done-when NOT met (by design) |
-| 11 | Frontend | ⬜ Not started |
+| 10 | LLM extraction | ✅ Done (done-when NOT met, by design) |
+| 11 | Frontend | 🟨 Planning |
 | 12 | Deploy & harden | ⬜ Not started |
 
 Legend: ⬜ Not started · 🟨 In progress · ✅ Done
@@ -3138,6 +3137,7 @@ though the invented-value half held (0 of 19 real corrections were ungrounded). 
 integration was built, run for real, and reversed after an audit found it net-harmful on data a
 public site uses to answer "is my batch flagged?" (ADR 0019, amendment 4). Reported as measured,
 with no retry and no widened gate - the same discipline Phase 7 applied to its own tied result.
+✅ **Phase 10 signed off by Harith, 2026-11-24**, on that basis.
 
 ---
 
@@ -3438,3 +3438,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-24 | 🔍 Grounding catches invention but NOT a real value copied into the wrong field; plausibility is shape-only (a date satisfies `batch_no`, `Not of Standard` satisfies `manufacturer`, and blank is always plausible). Three checks that each worked were still not enough | PROGRESS Phase 10 step 6 |
 | 2026-11-24 | ✅ Harith's call: **don't integrate the LLM fallback.** Best case ~3 rows fixed (3 of 103 low-confidence rows are real parser mistakes), against 6+ measured broken. Pipeline task removed; `"llm"` removed from GE's `EXPECTED_METHODS` so an `llm` row in silver now fails validation. Everything built stays, runnable by hand | Harith; ADR 0019 amendment 4 |
 | 2026-11-24 | Step 7: CI already deselects the 5 model-marked tests with no model present (`pyproject.toml`'s `-m 'not model'` default, set up at step 0) - verified on the real CI run, 61 passed / 5 deselected. Phase 10's done-when recorded NOT MET on both gates, by design, same discipline as Phase 7's tied result | PROGRESS Phase 10 step 7 |
+| 2026-11-24 | ✅ Phase 10 closed (approved by Harith): all 7 steps done; done-when NOT met, documented as a negative result; fallback not integrated | Harith |
+| 2026-11-24 | Phase 11 planning approved | Harith |
