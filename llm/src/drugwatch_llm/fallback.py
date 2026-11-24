@@ -26,12 +26,14 @@ For each bronze PDF file, in two passes so a quiet month (most of them - the arc
 Run (from llm/, RustFS + MLflow up, a registered adapter at the "production" alias):
     uv run --env-file ../.env python -m drugwatch_llm.fallback --all
     uv run --env-file ../.env python -m drugwatch_llm.fallback --all --dry-run   # preview only
+    uv run --env-file ../.env python -m drugwatch_llm.fallback --key <bronze-key>  # just one file
 """
 
 import argparse
 import io
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import pdfplumber
@@ -140,15 +142,25 @@ def process_file(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Phase 10 step 6: the LLM fallback, for real.")
-    parser.add_argument("--all", action="store_true", required=True)
+    which = parser.add_mutually_exclusive_group(required=True)
+    which.add_argument("--all", action="store_true", help="every bronze PDF file")
+    which.add_argument("--key", help="one bronze PDF file's key (re-running one file by hand)")
     parser.add_argument(
         "--dry-run", action="store_true", help="report what would change; write nothing"
+    )
+    parser.add_argument(
+        "--adapter-dir",
+        type=Path,
+        default=None,
+        help="load the adapter from this local directory instead of MLflow's registry "
+        "(e.g. a Mac too tight on memory to run Docker and inference at once: download once "
+        "with registry.load() while MLflow is up, then rerun pointed here with it stopped)",
     )
     args = parser.parse_args(argv)
 
     s3 = RawStore.from_env().s3
-    keys = bronze_pdf_keys(s3)
-    print(f"{len(keys)} bronze PDF files")
+    keys = [args.key] if args.key else bronze_pdf_keys(s3)
+    print(f"{len(keys)} bronze PDF file(s)")
 
     # Pass 1: find every candidate without loading anything heavier than Parquet.
     files: list[tuple[str, list[dict[str, Any]], list[int]]] = []
@@ -181,7 +193,10 @@ def main(argv: list[str] | None = None) -> int:
     from drugwatch_llm import registry
 
     device = device_for()
-    loaded = registry.load(device)
+    if args.adapter_dir:
+        loaded = registry.load_from_dir(str(args.adapter_dir), device)
+    else:
+        loaded = registry.load(device)
     print(f"loaded {loaded.describe()}, device={device}")
 
     total_changed = 0

@@ -57,6 +57,33 @@ def tracking_uri(env: dict[str, str] | None = None) -> str:
     return source.get("MLFLOW_TRACKING_URI", "http://localhost:5050")
 
 
+def load_from_dir(
+    local_dir: str, device: str, base_model_id: str = MODEL_ID, **identity: str
+) -> LoadedAdapter:
+    """Load the base model plus an adapter already sitting on local disk - no MLflow call at
+    all. Split out of `load` so a Mac whose 8 GB is already spent on Docker's own stack can
+    download the adapter once (while MLflow is up) and then run inference with MLflow stopped,
+    the same "the two steps don't both need to be up at once" idea ADR 0019 already applies to
+    `train.py` vs `publish_run.py`. `identity` fills in whatever `load` would otherwise have
+    read from the registry (name/version/run_id), for a caller that already knows it."""
+    tokenizer = AutoTokenizer.from_pretrained(base_model_id)
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    base = AutoModelForCausalLM.from_pretrained(base_model_id, dtype=torch.bfloat16).to(device)
+    # Inference only - the backward-pass MPS cliff that sent training to Colab/Kaggle (ADR 0019)
+    # does not apply to a forward pass, already measured fine on a Mac at step 0.
+    model = PeftModel.from_pretrained(base, local_dir)
+    model.eval()
+    return LoadedAdapter(
+        name=identity.get("name", "unknown"),
+        version=identity.get("version", "unknown"),
+        run_id=identity.get("run_id", "unknown"),
+        base_model_id=base_model_id,
+        model=model,
+        tokenizer=tokenizer,
+    )
+
+
 def load(device: str, name: str = MODEL_NAME, alias: str = PRODUCTION_ALIAS) -> LoadedAdapter:
     """Resolve the alias to a concrete version, download its adapter files, and load the base
     model plus the adapter on top of it. Raises if the registry is unreachable or the alias
@@ -66,24 +93,9 @@ def load(device: str, name: str = MODEL_NAME, alias: str = PRODUCTION_ALIAS) -> 
     client = mlflow.MlflowClient()
     version = client.get_model_version_by_alias(name, alias)
     base_model_id = version.tags.get("base_model_id", MODEL_ID)
-
     local_dir = mlflow.artifacts.download_artifacts(artifact_uri=f"models:/{name}@{alias}")
-
-    tokenizer = AutoTokenizer.from_pretrained(base_model_id)
-    if tokenizer.pad_token_id is None:
-        tokenizer.pad_token = tokenizer.eos_token
-    base = AutoModelForCausalLM.from_pretrained(base_model_id, dtype=torch.bfloat16).to(device)
-    # Inference only - the backward-pass MPS cliff that sent training to Colab/Kaggle (ADR 0019)
-    # does not apply to a forward pass, already measured fine on a Mac at step 0.
-    model = PeftModel.from_pretrained(base, local_dir)
-    model.eval()
-
-    return LoadedAdapter(
-        name=name,
-        version=version.version,
-        run_id=version.run_id,
-        base_model_id=base_model_id,
-        model=model,
-        tokenizer=tokenizer,
-        tags=dict(version.tags),
+    loaded = load_from_dir(
+        local_dir, device, base_model_id, name=name, version=version.version, run_id=version.run_id
     )
+    loaded.tags = dict(version.tags)
+    return loaded
