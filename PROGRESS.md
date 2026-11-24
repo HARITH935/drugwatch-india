@@ -3,8 +3,8 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 11 — Frontend. The public Next.js website.
-**Next:** Phase 11 planning - pages, design direction and the decisions that need Harith's approval
-before any code.
+**Next:** Phase 11 step 0 - the Next.js skeleton, CI job, test tools (ADR) and one page calling the
+backend end to end.
 
 ---
 
@@ -23,7 +23,7 @@ before any code.
 | 8 | Model serving | ✅ Done |
 | 9 | Backend | ✅ Done |
 | 10 | LLM extraction | ✅ Done (done-when NOT met, by design) |
-| 11 | Frontend | 🟨 Planning |
+| 11 | Frontend | 🟨 In progress |
 | 12 | Deploy & harden | ⬜ Not started |
 
 Legend: ⬜ Not started · 🟨 In progress · ✅ Done
@@ -3141,6 +3141,66 @@ with no retry and no widened gate - the same discipline Phase 7 applied to its o
 
 ---
 
+## Phase 11 — Frontend
+
+Approved 2026-11-24. Plan: `DRUGWATCH_PHASES.md` §9 Phase 11, §11 (pages), §10 (API), §14
+(testing). Goal: the public website.
+
+**Four things the plan assumed that aren't true, found before any code** (checked against the
+repo, not the plan document):
+- **No price data exists anywhere** - no endpoint, nothing in gold (Phase 6 deferred the price
+  dashboard for the same reason). The plan's *Price compare* page and the drug page's "generic
+  alternatives, prices" have nothing to show.
+- **The backend has no CORS configuration**, so a browser page on `:3000` cannot call `:8080`.
+- **No endpoint serves watchlist notification history**, though `app.alert_notifications` holds
+  it. The plan's watchlist page asks for that history.
+- **Login returns its tokens in the response body** (refresh token rotation with reuse detection).
+  Kept in `localStorage`, any injected script could steal a login.
+
+**Five decisions** (Harith, 2026-11-24 - "take all recommendations"):
+- **A. Price compare and drug-page prices/alternatives are deferred**, recorded as not done rather
+  than faked. They need Jan Aushadhi data carried through silver and gold plus an endpoint - and
+  Jan Aushadhi's republishing permission is also unsent (`docs/permissions.md`).
+- **B. Next.js is the browser's only backend** (a "backend-for-frontend"): its server forwards
+  `/api/v1/*` to Spring and holds the JWTs in **httpOnly, Secure, SameSite cookies** - stored by
+  the browser, unreadable by page scripts. Spring needs no CORS change, and a script injected into
+  the page has no token to take.
+- **C. Test tools: Vitest + React Testing Library** (component tests) **and Playwright** (the
+  plan's search -> result end-to-end flow, §14). New tools, so an ADR.
+- **D. No UI component or chart library.** Tailwind plus a small set of hand-built components;
+  small charts as plain SVG, heavy ones stay in Superset (already approved). Nothing extra to
+  approve, and less JavaScript on a phone.
+- **E. One small read-only backend endpoint** for notification history, at step 5, because the
+  planned page needs it.
+
+**Design direction:** calm, trustworthy public-service (the spirit of NHS / GOV.UK), high contrast,
+phone-first, no 3D - a safety lookup needs a fast, plain answer, and CLAUDE.md §6 asks for neutral
+presentation. Step 1 turns this into a real design system with the UI UX Pro Max skill, reviewed by
+Harith visually before any page is built on it.
+
+**Ethics rules enforced by tests, not just written down** (CLAUDE.md §6): shared `Disclaimer`,
+`SourceLink` and `BatchFinding` components, and tests that fail if any result view lacks its batch
+number, source alert month, CDSCO link or disclaimer, or if a "not found" result ever reads as
+"safe" - the pattern `ml/explain.py`'s wording tests already use.
+
+**⚠️ Blocking Phase 12, Harith's to do:** the CDSCO permission email has never been sent
+(`docs/permissions.md`: ⬜). The live site cannot show CDSCO data until permission is recorded, and
+replies can take weeks. The draft is already written.
+
+- [ ] Step 0 — Next.js + TypeScript + Tailwind skeleton, npm lockfile, CI job, test tools wired
+      (ADR), and one real page calling the backend end to end through the Next.js server
+- [ ] Step 1 — design system (UI UX Pro Max): tokens, core components, accessibility baseline
+- [ ] Step 2 — home + batch checker + batch result page, and the search -> result end-to-end test
+- [ ] Step 3 — drug page and manufacturer page (risk score + explanation + its caveat)
+- [ ] Step 4 — auth: register, verify, login, logout, refresh (httpOnly cookies)
+- [ ] Step 5 — watchlist page (+ the notification-history endpoint)
+- [ ] Step 6 — dashboards page: Superset embedded SDK, guest tokens refreshed before expiry
+- [ ] Step 7 — About & Methodology, mobile + accessibility pass, the done-when demo
+
+**Done when:** all pages work against the live backend on desktop and mobile.
+
+---
+
 Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when each phase starts.
 
 ---
@@ -3440,3 +3500,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-24 | Step 7: CI already deselects the 5 model-marked tests with no model present (`pyproject.toml`'s `-m 'not model'` default, set up at step 0) - verified on the real CI run, 61 passed / 5 deselected. Phase 10's done-when recorded NOT MET on both gates, by design, same discipline as Phase 7's tied result | PROGRESS Phase 10 step 7 |
 | 2026-11-24 | ✅ Phase 10 closed (approved by Harith): all 7 steps done; done-when NOT met, documented as a negative result; fallback not integrated | Harith |
 | 2026-11-24 | Phase 11 planning approved | Harith |
+| 2026-11-24 | Phase 11 decisions A-E approved ("take all recommendations"): price pages deferred (no data); Next.js as backend-for-frontend with httpOnly-cookie tokens; Vitest + RTL + Playwright; no UI/chart library; one notification-history endpoint | Harith |
+| 2026-11-24 | ⚠️ CDSCO permission email never sent (`docs/permissions.md`) - blocks Phase 12's launch; Harith to send | PROGRESS Phase 11 |
