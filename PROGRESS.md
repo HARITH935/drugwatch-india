@@ -3,8 +3,9 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 10 — LLM Extraction.
-**Next:** step 7 - CI (model-dependent tests skip without a model) and the done-when
-demonstration, which for Phase 10 is the documented negative result, not a working fallback.
+**Next:** all 7 steps done; the done-when is NOT met (a documented negative result - see Phase 10
+step 7) and the fallback is not integrated. Waiting on Harith to sign off closing the phase on
+that basis, then Phase 11 — the Next.js frontend.
 
 ---
 
@@ -22,7 +23,7 @@ demonstration, which for Phase 10 is the documented negative result, not a worki
 | 7 | Data science | ✅ Done |
 | 8 | Model serving | ✅ Done |
 | 9 | Backend | ✅ Done |
-| 10 | LLM extraction | 🟨 Planning |
+| 10 | LLM extraction | 🟨 Steps done; done-when NOT met (by design) |
 | 11 | Frontend | ⬜ Not started |
 | 12 | Deploy & harden | ⬜ Not started |
 
@@ -3097,11 +3098,46 @@ Face page before writing it down, not assumed from the name):
       `drug_class_review`): the model proposes, a person accepts or rejects, nothing unreviewed
       reaches bronze. ~100 rows archive-wide makes that a one-off of minutes - a possible
       follow-up after Phase 12, not Phase 10 work.
-- [ ] Step 7 — CI (model-dependent tests skip without a model) and the done-when demo
+- [x] **Step 7 — CI, and the done-when demonstration** (2026-11-24)
+    - **CI already did this** (step 0, `28fe32a`) - `llm` is in the Python matrix, and
+      `pyproject.toml`'s `addopts = "-m 'not model'"` is the default, so a GitHub runner with no
+      GPU and no model automatically deselects the 5 tests that need one
+      (`test_dataset.py`'s real-tokenizer class, `test_registry.py`'s real-adapter load).
+      Verified on the real step-6-closure run rather than assumed: **61 passed, 5 deselected**.
+      `-m model` runs those 5 by hand, on a machine that has the adapter.
+    - **Done-when, read against what was actually measured:**
+      - Plan's own gate ("beats the baseline on labelled-eval-set F1 for low-confidence
+        rows"): **NOT MET** - 85.7% vs the parser's 92.3% (step 5).
+      - This phase's added gate (never lowers whole-test-split F1; never accepts an invented
+        value): **the F1 half failed too** (99.0% vs 99.5%); **the invented-value half held** -
+        0 of the real run's 19 corrections were ungrounded. Grounding did exactly its job; the
+        job itself turned out not to be enough (step 6's audit: a real value in the wrong field
+        passes grounding every time).
+      - **Deliverable "pipeline integration"**: built completely, run on the real archive, and
+        reversed by decision after an audit found it net-harmful. Not shipped, on purpose.
+    - **The honest headline, matching Phase 7's precedent for an unflattering result reported
+      as pre-committed rather than quietly reframed**: Phase 10 does not meet its plan's
+      done-when, and should not. The one row-level guard built in response to step 5 fixed the
+      shape there was evidence for; the archive-wide run found five or six more shapes with the
+      same character, inside the same afternoon. The project's existing review pattern
+      (`manufacturer_review`, `drug_class_review`) - propose, then a person decides - is named
+      in ADR 0019 as what a future attempt should look like instead of a direct write.
+    - **What is real and shipped from this phase**: the training-data builder with its leakage
+      checks, the Colab/Kaggle notebook (both hosts proven), a LoRA adapter trained and
+      registered in MLflow, a three-check validator plus the multi-part-pack guard, a
+      single-use test harness reused for both the parser's own baseline and the LLM's, and this
+      audit. All runnable by hand; none wired into the pipeline.
 
 **Done when:** the LLM beats the rule-based baseline on labelled-eval-set F1 for low-confidence
 rows (plan's gate), **and** it never lowers whole-test-split F1 below the parser's baseline or
 accepts an invented value (this phase's added gate).
+
+**Outcome (2026-11-24): NOT MET, on both gates, and the phase closes anyway - by design.** The
+plan's gate: 85.7% vs the parser's own 92.3%. This phase's added gate: F1 fell (99.0% vs 99.5%),
+though the invented-value half held (0 of 19 real corrections were ungrounded). Pipeline
+integration was built, run for real, and reversed after an audit found it net-harmful on data a
+public site uses to answer "is my batch flagged?" (ADR 0019, amendment 4). Reported as measured,
+with no retry and no widened gate - the same discipline Phase 7 applied to its own tied result.
 
 ---
 
@@ -3401,3 +3437,4 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-24 | ⚠️🛑 The fallback ran on the real archive (18 rows corrected, idempotency proven) and an audit against raw found it NET-HARMFUL: a date written over two real batch numbers, interleaved column garbage, and `Spurious` replaced with prose (breaking CLAUDE.md §6). Bronze + silver REVERTED from raw to the canonical 7,126 rows; GE passes | PROGRESS Phase 10 step 6 |
 | 2026-11-24 | 🔍 Grounding catches invention but NOT a real value copied into the wrong field; plausibility is shape-only (a date satisfies `batch_no`, `Not of Standard` satisfies `manufacturer`, and blank is always plausible). Three checks that each worked were still not enough | PROGRESS Phase 10 step 6 |
 | 2026-11-24 | ✅ Harith's call: **don't integrate the LLM fallback.** Best case ~3 rows fixed (3 of 103 low-confidence rows are real parser mistakes), against 6+ measured broken. Pipeline task removed; `"llm"` removed from GE's `EXPECTED_METHODS` so an `llm` row in silver now fails validation. Everything built stays, runnable by hand | Harith; ADR 0019 amendment 4 |
+| 2026-11-24 | Step 7: CI already deselects the 5 model-marked tests with no model present (`pyproject.toml`'s `-m 'not model'` default, set up at step 0) - verified on the real CI run, 61 passed / 5 deselected. Phase 10's done-when recorded NOT MET on both gates, by design, same discipline as Phase 7's tied result | PROGRESS Phase 10 step 7 |

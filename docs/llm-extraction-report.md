@@ -81,3 +81,26 @@ answer" because both are literally printed text.
 - **Metric harshness, carried from step 2**: `manufacturer` and `product_name` are scored on an exact, whitespace-collapsed match - the same bar the parser is held to - so a reply that is grounded and almost right still scores zero credit for not being byte-identical.
 - **The held-out-layout experiment** (train with one layout family excluded, test on it) was approved as reported-but-non-gating and is not run here; it needs a second training run and is deferred.
 - **A row the parser lost entirely** is out of this step's scope (and this run) - the test split has none.
+
+## Final outcome (step 6, 2026-11-24): the fallback is not integrated
+
+This report's gates were the first warning, not the last. Step 6 built the pipeline integration
+completely - guarded against the one shape this report's regressions came from (the multi-part
+pack) - and ran it on the whole real archive: 101 candidate rows, 18 corrected.
+
+An audit of every one of those 18 against the rule parser's own output, re-derived from the
+untouched `raw/`, found the fallback **net-harmful**: a date written over two real batch numbers,
+two interleaved text columns mashed into one field, a parseable Excel date and `NO EXPIRY` turned
+into blanks, and `Spurious` - the sentinel meaning the real maker is unknown because the pack is
+fake - replaced with prose. That last one breaks CLAUDE.md §6 directly.
+
+**Why grounding and plausibility, which both did their job, still weren't enough**: grounding
+catches invention, not a real value copied into the wrong field (`09/2024` genuinely was printed,
+as the mfg date). Plausibility is a shape check per field, and the shapes are necessarily
+permissive - a date satisfies `batch_no`, three letters satisfy `manufacturer`, and blank is always
+plausible by design.
+
+**Decision (Harith): don't integrate.** Full reasoning in `docs/adr/0019-llm-output-schema-and-training-location.md`'s
+fourth amendment. Bronze and silver were reverted from `raw/` to the canonical 7,126-row silver;
+the Airflow task was removed; Great Expectations now rejects an `llm` row outright. Phase 10's
+done-when is **not met**, on either gate, and the phase closes as a documented negative result.
