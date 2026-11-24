@@ -225,3 +225,22 @@ def test_it_catches_batch_numbers_going_blank_wholesale():
     result = validate(frame(*([{"batch_no": "--"}] * 10)))
 
     assert not outcome(result, "expect_column_values_to_match_regex", "batch_no").success
+
+
+# --- extraction_method (ADR 0019, fourth amendment) -------------------------------------
+
+
+def test_it_catches_an_llm_row_because_the_fallback_was_not_integrated():
+    # Phase 10 built an LLM fallback, ran it on the real archive, found it wrote a date over two
+    # real batch numbers and replaced `Spurious` with prose, and did NOT integrate it. "llm" was
+    # taken back out of EXPECTED_METHODS so the gate enforces that decision: if anything ever
+    # writes an llm row again without the decision being reversed, validation fails here.
+    result = validate(frame({"extraction_method": "llm"}))
+
+    assert not outcome(result, "expect_column_values_to_be_in_set", "extraction_method").success
+
+
+def test_rule_and_api_rows_are_still_accepted():
+    result = validate(frame({"extraction_method": "rule"}, {"extraction_method": "api"}))
+
+    assert outcome(result, "expect_column_values_to_be_in_set", "extraction_method").success

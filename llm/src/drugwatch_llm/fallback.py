@@ -1,4 +1,12 @@
-"""Phase 10 step 6: the LLM fallback as a real pipeline task.
+"""Phase 10 step 6: the LLM fallback - built, run on the real archive, and NOT integrated.
+
+**Not in the pipeline.** ADR 0019's fourth amendment: an audit of this module's real run against
+`raw/` found it net-harmful (a date written over two real batch numbers; `Spurious` replaced with
+prose), so the Airflow task was removed and Great Expectations rejects any `llm` row in silver.
+This module is kept, tested and runnable by hand - for re-running that audit, or as the starting
+point for a reviewed (model proposes, person accepts) version. The design notes below describe how
+it works, not something that runs monthly.
+
 
 Runs AFTER `drugwatch_extraction.bronze --all` (needs the rule parser's bronze already written)
 and BEFORE Spark reads bronze (Phase 3's `build_silver` must see any correction, not the rule

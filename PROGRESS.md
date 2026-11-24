@@ -3,9 +3,8 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 10 — LLM Extraction.
-**Next:** step 6 is built, wired and was run for real - and the archive-wide audit found it
-NET-HARMFUL (see Phase 10 step 6). Bronze and silver are reverted to the canonical 7,126-row
-state. Waiting on Harith: don't integrate (recommended), or harden the validator and re-audit.
+**Next:** step 7 - CI (model-dependent tests skip without a model) and the done-when
+demonstration, which for Phase 10 is the documented negative result, not a working fallback.
 
 ---
 
@@ -3002,7 +3001,7 @@ Face page before writing it down, not assumed from the name):
       the merged score, an ungrounded invention costing nothing (not even a penalty), and the
       multi-part-pack mechanism above - all with made-up rows, no real CDSCO text, before the
       real run. 50 fast tests passing in `llm/`.
-- [~] **Step 6 — pipeline integration** (in progress, 2026-11-24)
+- [x] **Step 6 — pipeline integration: built, run for real, audited, NOT integrated** (2026-11-24)
     - **Decision (Harith, after step 5's result): guard against multi-part packs, then
       integrate.** `validator.merge` gains a row-level check before its three per-field ones -
       a row whose own parser warning names a multi-part pack (`family_d.MULTI_PART_PACK_WARNING`,
@@ -3077,14 +3076,27 @@ Face page before writing it down, not assumed from the name):
       fixed the one shape there was evidence for; the archive-wide run found five or six more
       with the same character. Patching shapes as they are discovered is a treadmill, not a
       strategy - so this is a decision for Harith, not something to iterate on quietly.
-    - **⏳ OPEN - Harith's decision**: (a) **don't integrate** (my recommendation now that there
-      is evidence) - Phase 10 closes as a documented negative result, keeping the training
-      pipeline, validator, registry, evaluation harness and this audit as the real work; or
-      (b) harden the validator with field-specific rules (a batch number may not parse as a
-      date; a manufacturer may not equal a failure-reason phrase; a sentinel may never become
-      blank) and re-audit, with no guarantee the next audit is clean. **The Airflow task stays
-      wired but has NOT been left to run against real data** - any future run needs that
-      decision first.
+    - ✅ **Decision (Harith, 2026-11-24): don't integrate** - over hardening the validator and
+      re-auditing. ADR 0019, fourth amendment. The argument that decided it was available before
+      training began: only **3 of the archive's 103** low-confidence rows are real parser mistakes,
+      so the best case was about 3 fixed rows, against 6 or more measured broken - in a dataset
+      whose core feature is "is my batch flagged?", where a corrupted batch number makes a real
+      finding stop matching a real search. Hardening was rejected as whack-a-mole (one guard, then
+      five more shapes), as tuning against already-seen data, and as unable to close the gap
+      underneath: grounding cannot tell a real value in the right field from the same value in the
+      wrong one.
+    - **Removed**: the `llm_extraction_fallback` task from `processing_chain()`, so both DAGs are
+      back to `extract_pdf_bronze -> build_silver` (checked against a real DagBag), with a comment
+      in its place pointing at the ADR. **`"llm"` taken back out of `EXPECTED_METHODS`**, so an `llm`
+      row reaching silver now FAILS validation instead of being accepted: the check enforces the
+      decision rather than tolerating it.
+    - **Kept, tested, runnable by hand**: the adapter (registered in MLflow), `validator.py` with
+      the multi-part-pack guard, `evaluate.py` and its report, `registry.py`, and `fallback.py`
+      (its docstring now opens by saying it is not in the pipeline). If this is ever revisited, the
+      fitting shape is this project's own review pattern (`manufacturer_review`,
+      `drug_class_review`): the model proposes, a person accepts or rejects, nothing unreviewed
+      reaches bronze. ~100 rows archive-wide makes that a one-off of minutes - a possible
+      follow-up after Phase 12, not Phase 10 work.
 - [ ] Step 7 — CI (model-dependent tests skip without a model) and the done-when demo
 
 **Done when:** the LLM beats the rule-based baseline on labelled-eval-set F1 for low-confidence
@@ -3388,3 +3400,4 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-24 | 🐛 A 27-minute `stuck`-state stall was memory thrashing dominated by ANOTHER project's container (opspilot, 2.5 GB), not drugwatch's. My "72 MB free" reading misused macOS metrics - "pages free" is near-zero by design; `memory_pressure`'s free PERCENTAGE is the real figure | PROGRESS Phase 10 step 6 |
 | 2026-11-24 | ⚠️🛑 The fallback ran on the real archive (18 rows corrected, idempotency proven) and an audit against raw found it NET-HARMFUL: a date written over two real batch numbers, interleaved column garbage, and `Spurious` replaced with prose (breaking CLAUDE.md §6). Bronze + silver REVERTED from raw to the canonical 7,126 rows; GE passes | PROGRESS Phase 10 step 6 |
 | 2026-11-24 | 🔍 Grounding catches invention but NOT a real value copied into the wrong field; plausibility is shape-only (a date satisfies `batch_no`, `Not of Standard` satisfies `manufacturer`, and blank is always plausible). Three checks that each worked were still not enough | PROGRESS Phase 10 step 6 |
+| 2026-11-24 | ✅ Harith's call: **don't integrate the LLM fallback.** Best case ~3 rows fixed (3 of 103 low-confidence rows are real parser mistakes), against 6+ measured broken. Pipeline task removed; `"llm"` removed from GE's `EXPECTED_METHODS` so an `llm` row in silver now fails validation. Everything built stays, runnable by hand | Harith; ADR 0019 amendment 4 |

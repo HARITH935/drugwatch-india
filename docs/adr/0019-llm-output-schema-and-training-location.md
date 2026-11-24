@@ -201,3 +201,61 @@ host. This is a new service under CLAUDE.md §4, so it is recorded here.
   would fail late and confusingly. The T4 is what the first run actually trained on.
 - `run_info.json` gains a `platform` field (`colab` / `kaggle`) beside `device`, so step 5's report
   can say which host produced the published adapter.
+
+## Amendment, 2026-11-24 (fourth) — the fallback is built but NOT integrated into the pipeline
+
+**Context.** Step 5's single-use test failed both gates (gate 1 92.3% → 85.7%, gate 2 99.5% →
+99.0%), every regression traced to one multi-part-pack row. Harith chose to guard that shape and
+integrate. Step 6 then built the integration completely - the adapter registered in MLflow
+(`drugwatch-extraction-fallback` @production), `drugwatch_llm.fallback` as a pipeline task between
+`extract_pdf_bronze` and `build_silver`, `"llm"` accepted by Great Expectations - and ran it on
+the whole archive: 101 candidate rows, 18 changed, idempotency proven on real data.
+
+An audit of every change against the rule parser's own output, re-derived from the untouched
+`raw/`, found the fallback **net-harmful**: roughly 2 of 19 changes were improvements, several
+destroyed information, and at least 6 were wrong - a date written over two real batch numbers,
+two interleaved text columns mashed into one batch number, a parseable Excel date and `NO EXPIRY`
+turned into blanks, and `Spurious` replaced with prose and with a failure-reason fragment. The last
+breaks CLAUDE.md §6 directly: `Spurious` means the real maker is unknown because the pack is fake.
+
+**Why the validator could not catch it.** Grounding asks whether a value's words appear in the
+row's text. That catches *invention*, which is what it was built for, but a real value copied into
+the wrong field is grounded too: `09/2024` was printed on that row, as its mfg date. Plausibility is
+a shape check per field, and the shapes are permissive by necessity - a batch number needs a digit
+(a date has one), a manufacturer needs three letters (`Not of Standard` has them), and a blank is
+always plausible because an empty cell is a legitimate answer.
+
+**Decision (Harith, 2026-11-24, choosing over hardening the validator and re-auditing): do not
+integrate.** Bronze and silver were reverted from `raw/` (CLAUDE.md §5) to `extraction_method:
+{'rule': 1317}` and the canonical 7,126-row silver, and the pipeline task was removed.
+
+- **The upside was always small and the downside is not.** Step 4's planning found only 3 of the
+  archive's 103 low-confidence rows are genuine parser mistakes; the rest are the PDF printing
+  `NIL`, `NM` or an Excel date, which the parser already copies correctly. The most the fallback
+  could fix was about 3 rows; the audit found 6 or more it broke, in a dataset whose core feature
+  is answering "is my batch flagged?". A corrupted batch number means a real NSQ finding stops
+  matching a real search, so "not found" quietly stops meaning what CLAUDE.md §6 requires.
+- **Hardening rejected, for three reasons.** Each new rule fixes one shape the audit happened to
+  find - the multi-part-pack guard fixed one and the next run found five or six more. The test
+  split has been read once, so tuning rules to this audit and re-checking on the same archive would
+  be tuning against what has already been seen. And no shape rule closes the gap underneath:
+  grounding cannot tell a real value in the right field from the same value in the wrong one.
+- **What stays.** Everything built is kept and tested: the training data builder, the Colab/Kaggle
+  notebook, the LoRA adapter (registered in MLflow), `validator.py` including the multi-part-pack
+  guard, `evaluate.py` and its report, `registry.py`, and `fallback.py` itself, with `--dry-run`,
+  `--key` and `--adapter-dir`. `fallback.py` runs only when someone runs it by hand.
+- **What is removed.** The `llm_extraction_fallback` task in `processing_chain()` (both DAGs), with
+  a comment in its place pointing here. `"llm"` is taken back OUT of Great Expectations'
+  `EXPECTED_METHODS`, so an `llm` row reaching silver is now a validation failure, not an accepted
+  value - the check enforces this decision rather than merely tolerating it.
+
+**Consequences.**
+
+- Phase 10's done-when ("the LLM beats the rule-based baseline on low-confidence rows") is **not
+  met**, and Phase 10 closes as a documented negative result, the same way Phase 7 closed on
+  LightGBM being statistically tied with logistic regression.
+- If this is ever revisited, the shape that fits is the one this project already uses for every
+  other uncertain mapping (`manufacturer_review`, `drug_class_review`): **the model proposes, a
+  person accepts or rejects**, and nothing reaches bronze unreviewed. With about 100 low-confidence
+  rows in the whole archive, that review is a one-off of minutes, not a monthly burden. It is a
+  possible follow-up after Phase 12, not part of Phase 10.

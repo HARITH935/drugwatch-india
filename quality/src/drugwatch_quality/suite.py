@@ -38,7 +38,9 @@ EXPECTED_CATEGORIES = frozenset(
         "Uniformity", "Water", "pH",
     }
 )  # fmt: skip
-EXPECTED_METHODS = ["api", "rule", "llm"]  # portal JSON / PDF parser / Phase 10's fallback
+# portal JSON / PDF parser. NOT "llm": Phase 10's fallback was built, audited on the real archive
+# and not integrated (ADR 0019, amendment 4), so an `llm` row reaching silver is a failure.
+EXPECTED_METHODS = ["api", "rule"]
 EXPECTED_DATASETS = ["central-nsq", "state-nsq", "nsq", "spurious", "combined"]
 # Silver only grows, by roughly 100-300 rows a month. Below the floor means data was lost; above
 # the ceiling, within this phase, means de-duplication regressed.
