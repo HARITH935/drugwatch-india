@@ -37,7 +37,9 @@ class RateLimitHttpTest {
     void clearCounters() {
         // Every test starts with a fresh window; otherwise the first test spends the budget for
         // all of them.
-        redis.getConnectionFactory().getConnection().serverCommands().flushAll();
+        // Only the limiter's own keys. A FLUSHALL here also wiped every other test's keys, and
+        // opened a connection that nothing closed.
+        redis.delete(redis.keys("ratelimit:*"));
     }
 
     @Test

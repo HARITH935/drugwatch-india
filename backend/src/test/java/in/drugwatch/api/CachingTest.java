@@ -1,9 +1,11 @@
 package in.drugwatch.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import in.drugwatch.api.drugs.domain.DrugService;
 import in.drugwatch.api.shared.DataVersion;
+import java.time.Duration;
 import java.util.Set;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
@@ -41,13 +43,42 @@ class CachingTest {
         return redis.keys("drugPages*");
     }
 
+    /**
+     * Removes only this cache's keys, not everything in Redis.
+     *
+     * <p>This used to be {@code getConnectionFactory().getConnection().serverCommands().flushAll()},
+     * which opened a connection nothing closed and wiped every other test's keys too, the rate
+     * limiter's counters included. It was not the cause of this class's flakiness (see {@link
+     * #awaitCached}); that turned out to be timing.
+     */
+    private void clearDrugPages() {
+        redis.delete(cacheKeys());
+    }
+
+    /**
+     * Waits (briefly) for a cache entry instead of asserting the instant the method returns.
+     *
+     * <p>The cache write is not finished when the cached method returns: it reaches Redis a few
+     * milliseconds later. Measured directly - a key that the test's own template could not yet see
+     * was visible to a second connection asked a moment later, and to the template within ~20 ms.
+     * That is harmless for the site (the next request finds the entry), but asserting immediately
+     * made this class fail on roughly every other run, a different test each time. Two seconds is
+     * a ceiling, not a delay: the wait returns as soon as the entry is there.
+     */
+    private Set<String> awaitCached(String monthPrefix) {
+        await().atMost(Duration.ofSeconds(2))
+                .untilAsserted(() -> assertThat(cacheKeys())
+                        .anySatisfy(key -> assertThat(key).contains(monthPrefix)));
+        return cacheKeys();
+    }
+
     @Test
     void a_drug_page_is_cached() {
-        redis.getConnectionFactory().getConnection().serverCommands().flushAll();
+        clearDrugPages();
 
         drugs.page("d1");
 
-        assertThat(cacheKeys()).isNotEmpty();
+        assertThat(awaitCached("page:[d1]")).isNotEmpty();
     }
 
     @Test
@@ -55,18 +86,18 @@ class CachingTest {
         // This is what makes the monthly pipeline invalidate the cache by itself: the key changes
         // because the data changed, so nothing has to remember to flush anything - and the
         // failure mode that matters, serving last month's answers as current, cannot happen.
-        redis.getConnectionFactory().getConnection().serverCommands().flushAll();
+        clearDrugPages();
 
         drugs.page("d1");
 
-        assertThat(cacheKeys()).anySatisfy(key -> assertThat(key).contains("2026-03"));
+        awaitCached("2026-03:page:[d1]");
     }
 
     @Test
     void a_new_alert_month_makes_the_old_entries_unreachable() {
-        redis.getConnectionFactory().getConnection().serverCommands().flushAll();
+        clearDrugPages();
         drugs.page("d1");
-        Set<String> before = cacheKeys();
+        Set<String> before = awaitCached("2026-03:page:[d1]");
 
         // The monthly load: a newer alert month appears in the warehouse.
         JdbcClient.create(dataSource).sql("""
@@ -86,13 +117,16 @@ class CachingTest {
         // rather than by counting keys: other test classes share this Redis and flush it, so a
         // count is not a stable thing to assert. The property is what matters anyway.
         assertThat(before).anySatisfy(key -> assertThat(key).contains("2026-03"));
-        assertThat(cacheKeys()).anySatisfy(key -> assertThat(key).contains("2026-04"));
+        awaitCached("2026-04:page:[d1]");
     }
 
     @Test
     void the_second_call_does_not_reach_the_database() {
-        redis.getConnectionFactory().getConnection().serverCommands().flushAll();
+        clearDrugPages();
         var first = drugs.page("d1");
+        // Wait for the entry to land before deleting the row: otherwise the second call can miss a
+        // write still in flight, go to the database, and fail for a reason unrelated to caching.
+        awaitCached("2026-03:page:[d1]");
 
         // Delete the row the page is built from. A cached answer survives; an uncached one would
         // now throw NotFoundException - which is how this proves the cache was used rather than

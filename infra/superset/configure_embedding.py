@@ -24,8 +24,11 @@ what the API's allowlist maps to.
 Idempotent: roles are set to exactly these permissions on every run, so anything added by hand in
 the UI is removed again.
 
-Run from the repo root, with the stack up:
-    set -a && . ./.env && set +a && docker compose exec -T superset python - < infra/superset/configure_embedding.py
+Run from the repo root, with the stack up. The -e flags matter: this reads the service account's
+credentials from the environment, and `docker compose exec` passes the host's only when named:
+    set -a && . ./.env && set +a && \
+        docker compose exec -T -e SUPERSET_EMBED_USERNAME -e SUPERSET_EMBED_PASSWORD \
+        superset python - < infra/superset/configure_embedding.py
 """
 
 import os

@@ -3,6 +3,7 @@ package in.drugwatch.api;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 /**
@@ -18,8 +19,17 @@ import org.testcontainers.containers.PostgreSQLContainer;
  *
  * <p>{@code @ServiceConnection} wires the JDBC url, username and password into Spring by itself,
  * which also means the test configuration cannot drift from the container it is pointed at.
+ *
+ * <p><b>It also brings {@link TestRedis}</b>, because the application cannot answer a public
+ * request without Redis (the cache and the rate limiter sit in front of every lookup). Thirteen
+ * test classes imported this and not that, and passed only because this Mac runs a dev Redis on
+ * the default port; in CI nothing listens there, and {@code main} was red from the Phase 9
+ * sign-off onwards. Importing it here, rather than in every test, means a new test cannot forget
+ * it - and {@code spring.data.redis.port=1} in the test properties makes one that somehow does
+ * fail on this Mac too, not only in CI.
  */
 @TestConfiguration(proxyBeanMethods = false)
+@Import(TestRedis.class)
 class TestDatabase {
 
     @Bean
