@@ -3,6 +3,7 @@ package in.drugwatch.api;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.List;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,16 +56,27 @@ class AppSchemaTest {
         assertThat(applied).isPositive();
     }
 
+    /** The tables {@code db/gold-fixture.sql} creates: the only ones allowed outside {@code app}. */
+    private static final List<String> GOLD_FIXTURE_TABLES =
+            List.of("gold.dim_drug", "gold.dim_manufacturer", "gold.fact_nsq_sample", "gold.mart_ml_features");
+
     @Test
     void nothing_was_created_outside_the_app_schema() {
-        // Flyway owns `app`; dbt owns `gold`. A migration that leaked a table into `public` would
-        // be the first step towards two tools editing the same schema.
+        // Flyway owns `app`; dbt owns `gold`. A migration that leaked a table into `public` - or
+        // into dbt's `gold` - would be the first step towards two tools editing the same schema.
+        //
+        // The test fixture's own gold tables are allowed, by name. Other classes share this
+        // Postgres container and load that fixture, so whether those tables exist here depends on
+        // which class ran first: counting them as leaks failed this test in CI (`but was: 4`) and
+        // passed it on the Mac, decided by test order. Naming them, rather than excluding the whole
+        // gold schema, keeps a migration that writes into gold a failure - and a failure now names
+        // what leaked instead of only counting it.
         var elsewhere = sql().sql("""
-                        SELECT count(*) FROM information_schema.tables
+                        SELECT table_schema || '.' || table_name FROM information_schema.tables
                         WHERE table_schema NOT IN ('app', 'information_schema', 'pg_catalog')
-                        """).query(Integer.class).single();
+                        """).query(String.class).list();
 
-        assertThat(elsewhere).isZero();
+        assertThat(elsewhere).isSubsetOf(GOLD_FIXTURE_TABLES);
     }
 
     // ------------------------------------------------------------------ the rules that matter
