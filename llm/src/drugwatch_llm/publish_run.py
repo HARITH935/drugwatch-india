@@ -71,7 +71,10 @@ def main(argv: list[str] | None = None) -> None:
     run_id = publish(args.run_name, info, adapter_dir)
 
     print(f"Logged run {args.run_name!r} -> {run_id}")
-    print(f"{mlflow.get_tracking_uri()}/#/experiments/0/runs/{run_id}")
+    # The run's own experiment, not a hardcoded 0: tracking.py logs to
+    # 'llm-extraction-fallback', so a fixed /experiments/0/ link opened the wrong page.
+    experiment_id = mlflow.get_run(run_id).info.experiment_id
+    print(f"{mlflow.get_tracking_uri()}/#/experiments/{experiment_id}/runs/{run_id}")
 
 
 if __name__ == "__main__":

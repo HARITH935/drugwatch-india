@@ -3,10 +3,8 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 10 — LLM Extraction.
-**Next:** step 4 is waiting on Harith: run `llm/notebooks/colab_train.ipynb` on **Kaggle** (Colab's
-free GPU allowance is used up; ADR 0019's third amendment), with `train.jsonl` attached as a private
-dataset and a T4 GPU. Then download the zip into `data/llm-training/runs/<run_name>/` and (Docker up)
-run `uv run --env-file ../.env python -m drugwatch_llm.publish_run <run_name>` from `llm/`.
+**Next:** step 5, the single-use test evaluation (both gates). Before it, a decision for Harith: CI has
+been red since the Phase 9 sign-off (backend Redis test plus one lint error; see Phase 10 step 4).
 
 ---
 
@@ -2794,8 +2792,7 @@ Face page before writing it down, not assumed from the name):
       text from the row; a well-formed-looking but never-printed date is rejected on grounding
       even though it parses as a valid date shape.
     - 10 new tests, 33 passing overall in `llm/`.
-- [~] **Step 4 — LoRA fine-tune, tracked in MLflow** (in progress, 2026-11-23: pipeline built and
-  proven at small scale; the real run needs Harith's hands in Colab, then `publish_run.py`)
+- [x] **Step 4 — LoRA fine-tune, tracked in MLflow** (2026-11-24, third attempt, on Kaggle)
     - `dataset.py`: loss-masked tokenization — the model is trained only to predict the JSON
       answer, with every prompt token labelled -100. 10 tests (4 need the real tokenizer,
       network-only, no weights).
@@ -2886,9 +2883,41 @@ Face page before writing it down, not assumed from the name):
       against a stand-in `/kaggle` tree before any GPU time was spent: the dataset was found at
       a nested path (768,578 bytes, 737 rows), and the saved `run_info.json` has every key
       `publish_run.py` reads.
-    - **Still to do:** Harith runs the notebook on Kaggle (about 40 minutes on a T4, going by the
-      first run); the zip comes back into `data/llm-training/runs/<run_name>/` and gets
-      published via `publish_run.py`; step 4 closes once that run is logged in MLflow.
+    - **Run without the browser (Harith's call, after an interactive Kaggle session sat idle
+      for 39 minutes on an error nobody could see):** the notebook is pushed with Kaggle's own CLI
+      (`kaggle kernels push --accelerator NvidiaTeslaT4 -t 7200`) as a **private** notebook,
+      polled until complete, and its output and full log fetched with `kaggle kernels output`.
+      The token lives in `~/.kaggle/`, outside the repo. The CLI is run through `uvx`, not added
+      to any project's dependencies (and it needs `--with six`, which it fails to declare).
+      `-t 7200` caps the run at two hours so a hang can't spend the weekly GPU quota.
+    - **Result**: `kaggle-20261124-043743`, Tesla T4. **556 examples** (181 of 737 dropped for
+      going over 512 tokens, same as the first run), **1,668 micro-batches in 38.6 min**
+      (1.39 s/example). **Loss 0.574 → 0.027** (mean 0.094), within a few thousandths of the
+      first, lost run (0.57 → 0.027), so the result reproduces on a second host. The adapter has
+      224 tensors (28 layers × 4 attention projections × LoRA A/B) and **2,179,072 trained
+      parameters**, on `Qwen/Qwen2.5-1.5B-Instruct`.
+    - 🔍 **The loss is flat from about step 840**, halfway through epoch 2: 0.033 at 840, 0.028
+      at 1,260, 0.027 at 1,660. The third epoch bought almost nothing on training loss, which is
+      also what overfitting would look like. Step 5's validation numbers, not this curve,
+      decide whether it matters.
+    - **Logged to MLflow**: experiment `llm-extraction-fallback` (id 2), run
+      `977340e5dae04eb885290c7f29aa3adb`. Applying Phase 7's lesson (`log_artifact` can report
+      success when nothing reached storage), the adapter was **downloaded back from MLflow and
+      SHA-256-compared: 6 of 6 files identical**.
+    - 🐛 `publish_run.py` printed a link to experiment **0**, but the run is in experiment 2. It
+      now reads the run's own `experiment_id`.
+    - 🐛 **My Kaggle commit (`2f8368d`) failed CI's `ruff format --check`** on one 101-character
+      line in the notebook. It ran fine; CI's format check failed on it. Reformatted.
+    - ⚠️ **CI has been red on `main` since the Phase 9 sign-off commit (`ac38e30`)**. The last green
+      run was `f7a5bee` (2026-11-13). Two failures predate Phase 10: (1) **backend**: at
+      `ac38e30` six test classes failed (`BatchSearchTest`, `AuthHttpTest`,
+      `PublicEndpointsTest`, `PublicApiHttpTest`, `AppSchemaTest`, `ApplicationSmokeTest`); by
+      `2f8368d` it is `AuthHttpTest.the_public_data_needs_no_account`, a 500 because step 6's
+      Redis cache tries `localhost:6380` and CI has no Redis. (2) **repo-checks**: `E501` at
+      `infra/superset/configure_embedding.py:28`. So Phase 9's done-when ("test suite passes in
+      CI") was not actually met when it was signed off. **Not fixed here.** It is Phase 9's code,
+      and whether to reopen Phase 9 is Harith's decision.
+
 - [ ] Step 5 — single-use test evaluation (both gates, `docs/llm-extraction-report.md`)
 - [ ] Step 6 — pipeline integration (fallback, `extraction_method = llm`, Airflow task, GE check)
 - [ ] Step 7 — CI (model-dependent tests skip without a model) and the done-when demo
@@ -3182,3 +3211,6 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-23 | 🐛 Colab renames a repeat upload (`train (1).jsonl`), so the upload cell reads the bytes it was given and ignores the name | `colab_train.ipynb` cell 4 |
 | 2026-11-23 | 🐛 Mounting Drive before saving lost a finished run when the mount failed. Now: local disk and zip first, then Drive and the download as guarded fallbacks | `colab_train.ipynb` cell 14 |
 | 2026-11-23 | One full training run uses about a day of Colab's free GPU allowance, so Kaggle Notebooks is a second host for the SAME notebook (private dataset in, `/kaggle/working` out, P100 refused) | Harith; ADR 0019 |
+| 2026-11-24 | Training runs through Kaggle's CLI (`kernels push --accelerator NvidiaTeslaT4 -t 7200`, private), polled and fetched without a browser; the token stays in `~/.kaggle/`, the CLI is used via `uvx` and not added to any project | Harith; PROGRESS Phase 10 step 4 |
+| 2026-11-24 | Step 4 done: 556 examples, 1,668 micro-batches in 38.6 min on a T4, loss 0.574 → 0.027 (reproduces the lost first run); MLflow run 977340e5…, adapter read back 6/6 SHA-256 identical | MLflow `llm-extraction-fallback` |
+| 2026-11-24 | ⚠️ CI red on `main` since `ac38e30` (Phase 9 sign-off): backend Redis test + `E501` in `configure_embedding.py`. Phase 9's "passes in CI" was not met at sign-off. Reported, not fixed | PROGRESS Phase 10 step 4 |
