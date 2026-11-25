@@ -20,9 +20,13 @@ if (existsSync(rootEnv)) {
 }
 
 const nextConfig: NextConfig = {
-  // Next.js 16's data model: every server-side fetch is either cached or explicitly dynamic.
-  cacheComponents: true,
-  partialPrefetching: true,
+  // Cache Components (Partial Prerendering) was tried and reverted - ADR 0020's amendment
+  // explains why: on this version, a dynamic-segment page's notFound() answers HTTP 200 once
+  // the page has started streaming, which an unknown drug/manufacturer id hits on every route
+  // that has one. Classic dynamic rendering gives a correct 404 and costs this project almost
+  // nothing, since nearly every page here needs live backend data anyway - there is no
+  // meaningful static shell to prerender in the first place.
+  cacheComponents: false,
   poweredByHeader: false, // don't advertise the framework and version in every response
   // This app is the project root, stated rather than guessed: Next.js otherwise walks upwards
   // looking for lockfiles, and found an unrelated one in the home folder on this Mac.

@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import type { Finding } from "@/lib/backend";
 import { formatAlertMonth } from "@/lib/format";
 import { Badge } from "@/components/ui/Badge";
@@ -42,7 +44,18 @@ export function FindingCard({ finding }: { finding: Finding }) {
         ) : (
           <>
             <dt className="text-muted-foreground">Manufacturer</dt>
-            <dd>{finding.manufacturerName ?? "Not stated in the alert"}</dd>
+            <dd>
+              {finding.manufacturerId && finding.manufacturerName ? (
+                <Link
+                  href={`/manufacturers/${finding.manufacturerId}`}
+                  className="text-accent-foreground underline underline-offset-2"
+                >
+                  {finding.manufacturerName}
+                </Link>
+              ) : (
+                (finding.manufacturerName ?? "Not stated in the alert")
+              )}
+            </dd>
           </>
         )}
 

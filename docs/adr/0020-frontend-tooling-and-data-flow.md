@@ -93,3 +93,51 @@ to Superset (already approved). Nothing extra to approve, and less JavaScript on
 - Phase 12 inherits a server that needs `BACKEND_URL` set, and a site whose security relies on the
   browser never seeing a token - so the Phase 12 reverse proxy must forward cookies, and must not
   expose Spring's port publicly.
+
+## Amendment, 2026-11-25 — Cache Components (Partial Prerendering) tried and reverted
+
+**Context.** Step 0 enabled `cacheComponents: true` (Next.js 16's Partial Prerendering) without
+yet having a dynamic-segment route (`/drugs/[id]`, `/manufacturers/[id]`) to test it against.
+Step 3 added those routes, each calling `notFound()` for an id the backend's `NotFoundException`
+rejects - and found a real correctness defect: once a page has started streaming under PPR (even
+behind a Suspense boundary added specifically to satisfy PPR's own build-time requirement),
+`notFound()` still renders the right "Not found" body, but the HTTP status stays **200**, because
+the status line was already sent before the dynamic content resolved. Verified directly: a known
+unknown drug id answered `200` under PPR and `404` once PPR was disabled for that page, with no
+other change.
+
+**Things tried first, in order, before concluding this wasn't fixable per-route:**
+1. A route-level `export const instant = false` - Next's own compiler error message names this as
+   a fix ("[block] Set `export const instant = false` to allow a blocking route"). Confirmed real
+   (the build errors if you reference it without `cacheComponents` enabled at all), but it did not
+   change the runtime status code - still 200 on a known-unknown id, with or without it.
+2. A minimal, isolated reproduction (`/nf-test2/[id]`, no backend, just `params` and a conditional
+   `notFound()`) to rule out anything specific to this project's own fetch/error-handling code.
+   Same result: 200 regardless of `instant`.
+
+**Decision: disable `cacheComponents` for the whole app**, not just the affected routes. A 200
+instead of a 404 is a real defect for pages whose entire purpose is "does this id exist" - search
+engines would index them as found, monitoring would miscount errors, and the status line is
+meant to be load-bearing. Scoping the fix to just two routes was considered and rejected: nearly
+every page in this app needs live, request-time backend data (ADR 0020's own decision: never
+cached in Next.js), so there is no meaningful static shell anywhere for PPR to prerender in the
+first place - the one page with genuinely cacheable content (the header text on `/`) streams its
+dynamic part via an ordinary Suspense boundary, which works identically with or without PPR, since
+streaming SSR is a core React/Next.js feature and not itself a Cache Components concept. Turning
+PPR off costs this project nothing measurable and removes a live correctness bug.
+
+**What changed:** `cacheComponents: true` and `partialPrefetching: true` removed from
+`next.config.ts` (the latter requires the former). Every `export const instant = false` and the
+PPR-only Suspense wrapping added purely to satisfy the build (not for genuine independent
+streaming) were removed from `/batches/search`, `/drugs/[id]`, `/drugs/search` and
+`/manufacturers/[id]`, returning them to plain `async` server components. `connection()` calls
+were left in place as an explicit, harmless statement of intent ("this is deliberately dynamic"),
+though classic dynamic rendering no longer requires them. The genuinely useful Suspense boundaries
+- the home page's `LatestAlerts` and the manufacturer page's `RiskSection`, both independent,
+slower, separately-failing fetches - were kept exactly as they were.
+
+**Consequence:** every route is now `ƒ` (server-rendered on demand) rather than `◐` (Partial
+Prerender) in Next's build output. Verified unaffected: all 24 e2e tests, all 37 unit/contract
+tests, and a real run against the live backend for every page (home, batch result in all three
+outcomes, drug page, manufacturer page with both risk-score states, drug search, and real 404s
+for both id-based routes with the correct HTTP status this time).

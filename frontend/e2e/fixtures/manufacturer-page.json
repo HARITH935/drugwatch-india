@@ -1,0 +1,22 @@
+{
+  "manufacturer": {
+    "manufacturerId": "m1",
+    "name": "Marvex Labs",
+    "state": "Himachal Pradesh",
+    "firstAlertMonth": "2026-03",
+    "lastAlertMonth": "2026-03",
+    "reportedBatches": 1,
+    "alertMonths": 1,
+    "distinctMedicines": 1
+  },
+  "medicines": [
+    {
+      "drugId": "d1",
+      "productName": "Zyntophil Tablets 500 mg",
+      "reportedBatches": 1,
+      "lastAlertMonth": "2026-03"
+    }
+  ],
+  "meaning": "These are batches of this company's medicines that a government laboratory reported. Each finding is about one tested batch.",
+  "disclaimer": "Not medical advice. Data from CDSCO public alerts."
+}

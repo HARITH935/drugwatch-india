@@ -1,0 +1,12 @@
+{
+  "manufacturerId": "m1",
+  "name": "Marvex Labs",
+  "available": true,
+  "score": 0.42,
+  "featuresAsOfMonth": "2026-09",
+  "modelHasSeenThisCompany": true,
+  "explanation": ["Mainly batches reported in the last 24 months raises it."],
+  "accuracyNote": "The model was trained on this company's earlier history, which is the group it predicts best.",
+  "meaning": "This estimates the chance that a batch from this company is named in a CDSCO alert in the next six months. It reflects reporting history, not the quality of the company's medicines.",
+  "disclaimer": "Not medical advice. Data from CDSCO public alerts."
+}

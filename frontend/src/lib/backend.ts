@@ -105,3 +105,96 @@ export function searchBatch(drug: string, batch: string): Promise<BatchSearchRes
   const query = new URLSearchParams({ drug, batch });
   return backendGet<BatchSearchResult>(`/api/v1/batches/search?${query}`);
 }
+
+/** DrugSummary.java */
+export type DrugSummary = {
+  drugId: string;
+  productName: string;
+  genericName: string | null;
+  dosageForm: string | null;
+  strengths: string[];
+  drugClasses: string[];
+  findings: number;
+  firstAlertMonth: string;
+  lastAlertMonth: string;
+};
+
+/** DrugService.DrugPage (GET /api/v1/drugs/{id}) */
+export type DrugPage = {
+  drug: DrugSummary;
+  findings: Finding[];
+  meaning: string;
+  disclaimer: string;
+};
+
+/** DrugService.DrugSearchResult (GET /api/v1/drugs/search) */
+export type DrugSearchResult = {
+  query: string;
+  matches: DrugSummary[];
+  note: string; // same-medicine-different-spelling caveat - rendered verbatim, never reworded
+  disclaimer: string;
+};
+
+export function getDrug(id: string): Promise<DrugPage> {
+  return backendGet<DrugPage>(`/api/v1/drugs/${encodeURIComponent(id)}`);
+}
+
+export function searchDrugs(q: string, limit = 20): Promise<DrugSearchResult> {
+  const query = new URLSearchParams({ q, limit: String(limit) });
+  return backendGet<DrugSearchResult>(`/api/v1/drugs/search?${query}`);
+}
+
+/** ManufacturerService.Manufacturer */
+export type Manufacturer = {
+  manufacturerId: string;
+  name: string;
+  state: string | null;
+  firstAlertMonth: string;
+  lastAlertMonth: string;
+  reportedBatches: number;
+  alertMonths: number;
+  distinctMedicines: number;
+};
+
+/** ManufacturerService.ReportedMedicine - a different shape from AlertService's, despite the name. */
+export type ManufacturerMedicine = {
+  drugId: string;
+  productName: string;
+  reportedBatches: number;
+  lastAlertMonth: string;
+};
+
+/** ManufacturerService.ManufacturerPage (GET /api/v1/manufacturers/{id}) */
+export type ManufacturerPage = {
+  manufacturer: Manufacturer;
+  medicines: ManufacturerMedicine[];
+  meaning: string;
+  disclaimer: string;
+};
+
+export function getManufacturer(id: string): Promise<ManufacturerPage> {
+  return backendGet<ManufacturerPage>(`/api/v1/manufacturers/${encodeURIComponent(id)}`);
+}
+
+/** RiskService.RiskResult (GET /api/v1/manufacturers/{id}/risk).
+ *
+ * `available` is false for TWO distinct reasons the backend tells apart only in `meaning`'s
+ * wording, never in a separate field: no reporting history at all ("not scoreable"), or the
+ * scoring service being down right now ("unavailable"). The frontend doesn't need to tell them
+ * apart either - both cases render the same way, `meaning` alone, with no numeric score. */
+export type RiskResult = {
+  manufacturerId: string;
+  name: string;
+  available: boolean;
+  score: number | null;
+  featuresAsOfMonth: string | null;
+  modelHasSeenThisCompany: boolean | null;
+  explanation: string[]; // plain-English SHAP sentences, already in CLAUDE.md §6's approved wording
+  accuracyNote: string | null;
+  meaning: string; // CLAUDE.md §6: "say so wherever it is shown" - rendered with the score, always
+  disclaimer: string;
+};
+
+export function getRiskScore(manufacturerId: string): Promise<RiskResult> {
+  return backendGet<RiskResult>(`/api/v1/manufacturers/${encodeURIComponent(manufacturerId)}/risk`);
+}

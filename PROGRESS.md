@@ -3,8 +3,8 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 11 — Frontend. The public Next.js website.
-**Next:** step 3 - the drug page and manufacturer page, including the risk score, its explanation
-and the "reporting history, not true quality" caveat.
+**Next:** step 4 - auth: register, verify, login, logout, refresh, with the JWTs kept in httpOnly
+cookies (decision B).
 
 ---
 
@@ -3306,7 +3306,49 @@ replies can take weeks. The draft is already written.
     - 11 new unit/contract tests (two new files) + 2 new live-contract checks + 4 new e2e specs
       (×2 viewport sizes). 26 unit/contract tests, 14 e2e tests, all passing against the real
       build and the real backend.
-- [ ] Step 3 — drug page and manufacturer page (risk score + explanation + its caveat)
+- [x] **Step 3 — drug page, manufacturer page, and the risk score** (2026-11-25)
+    - **Every scenario checked against the LIVE backend with real archive data first**: a drug
+      page, a manufacturer page, a manufacturer the model saw in training and one it didn't
+      (PR-AUC 0.438 vs 0.269 - the model card's largest caveat, surfaced directly), a 404 for
+      both id types, and drug search including the "same medicine, different spellings, not
+      merged" note.
+    - **`RiskScoreCard` is the one component built to make CLAUDE.md §6 structurally
+      impossible to violate**: there is exactly one return path that renders a score number, and
+      the caveat sentence is in the same JSX, not a sibling a page could choose to omit.
+      Mutation-checked: hiding the caveat behind `!result.available` broke the test built to
+      catch exactly that, confirmed, then reverted.
+    - **The risk score streams in its own Suspense boundary**, separate from the manufacturer's
+      core data - proven for real, not just argued: a transient slowdown on the model service
+      (SHAP/MLflow cold-start, ~1.5 s on a first call) showed the "temporarily unavailable"
+      fallback while the rest of the page rendered correctly, then a retry showed the full score
+      - exactly the "everything else is unaffected" promise `RiskController` makes.
+    - 🐛🔍 **A real correctness bug found and fixed, not papered over**: Cache Components
+      (enabled at step 0) made `notFound()` answer HTTP 200 instead of 404 on a dynamic segment,
+      once any Suspense boundary had already started streaming - confirmed with a minimal,
+      backend-free reproduction, confirmed that the compiler's own suggested fix
+      (`export const instant = false`) does not change the runtime status either. **Decision:
+      disable Cache Components app-wide** (ADR 0020 amendment) rather than patch two routes -
+      nearly every page here needs live, per-request data anyway, so PPR's actual benefit to
+      this project was never more than the two lines it just cost. Every route is now `ƒ`
+      (plain dynamic rendering); the genuinely useful Suspense boundaries (home's latest alerts,
+      the risk score) were kept, and the PPR-only ceremony (`instant`, defensive Suspense
+      wrapping on search pages) was removed. Verified: a known-unknown id now answers a real 404.
+    - **Finding → manufacturer navigation wired through `FindingCard`**, so a batch result,
+      a drug page's findings, and (later) anywhere else a `Finding` renders all link to the same
+      manufacturer page without each needing its own logic.
+    - **One e2e flow threads through every page this step added**: a flagged batch result's
+      manufacturer link → the manufacturer page (with its risk score) → a medicine link → the
+      drug page → its source link - proving the pages connect, not just that each renders alone.
+      Also real 404s for both id types, and the header's "Find a medicine" search.
+    - 🐛 **A real test-flakiness bug, not a product bug**: the header's search flow intermittently
+      filled the WRONG form, because "Medicine name" labels both `BatchSearchForm` (home) and
+      `DrugSearchForm` (search) - a client-side navigation that hadn't yet landed meant
+      `getByLabel` could still match the old page's identically-labelled field. Fixed by waiting
+      for the URL itself, not just the triggering click; confirmed stable across 3 full runs.
+    - 11 new unit tests (4 files) + 10 new e2e tests (2 files, ×2 viewports) + 1 new stub route
+      set (drug/manufacturer/risk fixtures, id-aware 404s mirroring the real
+      `NotFoundException` messages). 37 unit/contract tests, 24 e2e tests, all passing against
+      the real build and the real backend.
 - [ ] Step 4 — auth: register, verify, login, logout, refresh (httpOnly cookies)
 - [ ] Step 5 — watchlist page (+ the notification-history endpoint)
 - [ ] Step 6 — dashboards page: Superset embedded SDK, guest tokens refreshed before expiry
@@ -3628,3 +3670,7 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-25 | Step 2: all three batch-search outcomes (flagged/not-found/not-searchable), a validation error, and a real spurious+non-spurious pair for one batch, checked against the live backend with real archive data before any unit test was written | `BatchResult.tsx`, PROGRESS |
 | 2026-11-25 | The spurious rule enforced twice, not once: `Finding.java`'s constructor AND `FindingCard.tsx` both refuse to render a manufacturer on a spurious row - mutation-checked (disabled the component's own check, confirmed its test fails) | `FindingCard.tsx`, `FindingCard.test.tsx` |
 | 2026-11-25 | The plan's required search → result e2e flow (§14) runs through the real `<form>`, no client JS, landing on a real bookmarkable URL; `e2e/stub-backend.mjs` gained query-aware routing to serve it | `e2e/batch-search.spec.ts` |
+| 2026-11-25 | 🐛🔍 Cache Components made `notFound()` answer HTTP 200 instead of 404 on a dynamic segment once streaming had started - confirmed with a minimal, backend-free repro, confirmed the compiler's own suggested `instant` fix doesn't change it either. Disabled app-wide rather than patched per-route: nearly every page here needs live data anyway, so PPR bought this project nothing | ADR 0020 amendment |
+| 2026-11-25 | `RiskScoreCard` makes CLAUDE.md §6 structurally impossible to violate: one return path renders a score, the caveat is in the same JSX, not a sibling a page could omit. Mutation-checked | `RiskScoreCard.tsx`, `.test.tsx` |
+| 2026-11-25 | 🐛 Flaky e2e test, not a product bug: "Medicine name" labels both search forms, so filling before a client-side navigation actually landed could fill the OLD page's field. Fixed by waiting for the URL itself; stable across 3 full runs | `e2e/drug-and-manufacturer.spec.ts` |
+| 2026-11-25 | A transient ~1.5s model-service slowdown showed the risk score's "temporarily unavailable" fallback live, with the rest of the manufacturer page unaffected, then a retry showed the real score - the backend's own design promise, observed actually holding | PROGRESS Phase 11 step 3 |

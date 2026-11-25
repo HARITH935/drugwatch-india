@@ -1,0 +1,31 @@
+{
+  "drug": {
+    "drugId": "d1",
+    "productName": "Zyntophil Tablets 500 mg",
+    "genericName": "Zyntophilin",
+    "dosageForm": "Tablet",
+    "strengths": ["500 mg"],
+    "drugClasses": ["Analgesic"],
+    "findings": 1,
+    "firstAlertMonth": "2026-03",
+    "lastAlertMonth": "2026-03"
+  },
+  "findings": [
+    {
+      "batchNumber": "TB-1201",
+      "alertMonth": "2026-03",
+      "productName": "Zyntophil Tablets 500 mg",
+      "failureReason": "Assay",
+      "failureCategories": ["Assay"],
+      "spurious": false,
+      "nameOnPack": null,
+      "manufacturerId": "m1",
+      "manufacturerName": "Marvex Labs",
+      "reportedBy": "DTL, Shimla",
+      "labType": "State",
+      "sourceUrl": "https://cdsco.example.invalid/alert.pdf"
+    }
+  ],
+  "meaning": "This finding applies to one specific batch that a laboratory tested. It is not a statement about the product in general or about the company.",
+  "disclaimer": "Not medical advice. Data from CDSCO public alerts."
+}
