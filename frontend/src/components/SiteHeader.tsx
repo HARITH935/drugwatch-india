@@ -11,11 +11,11 @@ export async function SiteHeader() {
 
   return (
     <header className="border-b border-border bg-card">
-      <div className="mx-auto flex h-16 max-w-3xl items-center justify-between gap-4 px-4">
+      <div className="mx-auto flex min-h-16 max-w-3xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
         <Link href="/" className="text-lg font-semibold text-foreground">
           DrugWatch India
         </Link>
-        <div className="flex items-center gap-4 text-sm">
+        <div className="flex flex-wrap items-center gap-4 text-sm">
           <Link
             href="/drugs/search"
             className="text-accent-foreground underline underline-offset-2"

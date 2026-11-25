@@ -3513,8 +3513,21 @@ replies can take weeks. The draft is already written.
       meaningfully mocked in jsdom (it's a real iframe); that part is verified only against the
       live stack, as above. 54 frontend unit/contract tests, 52 e2e tests, 214 backend tests - all
       green on a clean run.
+    - 🐛🔍 **CI caught a real regression this session's local runs never did**: the frontend job
+      failed on `main` - the new "Dashboards" header link pushed the mobile nav over one line's
+      width, and `e2e/home.spec.ts`'s "nothing is wider than the screen" test (passing since step
+      0) failed with 11px of horizontal overflow. Never reproduced locally even once, because
+      macOS's `-apple-system` renders these labels more compactly than whatever CI's Linux runner
+      falls back to in the same `system-ui, -apple-system, ...` stack - confirmed by forcing a
+      wider fallback font locally and reproducing 0 overflow only after the fix, never before it
+      was possible to check sitting at a Mac. Root cause: the header's nav div had no `flex-wrap`,
+      so a fixed `h-16` plus unwrapped links had nowhere to go but sideways once a fifth link
+      didn't fit. Fixed (`flex-wrap`, `min-h-16` so wrapped content isn't clipped); the second
+      failure CI reported (`auth.spec.ts`'s login/logout test timing out) was the same cramped
+      layout making the header's own buttons intermittently non-interactable, not a separate bug -
+      it passed cleanly once the overflow was fixed too. Re-verified with a forced wide fallback
+      font (0px overflow) and the full suite at CI's exact worker count (52/52).
 - [ ] Step 7 — About & Methodology, mobile + accessibility pass, the Phase 11 done-when demo
-- [ ] Step 7 — About & Methodology, mobile + accessibility pass, the done-when demo
 
 **Done when:** all pages work against the live backend on desktop and mobile.
 
@@ -3850,3 +3863,4 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-25 | Embedding is an iframe the browser loads directly, which decision B's "browser's one backend" rule was never written to cover - a deliberate, narrow, documented exception (`NEXT_PUBLIC_SUPERSET_URL`), not a quiet violation of it | ADR 0020 amendment |
 | 2026-11-25 | 🐛 No try/catch around `embedDashboard()` itself - found running it in a real browser, not by review. An unhandled rejection with no visible fallback, fixed and mutation-tested (reverted, confirmed the new test fails, restored) | `DashboardEmbed.tsx` |
 | 2026-11-25 | 🐛🔍 Phase 6's `configure_public_role.py` never granted `can_read on CurrentUserRestApi`, because nothing before step 6 had ever loaded a real embedded dashboard in a real browser to discover Superset's own bootstrap needs it. Found via the container's logs, fixed, re-verified with a real dashboard's real content rendering | `infra/superset/configure_public_role.py` |
+| 2026-11-25 | 🐛🔍 CI (not this Mac) caught a real mobile overflow regression: a 5th header link needed `flex-wrap`, which macOS's `-apple-system` font happened to never expose locally - confirmed by forcing a wide fallback font and reproducing 0px overflow only after the fix | `SiteHeader.tsx` |
