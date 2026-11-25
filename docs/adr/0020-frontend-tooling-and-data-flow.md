@@ -169,3 +169,19 @@ one thing `BACKEND_URL`-side validation protects - never by a client supplying a
 (`/api/dashboards/[key]/guest-token`), the first in this project, proxying to Spring exactly as
 every Server Component already does; the only genuinely new browser-to-third-party traffic is the
 iframe itself.
+
+## Amendment, 2026-11-25 — `@axe-core/playwright` added for the accessibility pass
+
+Step 7's accessibility pass needed real, repeatable WCAG checks rather than eyeballing contrast
+and tab order by hand - the same reasoning that put Vitest and Playwright in this ADR rather than
+a manual test plan. `@axe-core/playwright` is pinned at **4.14.0** (released 2026-10-15; 4.14.1
+exists but was five days old when this was written, inside the 14-day floor), run as one
+`e2e/accessibility.spec.ts` test per real page, tagged `wcag2a`/`wcag2aa`/`wcag21a`/`wcag21aa` -
+the same bar step 1's design tokens were computed against. The dashboards page excludes the
+embedded `iframe` from the scan: it is Superset's own cross-origin page, not this project's code,
+and Playwright's automation access can reach inside a cross-origin frame in a way an ordinary
+browser tab's own script never could - scanning it would fail on someone else's UI and behave
+differently between a dev machine (a real Superset) and CI (nothing at that address). All 16 real
+pages plus the logged-in watchlist passed with zero violations on both viewports on the first
+real run - evidence that step 1's token-level contrast work and the semantic HTML used throughout
+this phase held up end to end, not just in isolation.

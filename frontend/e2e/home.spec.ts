@@ -16,11 +16,6 @@ test("every page carries the disclaimer (CLAUDE.md §6)", async ({ page }) => {
   await expect(page.getByText("Not medical advice. Data from CDSCO public alerts.")).toBeVisible();
 });
 
-test("nothing is wider than the screen", async ({ page }) => {
-  // A sideways scroll on a phone is the most common way a "responsive" page quietly isn't.
-  await page.goto("/");
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  );
-  expect(overflow).toBe(0);
-});
+// "nothing is wider than the screen" now runs for every real page, not just this one -
+// e2e/accessibility.spec.ts, added step 7 after this exact check caught a CI-only regression
+// that never reproduced on a Mac.

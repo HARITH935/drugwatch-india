@@ -3,7 +3,8 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 11 — Frontend. The public Next.js website.
-**Next:** step 7 - About & Methodology, mobile + accessibility pass, the Phase 11 done-when demo.
+**Next:** Phase 11's 7 steps are all complete and its done-when is demonstrated - awaiting sign-off
+to start Phase 12 (Deploy & harden).
 
 ---
 
@@ -3527,9 +3528,59 @@ replies can take weeks. The draft is already written.
       layout making the header's own buttons intermittently non-interactable, not a separate bug -
       it passed cleanly once the overflow was fixed too. Re-verified with a forced wide fallback
       font (0px overflow) and the full suite at CI's exact worker count (52/52).
-- [ ] Step 7 — About & Methodology, mobile + accessibility pass, the Phase 11 done-when demo
+- [x] **Step 7 — About & Methodology, mobile + accessibility pass, the Phase 11 done-when demo** (2026-11-25)
+    - **About & Methodology page** (`/about`, linked from every page's footer, not the header -
+      a deliberate IA choice given the header's own recent overflow lesson): written from the
+      real, already-measured numbers in `docs/model-card.md`, `docs/analytics-findings.md` and
+      `docs/llm-extraction-report.md`, not approximated - 7,126 findings across 101 published
+      months; the testing-effort-not-falling-quality correlation (r = 0.964); the risk score's
+      own honest limitations (statistically tied with logistic regression, PR-AUC 0.438 vs 0.269
+      for companies absent from training); and the LLM fallback's real outcome, stated plainly:
+      **built, measured, and not shipped**, with exactly why (it scored worse than the parser on
+      both pre-agreed gates, and corrupted real batch numbers on manual audit).
+    - **Decision, asked rather than assumed**: CLAUDE.md requires approval before any new
+      library. Asked whether the accessibility pass should add `@axe-core/playwright` (real,
+      repeatable WCAG checks, enforced in CI going forward) or stay manual - approved the former.
+      Pinned at **4.14.0** (released 2026-10-15; 4.14.1 existed but was 5 days old, inside the
+      14-day floor from ADR 0020's own pinning rule).
+    - **The accessibility pass, for real**: one `e2e/accessibility.spec.ts` test per real page
+      (16 pages + the logged-in watchlist), tagged `wcag2a`/`wcag2aa`/`wcag21a`/`wcag21aa` - the
+      same bar step 1's design tokens were computed against. **Zero violations, on the first real
+      run, on both viewports** - evidence that step 1's real contrast math and the semantic HTML
+      used throughout this phase held up end to end, not just in isolation. The dashboards page
+      excludes the embedded `iframe` from the scan: it's Superset's own cross-origin page, not
+      this project's code, and Playwright's automation access can reach inside it in a way an
+      ordinary browser tab's own script never could.
+    - **The mobile overflow check, generalised rather than left as one example**: step 6's CI-only
+      regression (PROGRESS.md, previous entry) showed that "nothing is wider than the screen" is
+      exactly the kind of check that only reproduces under CI's font metrics - so it now runs for
+      every real page (added to the same spec, replacing `home.spec.ts`'s single original
+      instance), rather than trusting that one page still generalises to all of them. All clean.
+    - 🐛🔍 **A real bug this step's own screenshot evidence caught**: the About page rendered its
+      own `<Disclaimer />` at the bottom, on top of the root layout's footer one that's on every
+      page already - visibly duplicated in a mobile screenshot taken for this very writeup, not
+      found by any automated check (a page having its disclaimer *twice* violates nothing CLAUDE.md
+      §6 or axe actually tests for). Removed the page's own copy; confirmed by counting the
+      rendered text node (1, not 2) rather than trusting a grep of the raw HTML, which doubles-
+      counts due to Next.js's hydration payload repeating all page text verbatim in a script tag -
+      a red herring chased down before concluding anything from it.
+    - **The done-when demo, against the real backend, not the stub**: built and ran the production
+      server with `BACKEND_URL`/`NEXT_PUBLIC_SUPERSET_URL` pointed at the live stack. Every real
+      page (home, batch checker flagged/not-found, drug search, a real drug page, a real
+      manufacturer page with its risk score, a real 404, login, register, the logged-out
+      watchlist, dashboards, about) returned the correct status with zero horizontal overflow, on
+      both a desktop and a Pixel 7 viewport, using real data (Paracetamol / Navkar Lifesciences /
+      batch TF3059A, 37% risk score) rather than fixtures. The full account lifecycle - register →
+      a real Mailpit email → verify → log in → add a real watch → remove it → log out - passed
+      end to end against the real backend, Postgres and Mailpit.
+    - 🔍 **The exact same local Superset-login-under-load timeout (on record since step 5)
+      surfaced one more time while demoing register** - confirmed transient again with a direct
+      curl showing the real endpoint healthy seconds later, not a new finding.
 
-**Done when:** all pages work against the live backend on desktop and mobile.
+**Done when:** all pages work against the live backend on desktop and mobile. **Demonstrated**
+2026-11-25 - every page above, both viewports, real backend data, zero overflow, zero
+accessibility violations. Phase 11 steps are complete; awaiting Harith's sign-off to close the
+phase, per this project's own rule that a phase closes only when its owner says so.
 
 ---
 
@@ -3864,3 +3915,7 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-25 | 🐛 No try/catch around `embedDashboard()` itself - found running it in a real browser, not by review. An unhandled rejection with no visible fallback, fixed and mutation-tested (reverted, confirmed the new test fails, restored) | `DashboardEmbed.tsx` |
 | 2026-11-25 | 🐛🔍 Phase 6's `configure_public_role.py` never granted `can_read on CurrentUserRestApi`, because nothing before step 6 had ever loaded a real embedded dashboard in a real browser to discover Superset's own bootstrap needs it. Found via the container's logs, fixed, re-verified with a real dashboard's real content rendering | `infra/superset/configure_public_role.py` |
 | 2026-11-25 | 🐛🔍 CI (not this Mac) caught a real mobile overflow regression: a 5th header link needed `flex-wrap`, which macOS's `-apple-system` font happened to never expose locally - confirmed by forcing a wide fallback font and reproducing 0px overflow only after the fix | `SiteHeader.tsx` |
+| 2026-11-25 | Step 7: asked before adding `@axe-core/playwright` rather than assuming approval, per CLAUDE.md's "any other library needs approval first" - approved, pinned at the newest release ≥14 days old (4.14.0; 4.14.1 was 5 days old) | `docs/adr/0020` amendment |
+| 2026-11-25 | Zero WCAG 2.1 A/AA violations across every real page on the first real `axe` run, both viewports - the real evidence that step 1's computed contrast ratios and the semantic HTML used throughout this phase generalise, not just an isolated claim | `e2e/accessibility.spec.ts` |
+| 2026-11-25 | 🐛 The About page duplicated the root layout's own `<Disclaimer/>` - caught by eye in a screenshot taken for this writeup, not by any automated check, since "shown twice" breaks no rule CLAUDE.md or axe tests for. Fixed; verified by counting the rendered text node, not grepping raw HTML (which double-counts via Next's hydration payload) | `about/page.tsx` |
+| 2026-11-25 | The About & Methodology link went in the footer, not the header, on purpose - step 6's own overflow regression was caused by adding one more header link, and the lesson was applied immediately rather than repeated | `layout.tsx` |

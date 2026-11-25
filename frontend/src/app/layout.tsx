@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { Disclaimer } from "@/components/Disclaimer";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -17,8 +18,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <SiteHeader />
         {children}
         <footer className="border-t border-border px-4 py-6">
-          <div className="mx-auto max-w-3xl">
+          <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-x-4 gap-y-2">
             <Disclaimer />
+            <Link
+              href="/about"
+              className="text-sm text-accent-foreground underline underline-offset-2"
+            >
+              About &amp; Methodology
+            </Link>
           </div>
         </footer>
       </body>
