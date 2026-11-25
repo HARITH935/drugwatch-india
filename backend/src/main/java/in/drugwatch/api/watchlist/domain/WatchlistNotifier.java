@@ -95,7 +95,7 @@ public class WatchlistNotifier {
                 The CDSCO alert for %s reports %d batch%s whose medicine name matches it.
 
                 See the details, including the batch numbers and a link to the original CDSCO
-                document: %s/search?q=%s
+                document: %s/drugs/search?q=%s
 
                 %s
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { batches, formatAlertMonth, formatCount } from "./format";
+import { batches, formatAlertMonth, formatCount, formatDate } from "./format";
 
 describe("formatAlertMonth", () => {
   it("turns an alert month into words", () => {
@@ -15,6 +15,13 @@ describe("formatAlertMonth", () => {
   it("leaves anything that isn't a month alone rather than guessing", () => {
     expect(formatAlertMonth("2026-13")).toBe("2026-13");
     expect(formatAlertMonth("not a month")).toBe("not a month");
+  });
+});
+
+describe("formatDate", () => {
+  it("renders an instant in IST, not the server's own time zone", () => {
+    // 2026-11-25T19:00:00Z is already 2026-11-26 00:30 IST - the trap this test is for.
+    expect(formatDate("2026-11-25T19:00:00Z")).toBe("26 November 2026");
   });
 });
 

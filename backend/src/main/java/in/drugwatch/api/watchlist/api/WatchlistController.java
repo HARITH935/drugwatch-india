@@ -63,6 +63,18 @@ public class WatchlistController {
         return watchlist.add(userId(token), request.term());
     }
 
+    @Operation(summary = "Notifications already sent to this account")
+    @GetMapping("/notifications")
+    public Map<String, Object> notifications(@AuthenticationPrincipal Jwt token) {
+        List<WatchlistService.Notification> notifications = watchlist.listNotifications(userId(token));
+        return Map.of(
+                "notifications",
+                notifications,
+                "note",
+                "Each one is an alert month where a watch matched. For the batch numbers and a link"
+                        + " to the original CDSCO document, search the medicine name.");
+    }
+
     @Operation(summary = "Stop watching a term")
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)

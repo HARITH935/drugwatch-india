@@ -16,6 +16,17 @@ export function formatAlertMonth(month: string): string {
   }).format(date);
 }
 
+/** An ISO instant (Java's `Instant.toString()`) -> "25 November 2026", in IST - fixed rather
+ * than the server's own time zone, so the date doesn't depend on where this happens to run. */
+export function formatDate(iso: string): string {
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Asia/Kolkata",
+  }).format(new Date(iso));
+}
+
 /** Indian digit grouping: 7126 -> "7,126", 150000 -> "1,50,000". */
 export function formatCount(n: number): string {
   return n.toLocaleString("en-IN");

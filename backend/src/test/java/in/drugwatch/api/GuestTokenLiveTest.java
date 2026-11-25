@@ -58,11 +58,7 @@ class GuestTokenLiveTest {
         // Decoded rather than taken on trust: a token that happened to carry every dashboard, or
         // a role with write permissions, would still look like a working token from outside.
         var token = tokens.tokenFor("states");
-        String payload = new String(Base64.getUrlDecoder()
-                .decode(token.token()
-                        .split("\\.")[1]
-                        .concat("==")
-                        .substring(0, (token.token().split("\\.")[1].length() / 4) * 4)));
+        String payload = decodeJwtPayload(token.token());
 
         assertThat(payload).contains("\"type\":\"guest\"");
         assertThat(payload).contains(System.getenv("SUPERSET_DASHBOARD_STATES"));
@@ -75,13 +71,28 @@ class GuestTokenLiveTest {
         // The guest is anonymous. If the token named the service account, Superset would resolve
         // it to that user's roles rather than the read-only EmbeddedViewer role.
         var token = tokens.tokenFor("states");
-        String payload = new String(Base64.getUrlDecoder()
-                .decode(token.token()
-                        .split("\\.")[1]
-                        .concat("==")
-                        .substring(0, (token.token().split("\\.")[1].length() / 4) * 4)));
+        String payload = decodeJwtPayload(token.token());
 
         assertThat(payload).contains("guest");
         assertThat(payload).doesNotContain(System.getenv("SUPERSET_EMBED_USERNAME"));
+    }
+
+    /**
+     * The JWT's middle segment, base64url-decoded.
+     *
+     * <p>{@code Base64.getUrlDecoder()} needs the segment padded to a multiple of 4 - but padding
+     * to the number of {@code =} characters the segment is actually missing, not blindly
+     * appending {@code "=="} and then trimming back to a multiple of 4 of the ORIGINAL (unpadded)
+     * length. That trim point is 2 or 3 characters short of the real padded length whenever the
+     * segment's length is 2 or 3 mod 4 - the common case - silently dropping real trailing bytes
+     * of the payload (the token's last field, {@code "type":"guest"}, missing its closing brace)
+     * rather than failing loudly. Found because it flaked: the token's `iat`/`exp` are
+     * variable-width floating-point timestamps, so the segment's length mod 4 differs run to run,
+     * and only the 25% of runs where it was already 0 mod 4 happened to decode correctly.
+     */
+    private static String decodeJwtPayload(String jwt) {
+        String segment = jwt.split("\\.")[1];
+        String padded = segment + "=".repeat((4 - segment.length() % 4) % 4);
+        return new String(Base64.getUrlDecoder().decode(padded));
     }
 }

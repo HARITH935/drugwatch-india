@@ -240,6 +240,26 @@ class WatchlistTest {
     }
 
     @Test
+    void a_sent_notification_appears_in_its_recipients_history_only() {
+        long reader = user("reader@example.com", true);
+        long other = user("other@example.com", true);
+        var watch = watchlist.add(reader, "Zyntophil");
+        watchlist.add(other, "Zyntophil");
+        backdate(watch.id(), "2025-01");
+        notifier.runOnce();
+
+        // One row per newly-notifiable alert month, same as a_new_alert_month_notifies_a_matching_watch
+        // - not necessarily one row overall, so this checks every entry rather than assuming a count.
+        var history = watchlist.listNotifications(reader);
+        assertThat(history).isNotEmpty();
+        assertThat(history).allSatisfy(entry -> {
+            assertThat(entry.term()).isEqualTo("Zyntophil");
+            assertThat(entry.findingsMatched()).isPositive();
+        });
+        assertThat(watchlist.listNotifications(other)).isEmpty();
+    }
+
+    @Test
     void two_users_watching_the_same_term_both_get_told() {
         long first = user("a@example.com", true);
         long second = user("b@example.com", true);

@@ -58,6 +58,32 @@ public class WatchlistService {
                 .toList();
     }
 
+    /**
+     * What this account has already been emailed about (decision E).
+     *
+     * <p>Plain SQL, like {@link #latestAlertMonth()} - a JPA relation between the two entities
+     * would exist only for this one read, since nothing else here ever navigates from a
+     * notification to its watch. The join is safe even for a watch that was later deleted: {@code
+     * watchlist_item_id} cascades, so a notification row never outlives the watch it names.
+     */
+    @Transactional(readOnly = true)
+    public List<Notification> listNotifications(Long userId) {
+        return jdbc.sql("""
+                        SELECT w.term, n.alert_month, n.findings_matched, n.sent_at
+                        FROM app.alert_notifications n
+                        JOIN app.watchlist_items w ON w.id = n.watchlist_item_id
+                        WHERE n.user_id = :userId
+                        ORDER BY n.sent_at DESC
+                        """)
+                .param("userId", userId)
+                .query((row, rowNum) -> new Notification(
+                        row.getString("term"),
+                        row.getString("alert_month"),
+                        row.getInt("findings_matched"),
+                        row.getTimestamp("sent_at").toInstant()))
+                .list();
+    }
+
     @Transactional
     public void remove(Long userId, Long watchId) {
         // Scoped by user as well as id: without that, anybody could delete anybody's watch by
@@ -81,6 +107,10 @@ public class WatchlistService {
 
     /** One watch, as its owner sees it. */
     public record Watch(Long id, String term, String notifiedFromAfter, java.time.Instant createdAt) {}
+
+    /** One email already sent, as its recipient sees it - no batch numbers: see the term's own
+     * drug search page for those, same as the email itself points to. */
+    public record Notification(String term, String alertMonth, int findingsMatched, java.time.Instant sentAt) {}
 
     /** The term could not be used, or is already watched. */
     public static class InvalidWatchException extends RuntimeException {

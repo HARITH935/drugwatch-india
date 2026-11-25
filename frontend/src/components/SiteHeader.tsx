@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/Button";
 import { logoutAction } from "@/lib/auth-actions";
 import { hasSession } from "@/lib/session";
 
-// hasSession() only reads a cookie (step 4) - cheap enough to call on every page's header
-// without turning this into a network round trip. Watchlist links arrive with step 5.
+// hasSession() only reads a cookie - cheap enough to call on every page's header without
+// turning this into a network round trip.
 export async function SiteHeader() {
   const loggedIn = await hasSession();
 
@@ -23,11 +23,19 @@ export async function SiteHeader() {
             Find a medicine
           </Link>
           {loggedIn ? (
-            <form action={logoutAction}>
-              <Button type="submit" variant="ghost" size="sm">
-                Log out
-              </Button>
-            </form>
+            <>
+              <Link
+                href="/watchlist"
+                className="text-accent-foreground underline underline-offset-2"
+              >
+                Watchlist
+              </Link>
+              <form action={logoutAction}>
+                <Button type="submit" variant="ghost" size="sm">
+                  Log out
+                </Button>
+              </form>
+            </>
           ) : (
             <>
               <Link href="/login" className="text-accent-foreground underline underline-offset-2">

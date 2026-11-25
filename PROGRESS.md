@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 11 — Frontend. The public Next.js website.
-**Next:** step 5 - the watchlist page, plus the new notification-history endpoint (decision E).
+**Next:** step 6 - the dashboards page: Superset embedded SDK, guest tokens refreshed before expiry.
 
 ---
 
@@ -3395,7 +3395,74 @@ replies can take weeks. The draft is already written.
       tests (×2 viewports) against a stub extended with a fixed test account and real-shaped
       fake JWTs. 51 unit/contract tests, 34 e2e tests, all passing; build still succeeds with a
       dead `BACKEND_URL`.
-- [ ] Step 5 — watchlist page (+ the notification-history endpoint)
+- [x] **Step 5 — watchlist page (+ the notification-history endpoint)** (2026-11-25)
+    - **Decision E's endpoint**: `GET /api/v1/watchlist/notifications`, scoped by the token's
+      subject like every other watchlist call. `WatchlistService.listNotifications()` joins
+      `alert_notifications` to `watchlist_items` in plain SQL rather than adding a JPA relation
+      that would exist for this one read - the same reasoning `latestAlertMonth()` already used.
+      The join is safe for a watch deleted after it notified: `watchlist_item_id` cascades, so a
+      notification row never outlives the watch it names.
+    - 🔍 **Found and fixed while reading `WatchlistNotifier` for this step, not by the step
+      itself**: its email's "see the details" link pointed at `/search?q=...`, a route that was
+      never built - the real frontend route, decided in step 0, is `/drugs/search`. A visitor
+      clicking a real notification email would have hit a 404. One-line fix, unrelated to
+      decision E's endpoint but found in the same file.
+    - **The real constraint this step is built around, checked empirically rather than assumed**:
+      whether a Server Component's render can write a cookie. Next's own docs call writing
+      cookies outside a Server Action/Route Handler disallowed; rather than take that as
+      given, built a throwaway page that called `cookies().set()` directly in a plain page and
+      confirmed the exact thrown error on this Next.js version before designing around it, the
+      same `/nf-test2`-style minimal-repro habit step 3's Cache Components finding used.
+      **Consequence, reported as a known limitation, not silently shipped**: the watchlist page
+      itself only reads a fresh access-token cookie (`getAccessTokenIfFresh()`, never refreshes);
+      the session-refreshing `getAccessToken()` built in step 4 is only called from the add/remove
+      Server Actions, which *are* allowed to write cookies. A visitor idle for more than 15
+      minutes (`AccessTokens.LIFETIME`) who revisits `/watchlist` without first doing a mutation
+      sees "log in again," even though their 30-day refresh token is still good. Considered and
+      rejected: refreshing in `proxy.ts` (Next 16's renamed middleware) on every matched request -
+      its own docs warn against "slow data fetching" there, and a backend round trip on every
+      watchlist visit is exactly that, even scoped to one route's matcher.
+    - **Mutations refresh the session for real, not just in theory**: add/remove a watch now
+      exercises step 4's `getAccessToken()` refresh path on an ordinary feature, not a dedicated
+      test of auth itself - the first real caller of the mechanism Step 4 built ahead of having
+      anything to call it.
+    - 🐛🔍 **Two e2e flakiness bugs, not product bugs, same class the project has hit twice
+      before**: (1) Playwright's string name matching is substring + case-insensitive by default,
+      so `getByRole("button", { name: "Watch" })` also matched "Stop watching" - fixed with
+      `exact: true`. (2) `waitForURL("/watchlist")` right after submitting the first "Calmirex"
+      watch resolved **instantly**, because the page was already at `/watchlist` from the test's
+      own `goto()` - it never actually waited for the Server Action's round trip, so a second,
+      duplicate submission could race the first. Fixed by waiting for the watch to actually
+      render instead of for a URL that was already true. Verified stable across 3 full e2e runs
+      (44/44 each).
+    - 🐛🔍 **A transient infrastructure symptom, investigated down to two separate causes - one
+      real bug fixed, one confirmed as pre-existing contention that never reaches CI.**
+      `GuestTokenLiveTest` and `RiskProxyLiveTest` (both unrelated to anything this step touched)
+      failed intermittently across repeated `mvn verify` runs while chasing a clean local pass:
+      - **A real, permanent bug, fixed**: `GuestTokenLiveTest`'s own JWT-decoding helper padded
+        the token's payload segment by always appending `"=="` and then trimming to a multiple of
+        4 of the *original, unpadded* length - correct only when that length happened to be 0 mod
+        4 (the minority case), and silently dropping 2-3 real trailing bytes otherwise. The token's
+        `iat`/`exp` are variable-width floating-point timestamps, so the segment's length mod 4
+        differs run to run, which is why this only failed sometimes and always on the SAME
+        assertion (the payload's final field, missing its closing brace). Replaced with correct
+        padding math (pad to what's *missing*, not a flat two characters); stable across 5
+        isolated reruns after the fix, 0 before it.
+      - **A separate, pre-existing contention issue, confirmed and left alone**: even after that
+        fix, both live tests still failed intermittently *only* inside a full `mvn verify`, never
+        in isolation. Measured directly with `curl`: Superset's own login took 24.8 s under full
+        load (this Mac running a live backend, Docker, and repeated back-to-back `mvn verify` /
+        Playwright runs at once) against `GuestTokenService`'s 5 s read timeout, and 2.9 s once
+        that load cleared - the same root cause already on record for step 3's risk-score
+        "unavailable" render and Phase 5's 141-minute "slow search." **Confirmed this can never
+        affect the actual merge gate**: both tests are `@EnabledIfEnvironmentVariable`-gated on
+        secrets (`SUPERSET_EMBED_PASSWORD`, risk-api's own var) that CI never sets, so they are
+        skipped there entirely - this is a local-only artifact of testing unusually hard on one
+        Mac, not a flake that could ever block a PR.
+    - 1 new frontend unit test (`formatDate`'s IST-not-server-timezone trap) + 4 new backend
+      tests (1 in `WatchlistTest`, 3 in `WatchlistHttpTest`, incl. one user's history staying
+      invisible to another) + 10 new e2e tests (×2 viewports, watchlist flows). 48 frontend
+      unit/contract tests, 44 e2e tests, 214 backend tests - all green on a clean run.
 - [ ] Step 6 — dashboards page: Superset embedded SDK, guest tokens refreshed before expiry
 - [ ] Step 7 — About & Methodology, mobile + accessibility pass, the done-when demo
 

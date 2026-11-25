@@ -31,11 +31,11 @@ export class BackendError extends Error {
   }
 }
 
-export async function backendGet<T>(path: string): Promise<T> {
+export async function backendGet<T>(path: string, extraHeaders: HeadersInit = {}): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${backendUrl()}${path}`, {
-      headers: { accept: "application/json" },
+      headers: { accept: "application/json", ...extraHeaders },
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (error) {
@@ -203,12 +203,16 @@ export function getRiskScore(manufacturerId: string): Promise<RiskResult> {
 // POST calls, not cached, not retried: a retried login/refresh could double-submit a single-use
 // refresh token, and AuthService.refresh() treats a repeat as theft and revokes every session.
 
-export async function backendPost<T>(path: string, body: unknown): Promise<T> {
+export async function backendPost<T>(
+  path: string,
+  body: unknown,
+  extraHeaders: HeadersInit = {},
+): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${backendUrl()}${path}`, {
       method: "POST",
-      headers: { "content-type": "application/json", accept: "application/json" },
+      headers: { "content-type": "application/json", accept: "application/json", ...extraHeaders },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
@@ -255,4 +259,80 @@ export function logoutSession(refreshToken: string): Promise<void> {
 
 export function verifyEmailToken(token: string): Promise<void> {
   return backendPost<void>("/api/v1/auth/verify", { token });
+}
+
+// --- watchlist (step 5) ----------------------------------------------------------------------
+// The only authenticated reads/writes in this app: every call here needs a Bearer token, which
+// comes from the httpOnly cookie via session.ts, never from the browser.
+
+function authHeaders(accessToken: string): HeadersInit {
+  return { authorization: `Bearer ${accessToken}` };
+}
+
+export async function backendDelete(path: string, accessToken: string): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(`${backendUrl()}${path}`, {
+      method: "DELETE",
+      headers: authHeaders(accessToken),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch (error) {
+    throw new BackendError(null, `backend unreachable for ${path}: ${String(error)}`);
+  }
+  if (!response.ok) {
+    const problem = await response.json().catch(() => null);
+    throw new BackendError(
+      response.status,
+      `backend answered ${response.status} for ${path}`,
+      problem,
+    );
+  }
+}
+
+/** WatchlistService.Watch */
+export type Watch = {
+  id: number;
+  term: string;
+  notifiedFromAfter: string;
+  createdAt: string;
+};
+
+/** WatchlistController.list's shape */
+export type WatchlistResult = {
+  watches: Watch[];
+  note: string;
+};
+
+export function getWatchlist(accessToken: string): Promise<WatchlistResult> {
+  return backendGet<WatchlistResult>("/api/v1/watchlist", authHeaders(accessToken));
+}
+
+export function addWatch(term: string, accessToken: string): Promise<Watch> {
+  return backendPost<Watch>("/api/v1/watchlist", { term }, authHeaders(accessToken));
+}
+
+export function removeWatch(id: number, accessToken: string): Promise<void> {
+  return backendDelete(`/api/v1/watchlist/${id}`, accessToken);
+}
+
+/** WatchlistService.Notification */
+export type WatchNotification = {
+  term: string;
+  alertMonth: string;
+  findingsMatched: number;
+  sentAt: string;
+};
+
+/** WatchlistController.notifications's shape */
+export type NotificationHistory = {
+  notifications: WatchNotification[];
+  note: string;
+};
+
+export function getNotificationHistory(accessToken: string): Promise<NotificationHistory> {
+  return backendGet<NotificationHistory>(
+    "/api/v1/watchlist/notifications",
+    authHeaders(accessToken),
+  );
 }

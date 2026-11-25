@@ -87,3 +87,22 @@ export async function hasSession(): Promise<boolean> {
   const store = await cookies();
   return store.get(REFRESH_COOKIE) !== undefined;
 }
+
+/**
+ * The access token, but ONLY if it's already fresh - never refreshes, so it's safe to call from
+ * a plain Server Component render too (reading cookies is always allowed; only writing them is
+ * restricted - confirmed directly against this Next.js version, which throws
+ * "Cookies can only be modified in a Server Action or Route Handler" otherwise).
+ *
+ * A watchlist page visited more than 15 minutes (`AccessTokens.LIFETIME`) after the last login,
+ * refresh, or watchlist change gets null here even though the refresh token is still good - the
+ * known, accepted gap this helper's absence of a refresh leaves. `getAccessToken()` above closes
+ * it for every *mutation* (add/remove a watch), which is also when a visit is most likely to
+ * follow a long-idle session; a plain re-visit just asks the visitor to log in again.
+ */
+export async function getAccessTokenIfFresh(): Promise<string | null> {
+  const store = await cookies();
+  const access = store.get(ACCESS_COOKIE)?.value;
+  if (!access || isExpired(access)) return null;
+  return access;
+}

@@ -1,11 +1,14 @@
 package in.drugwatch.api;
 
+import in.drugwatch.api.watchlist.domain.WatchlistNotifier;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.jdbc.Sql;
@@ -26,6 +29,12 @@ class WatchlistHttpTest {
 
     @Autowired
     RestTestClient client;
+
+    @Autowired
+    WatchlistNotifier notifier;
+
+    @Autowired
+    DataSource dataSource;
 
     @MockitoBean
     JavaMailSender mail;
@@ -161,6 +170,67 @@ class WatchlistHttpTest {
                 .expectBody()
                 .jsonPath("$.watches[0].term")
                 .isEqualTo("Zyntophil");
+    }
+
+    @Test
+    void notification_history_is_empty_until_something_is_actually_sent() {
+        String token = tokenFor("reader@example.com");
+        addWatch(token, "Zyntophil");
+
+        client.get()
+                .uri("/api/v1/watchlist/notifications")
+                .header("Authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.notifications")
+                .isEmpty()
+                .jsonPath("$.note")
+                .exists();
+    }
+
+    @Test
+    void a_sent_notification_shows_up_in_its_recipients_history() {
+        String token = tokenFor("reader@example.com");
+        Long id = addWatch(token, "Zyntophil");
+        // Same trick as WatchlistTest's backdate(): pretend the watch predates the archive so its
+        // matches become notifiable, then actually run the notifier rather than insert the row by
+        // hand - this test is only trustworthy if it goes through the real send path. The notifier
+        // only ever mails a verified address (decision E), and tokenFor() never calls /verify, so
+        // that has to be set here too, or runOnce() below sends nothing and the real finding here
+        // would be "the test account wasn't verified", not anything about this endpoint.
+        JdbcClient.create(dataSource)
+                .sql("UPDATE app.watchlist_items SET since_alert_month = '2025-01' WHERE id = ?")
+                .param(id)
+                .update();
+        JdbcClient.create(dataSource)
+                .sql("UPDATE app.users SET email_verified = true WHERE email = 'reader@example.com'")
+                .update();
+        notifier.runOnce();
+
+        client.get()
+                .uri("/api/v1/watchlist/notifications")
+                .header("Authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.notifications[0].term")
+                .isEqualTo("Zyntophil")
+                .jsonPath("$.notifications[0].alertMonth")
+                .exists()
+                .jsonPath("$.notifications[0].findingsMatched")
+                .isNumber();
+    }
+
+    @Test
+    void the_notifications_endpoint_needs_a_token_too() {
+        client.get()
+                .uri("/api/v1/watchlist/notifications")
+                .exchange()
+                .expectStatus()
+                .isUnauthorized();
     }
 
     @Test
