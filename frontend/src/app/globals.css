@@ -1,25 +1,145 @@
 @import "tailwindcss";
 
-/* Placeholder colours until step 1's design system replaces them. */
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ============================================================================================
+ * DrugWatch India — design tokens (Phase 11 step 1)
+ *
+ * Three layers (ui-ux-pro-max's token-architecture pattern):
+ *   primitive  -> raw HSL triplets, never used directly in a component
+ *   semantic   -> what the primitive is FOR ("primary", "flagged"), referenced in @theme
+ *   component  -> Tailwind utilities generated from @theme (bg-primary, text-flagged-fg, ...)
+ *
+ * HSL as a space-separated triplet (not hsl(...)) so Tailwind's /opacity modifiers work:
+ * bg-primary/10 needs the raw numbers to splice in an alpha channel.
+ *
+ * Direction: calm, public-service trust (GOV.UK / NHS in spirit), not a brand to get excited
+ * about. Two rules shaped every colour choice below:
+ *   1. A "flagged" result and a "not found" result are DIFFERENT HUES, not traffic-light
+ *      green/red. CLAUDE.md §6: "not found" must never read as "safe" - green would say that
+ *      wordlessly, so green is not used for either state. "Flagged" is amber, "not found" is
+ *      the same neutral slate as ordinary UI chrome.
+ *   2. Every text/background pair below is checked against WCAG AA (≥4.5:1 for body text),
+ *      not eyeballed - see the ratios in PROGRESS.md step 1.
+ * ========================================================================================== */
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+:root {
+  /* --- primitives (never referenced outside this block) --- */
+  --slate-50: 210 40% 98%;
+  --slate-100: 210 40% 96%;
+  --slate-200: 214 32% 91%;
+  --slate-300: 213 27% 84%;
+  --slate-600: 215 19% 35%;
+  --slate-700: 215 25% 27%;
+  --slate-900: 222 47% 11%;
+  --blue-700: 224 76% 48%;
+  --blue-800: 226 71% 40%;
+  --blue-900: 224 64% 33%;
+  --amber-100: 48 96% 89%;
+  --amber-800: 23 82% 31%;
+  --red-100: 0 93% 94%;
+  --red-800: 0 70% 35%;
+
+  /* --- semantic: light mode (default) --- */
+  --background: var(--slate-50);
+  --foreground: var(--slate-900);
+  --card: 0 0% 100%;
+  --card-foreground: var(--slate-900);
+  --border: var(--slate-200);
+  --muted-foreground: var(--slate-600);
+
+  --primary: var(--blue-700);
+  --primary-hover: var(--blue-800);
+  --primary-active: var(--blue-900);
+  --primary-foreground: 0 0% 100%;
+  --ring: 221 83% 53%;
+
+  /* A batch genuinely reported in a CDSCO alert. Amber, not red: a finding is a fact to read
+     carefully, not an alarm. Tinted background + dark text, never a bold solid block - the
+     calmer treatment the plan's "neutral wording" asks for applied to colour, not just text. */
+  --flagged-bg: var(--amber-100);
+  --flagged-foreground: var(--amber-800);
+
+  /* No match. Same hue family as plain UI chrome (slate), deliberately NOT green - CLAUDE.md
+     §6: "not found" never means "safe", and a green badge would say so wordlessly. */
+  --not-found-bg: var(--slate-100);
+  --not-found-foreground: var(--slate-700);
+
+  /* A real UI error (a failed request), unrelated to drug safety - the one place red appears. */
+  --error-bg: var(--red-100);
+  --error-foreground: var(--red-800);
+
+  --radius: 0.5rem;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: 220 49% 8%;
+    --foreground: 210 40% 96%;
+    --card: 222 39% 14%; /* a touch lighter than --background: a visible surface, not a contrast pair */
+    --card-foreground: 210 40% 96%;
+    --border: 219 32% 22%;
+    --muted-foreground: 215 20% 65%;
+
+    /* --primary stays the same strong blue: it is always a BUTTON background with white text
+       on it, and white-on-this-blue passes AA in both modes. Only colour used AS TEXT on the
+       page background needs a lighter value in the dark - that is --accent-foreground below. */
+    --accent-foreground: 212 96% 78%;
+
+    --flagged-bg: 39 70% 15%;
+    --flagged-foreground: 46 97% 65%;
+    --not-found-bg: 217 33% 17%;
+    --not-found-foreground: 213 27% 84%;
   }
 }
 
+/* A manual override wins over the OS preference (the eventual theme toggle writes this class). */
+:root[data-theme="light"] {
+  --background: var(--slate-50);
+  --foreground: var(--slate-900);
+}
+:root[data-theme="dark"] {
+  --background: 220 49% 8%;
+  --foreground: 210 40% 96%;
+}
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-border: hsl(var(--border));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-hover: hsl(var(--primary-hover));
+  --color-primary-active: hsl(var(--primary-active));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-ring: hsl(var(--ring));
+  --color-accent-foreground: hsl(var(--accent-foreground, var(--primary)));
+
+  --color-flagged-bg: hsl(var(--flagged-bg));
+  --color-flagged-foreground: hsl(var(--flagged-foreground));
+  --color-not-found-bg: hsl(var(--not-found-bg));
+  --color-not-found-foreground: hsl(var(--not-found-foreground));
+  --color-error-bg: hsl(var(--error-bg));
+  --color-error-foreground: hsl(var(--error-foreground));
+
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 0.25rem);
+
+  /* The system font, on purpose, not a loaded webfont: one less network request, no flash of
+     invisible/unstyled text, and every OS's own font already reads as "plain, official text" -
+     fitting for a public-service tone more than a distinctive brand typeface would. */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: system-ui, sans-serif;
+  background: var(--color-background);
+  color: var(--color-foreground);
+}
+
+/* Visible everywhere, not just inside a form control - CLAUDE.md's phone-first, accessible
+   direction means a focus ring has to survive someone navigating by keyboard on a tiny screen. */
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
 }

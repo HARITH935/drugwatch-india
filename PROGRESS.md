@@ -3,8 +3,8 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 11 — Frontend. The public Next.js website.
-**Next:** step 1 - the design system (UI UX Pro Max): tokens, core components, accessibility
-baseline, reviewed by Harith before any page is built on it.
+**Next:** step 1 is built and screenshotted (light/dark/mobile) for Harith's visual review; step 2
+(home + batch checker + result page) starts once that review is done.
 
 ---
 
@@ -3237,7 +3237,38 @@ replies can take weeks. The draft is already written.
     - 13 unit/contract tests, 6 e2e tests (×2 viewport sizes), all passing. CI gained a
       `frontend` job mirroring the Mac's exact command order, including Playwright's browser
       install and the e2e run - the first CI job in this repo that drives a real browser.
-- [ ] Step 1 — design system (UI UX Pro Max): tokens, core components, accessibility baseline
+- [x] **Step 1 — the design system** (2026-11-25)
+    - **Three-layer tokens** (`globals.css`, the UI UX Pro Max pattern: primitive → semantic →
+      component), as HSL triplets so Tailwind's `/opacity` modifiers work. Light and dark mode
+      both defined up front, plus a `data-theme` override class for the eventual toggle.
+    - **Every text/background pair is WCAG-AA checked by calculation, not eyeballed** - computed
+      the real contrast ratios (relative luminance formula) for the whole palette before writing
+      a single hex into CSS. Worst cases: white-on-primary 6.70:1, muted text 7.24:1 (light) /
+      7.30:1 (dark), status badge text ≥6.37:1 in every mode. All comfortably clear the 4.5:1
+      body-text minimum.
+    - **The one decision this step exists to get right**: *flagged* and *not-found* are
+      different HUES (amber vs. slate), and **neither is green**. CLAUDE.md §6 - "not found"
+      must never read as "safe" - so a reassuring green tick was never on the table, and
+      `Badge.tsx` has no `success`/`safe` variant to begin with. **Enforced in code, not just
+      argued in a comment**: `Badge.test.tsx` asserts the two status variants render different
+      classes and that neither contains the word "green", plus a `@ts-expect-error` line that
+      only compiles if `variant="success"` is genuinely not a valid prop - `tsc` itself is the
+      check that the type system really does refuse it.
+    - **Core components**: `Button` (4 variants × 3 sizes, matching component-specs.md's
+      height scale so a search box and its submit button line up), `Badge`, `Card`, `Input`,
+      plus a shared `SiteHeader`. No library - Tailwind utilities and `forwardRef`, per decision D.
+    - **System font, not a loaded webfont** - one less network request, no flash of
+      unstyled text, and every OS's own font already reads as "plain, official text", which
+      fits a public-service tone better than a distinctive brand typeface would.
+    - **A `/style-guide` page renders every token and component in one place** (not linked from
+      anywhere a visitor would find it), screenshotted in light mode, dark mode and at a phone
+      width (390px) for Harith's visual review before any real page is built on these tokens.
+      The home page was also reshot on a phone: real September-2026 backend data, legible, no
+      sideways scroll.
+    - Rebuilt and re-ran the full check suite on the real components, not just the new ones:
+      `npm run build` succeeds, all 6 e2e tests still pass (desktop + phone) against the
+      restyled home page.
+    - 15 unit/contract tests (2 new: Badge's hue separation and its missing success variant).
 - [ ] Step 2 — home + batch checker + batch result page, and the search -> result end-to-end test
 - [ ] Step 3 — drug page and manufacturer page (risk score + explanation + its caveat)
 - [ ] Step 4 — auth: register, verify, login, logout, refresh (httpOnly cookies)
@@ -3556,3 +3587,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-25 | Every frontend package pinned to the newest release ≥14 days old, checked against npm's real timestamps; `engine-strict` caught `jsdom` 31 needing Node 22.22 (this Mac runs 22.17) before it could fail strangely later | ADR 0020 |
 | 2026-11-25 | Ethics wording enforced by tests: `Disclaimer.test.tsx` locks CLAUDE.md §6's exact string, `LatestAlertsSummary.test.tsx` fails on "safe"/"fraud"/"fake"/"unsafe"/"dangerous"/"banned" - mutation-checked by planting "unsafe" and confirming both tests catch it | `frontend/src/components/*.test.tsx` |
 | 2026-11-25 | CI's new `frontend` job runs the full Mac command order, including a production build and Playwright's e2e suite against a stub backend (`e2e/stub-backend.mjs`) - the repo's first CI job driving a real browser | `.github/workflows/lint.yml` |
+| 2026-11-25 | Step 1: design tokens computed with real WCAG contrast math (relative luminance formula), not eyeballed; worst case 6.37:1, all clear 4.5:1 | `globals.css` |
+| 2026-11-25 | "Flagged" and "not found" are different hues (amber/slate), neither green - CLAUDE.md §6 - and `Badge.tsx` has no success/safe variant at all; a test enforces the hue separation and the variant's absence via `@ts-expect-error` | `Badge.tsx`, `Badge.test.tsx` |

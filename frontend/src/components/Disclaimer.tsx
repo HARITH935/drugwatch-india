@@ -3,5 +3,5 @@
 export const DISCLAIMER = "Not medical advice. Data from CDSCO public alerts.";
 
 export function Disclaimer() {
-  return <p className="text-sm text-zinc-600 dark:text-zinc-400">{DISCLAIMER}</p>;
+  return <p className="text-sm text-muted-foreground">{DISCLAIMER}</p>;
 }
