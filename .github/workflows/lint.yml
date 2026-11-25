@@ -1,6 +1,6 @@
 # CI lint workflow: runs on every push to main and on every pull request.
 # repo-checks: repo hygiene (Phase 0). python: lint + tests for each Python folder (Phase 1, ADR 0005).
-# backend: the Spring Boot API (Phase 9, ADR 0018). Still to come: TypeScript → Phase 11.
+# backend: the Spring Boot API (Phase 9, ADR 0018). frontend: the Next.js site (Phase 11, ADR 0020).
 name: lint
 
 on:
@@ -117,3 +117,49 @@ jobs:
       - name: Build, test and check formatting
         run: ./mvnw -B verify
 
+
+  # The Next.js site (Phase 11, ADR 0020). Every check that runs on the Mac runs here, in the
+  # same order, including the end-to-end tests: Playwright runs the production build against
+  # e2e/stub-backend.mjs, because this runner has no Spring, Postgres or Redis.
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22" # the major the Mac runs; jsdom 29 needs 22.13+, any current 22.x has it
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # `npm ci`, not `npm install`: installs exactly package-lock.json and fails if it is out of
+      # date - the equivalent of `uv sync --locked`.
+      - name: Install dependencies (exactly as locked)
+        run: npm ci
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      # No backend here, and none needed: the page's data is fetched per request, never at build
+      # time (ADR 0020), so a build that needed Spring would be a bug this step catches.
+      - name: Production build
+        run: npm run build
+
+      - name: Install Playwright's Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: End-to-end tests (desktop and phone sizes)
+        run: npm run e2e

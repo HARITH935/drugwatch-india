@@ -3,8 +3,8 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 11 — Frontend. The public Next.js website.
-**Next:** Phase 11 step 0 - the Next.js skeleton, CI job, test tools (ADR) and one page calling the
-backend end to end.
+**Next:** step 1 - the design system (UI UX Pro Max): tokens, core components, accessibility
+baseline, reviewed by Harith before any page is built on it.
 
 ---
 
@@ -3187,8 +3187,56 @@ number, source alert month, CDSCO link or disclaimer, or if a "not found" result
 (`docs/permissions.md`: ⬜). The live site cannot show CDSCO data until permission is recorded, and
 replies can take weeks. The draft is already written.
 
-- [ ] Step 0 — Next.js + TypeScript + Tailwind skeleton, npm lockfile, CI job, test tools wired
-      (ADR), and one real page calling the backend end to end through the Next.js server
+- [x] **Step 0 — Next.js skeleton, test tools, CI, one page calling the live backend** (2026-11-25)
+    - **Scaffolded with `create-next-app@16.4.6`** (TypeScript, Tailwind, ESLint, App Router,
+      `src/`) into a scratchpad first, reviewed, then moved into `frontend/` - the template's
+      default logos and README were dropped, nothing else was.
+    - **`ADR 0020`** records the tooling and two decisions every later step depends on:
+      - **The browser's only backend is the Next.js server** (decision B) - pages are server
+        components that fetch `BACKEND_URL` server-side; that variable has no `NEXT_PUBLIC_`
+        prefix, so it never reaches browser JavaScript (verified: the served HTML contains no
+        `localhost:8080`). Step 4 extends this to login tokens, in httpOnly cookies.
+      - **Backend data is fetched dynamically, never cached in Next.js** - Spring already
+        caches it in Redis keyed by the data's alert month (Phase 9 step 6); a second,
+        time-based cache here could serve a stale month after a new one lands. Proven:
+        `next build` succeeds with the backend unreachable (the page is a Partial Prerender -
+        static shell prebuilt, data streamed in per request), and a live run against the real
+        backend shows real September-2026 figures (330 batches, 48 labs, 232 manufacturers).
+    - 🔍 **Two bugs found by actually running things, not assumed fixed:**
+      - **npm 10.9.2 (what Node 22 ships) crashes resolving Vitest's optional peers**
+        (`Cannot read properties of null (reading 'edgesOut')`, inside npm's own resolver).
+        npm 11 doesn't. Fixed at the right layer: *changing* the lockfile uses
+        `npx npm@11.21.2 install`; *installing* from it (`npm ci`, what CI and this Mac both
+        do day to day) needs no upgrade - proven by deleting `node_modules` and running
+        `npm ci` with the stock 10.9.2.
+      - **Port 3000 was already taken** by an unrelated Next.js project on this Mac. Moved the
+        site to **3100** and updated the backend's `SITE_URL` (email links) to match; e2e
+        tests use 3101 and an 18080 stub, so a Playwright run can never collide with
+        `npm run dev`.
+    - **Every package pinned to the newest release at least 14 days old** (most compromised npm
+      releases are caught within days), checked against npm's publish timestamps, not assumed
+      current. `.npmrc` sets `save-exact` and `engine-strict` - the latter caught a real
+      problem immediately: `jsdom` 31 needs Node 22.22, this Mac runs 22.17, so `jsdom` 29.1.1
+      is pinned instead rather than failing strangely later.
+    - **Ethics rules enforced by tests, not just written**: `Disclaimer.test.tsx` locks the
+      exact CLAUDE.md §6 string; `LatestAlertsSummary.test.tsx` asserts neutral batch counts
+      and fails if the page ever contains "safe", "fraud", "fake", "unsafe", "dangerous" or
+      "banned" - mutation-checked by planting "unsafe" in the component and confirming both
+      the wording test and the banned-words test catch it, then reverting.
+    - **A stub backend for Playwright** (`e2e/stub-backend.mjs`), since CI has no Postgres: real
+      shape, invented values (ADR 0003). Two guards against it silently drifting from the real
+      API: `tsc` checks each fixture against its TypeScript type, and a new
+      `backend.contract.test.ts` compares field names with the **live** backend whenever one
+      is reachable (skipped otherwise, like the backend's own `GoldContractTest`) - tuned to a
+      5 s timeout after a 1.5 s one was found to skip against a live, healthy backend on a
+      cold run.
+    - **The production build and the full e2e suite were run for real, not just unit tests**:
+      `npm run build` succeeds, and `npm run e2e` passes all 6 (3 checks × desktop + phone)
+      against the production server and the stub, including a check that no page scrolls
+      sideways on a phone viewport.
+    - 13 unit/contract tests, 6 e2e tests (×2 viewport sizes), all passing. CI gained a
+      `frontend` job mirroring the Mac's exact command order, including Playwright's browser
+      install and the e2e run - the first CI job in this repo that drives a real browser.
 - [ ] Step 1 — design system (UI UX Pro Max): tokens, core components, accessibility baseline
 - [ ] Step 2 — home + batch checker + batch result page, and the search -> result end-to-end test
 - [ ] Step 3 — drug page and manufacturer page (risk score + explanation + its caveat)
@@ -3502,3 +3550,9 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-24 | Phase 11 planning approved | Harith |
 | 2026-11-24 | Phase 11 decisions A-E approved ("take all recommendations"): price pages deferred (no data); Next.js as backend-for-frontend with httpOnly-cookie tokens; Vitest + RTL + Playwright; no UI/chart library; one notification-history endpoint | Harith |
 | 2026-11-24 | ⚠️ CDSCO permission email never sent (`docs/permissions.md`) - blocks Phase 12's launch; Harith to send | PROGRESS Phase 11 |
+| 2026-11-25 | Step 0: Next.js server is the browser's only backend (`BACKEND_URL` has no `NEXT_PUBLIC_` prefix, verified absent from served HTML); backend data fetched per-request, never cached in Next.js (Spring's Redis cache already owns that, keyed by alert month) | ADR 0020 |
+| 2026-11-25 | 🐛 npm 10.9.2 (Node 22's bundled npm) crashes resolving Vitest's optional peers inside its own resolver; npm 11 doesn't. Lockfile changes use `npx npm@11`, routine installs (`npm ci`) need no upgrade - proven on the stock npm | ADR 0020 |
+| 2026-11-25 | Site moved to port 3100 (3000 was already taken by an unrelated project on this Mac); backend's `SITE_URL` updated to match so email links stay correct | `.env`, `.env.example`, `application.yaml` |
+| 2026-11-25 | Every frontend package pinned to the newest release ≥14 days old, checked against npm's real timestamps; `engine-strict` caught `jsdom` 31 needing Node 22.22 (this Mac runs 22.17) before it could fail strangely later | ADR 0020 |
+| 2026-11-25 | Ethics wording enforced by tests: `Disclaimer.test.tsx` locks CLAUDE.md §6's exact string, `LatestAlertsSummary.test.tsx` fails on "safe"/"fraud"/"fake"/"unsafe"/"dangerous"/"banned" - mutation-checked by planting "unsafe" and confirming both tests catch it | `frontend/src/components/*.test.tsx` |
+| 2026-11-25 | CI's new `frontend` job runs the full Mac command order, including a production build and Playwright's e2e suite against a stub backend (`e2e/stub-backend.mjs`) - the repo's first CI job driving a real browser | `.github/workflows/lint.yml` |

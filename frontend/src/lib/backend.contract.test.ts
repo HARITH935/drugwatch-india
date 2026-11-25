@@ -1,0 +1,44 @@
+// @vitest-environment node
+//
+// The e2e stub serves fixtures in place of Spring. A stub's failure mode is drifting: the real
+// API gains or renames a field, the stub doesn't, and every e2e test keeps passing against a shape
+// that no longer exists. Two guards:
+//   1. at type-check time, each fixture must satisfy its TypeScript type (below), and
+//   2. when a real backend is reachable, its response must have exactly the fixture's fields.
+// Without a backend (CI) the second is skipped, like the backend's own GoldContractTest.
+import { describe, expect, it } from "vitest";
+
+import latestAlertsFixture from "../../e2e/fixtures/latest-alerts.json";
+
+import { backendUrl, type LatestAlerts } from "./backend";
+
+// Guard 1: tsc fails here if the fixture and the type disagree.
+const typedFixture: LatestAlerts = latestAlertsFixture;
+
+async function backendIsUp(): Promise<boolean> {
+  try {
+    // 5 s, not 1.5 s: the first version skipped on a cold run, with four test workers starting
+    // at once, while the backend was up - a contract test that silently skips is green while
+    // checking nothing. With NO backend (CI) the connection is refused instantly, so a longer
+    // timeout costs nothing there; it only matters when a backend exists but is slow.
+    const response = await fetch(`${backendUrl()}/actuator/health`, {
+      signal: AbortSignal.timeout(5_000),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+const live = await backendIsUp();
+
+describe.skipIf(!live)("contract with the live backend", () => {
+  it("GET /api/v1/alerts/latest has exactly the fields the stub fixture has", async () => {
+    const real = await (await fetch(`${backendUrl()}/api/v1/alerts/latest`)).json();
+
+    expect(Object.keys(real).sort()).toEqual(Object.keys(typedFixture).sort());
+    expect(Object.keys(real.mostReportedMedicines[0]).sort()).toEqual(
+      Object.keys(typedFixture.mostReportedMedicines[0]).sort(),
+    );
+  });
+});

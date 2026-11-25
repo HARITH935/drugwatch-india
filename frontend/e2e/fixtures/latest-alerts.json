@@ -1,0 +1,12 @@
+{
+  "alertMonth": "2026-09",
+  "findings": 12,
+  "reportingLabs": 3,
+  "companies": 5,
+  "mostReportedMedicines": [
+    { "productName": "Zyntophil Tablets 500 mg", "findings": 4 },
+    { "productName": "Marvexol Syrup", "findings": 1 }
+  ],
+  "note": "The number of batches reported moves with the number of laboratories reporting them.",
+  "disclaimer": "Not medical advice. Data from CDSCO public alerts."
+}

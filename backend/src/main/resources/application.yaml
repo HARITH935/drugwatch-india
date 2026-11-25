@@ -115,7 +115,7 @@ drugwatch:
     base-url: ${RISK_API_URL:http://localhost:8000}
   # Where the links in emails point. Not a secret, but wrong by default is worse than absent:
   # a verification link to the wrong host is a link that cannot be used.
-  site-url: ${SITE_URL:http://localhost:3000}
+  site-url: ${SITE_URL:http://localhost:3100}
 
 # OpenAPI (springdoc). The document itself is generated from the controllers; these are the only
 # choices worth making about it.
