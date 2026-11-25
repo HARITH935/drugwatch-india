@@ -3,8 +3,8 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 11 — Frontend. The public Next.js website.
-**Next:** step 1 is built and screenshotted (light/dark/mobile) for Harith's visual review; step 2
-(home + batch checker + result page) starts once that review is done.
+**Next:** step 3 - the drug page and manufacturer page, including the risk score, its explanation
+and the "reporting history, not true quality" caveat.
 
 ---
 
@@ -3269,7 +3269,43 @@ replies can take weeks. The draft is already written.
       `npm run build` succeeds, all 6 e2e tests still pass (desktop + phone) against the
       restyled home page.
     - 15 unit/contract tests (2 new: Badge's hue separation and its missing success variant).
-- [ ] Step 2 — home + batch checker + batch result page, and the search -> result end-to-end test
+- [x] **Step 2 — the batch checker and the result page** (2026-11-25)
+    - **A plain `<form method="get">`, not a client-side handler.** Submitting it is the browser
+      turning two fields into `?drug=...&batch=...` on `/batches/search` - works with no
+      JavaScript at all, is a real bookmarkable URL, and needs no `'use client'` boundary.
+    - **All three of the backend's real outcomes, checked against the LIVE backend with real
+      archive data before any test was written**: FLAGGED (a real September-2026 finding),
+      NOT_FOUND, and NOT_SEARCHABLE (a single-character batch number CDSCO prints but that
+      identifies nothing). Also checked: a validation error (medicine name under 3 characters,
+      the backend's own `@Size` rule) and a spurious finding sitting in the SAME result as a
+      non-spurious one for the same batch - a real row in the archive, not a constructed case.
+    - **The spurious rule is enforced twice, not once.** `Finding.java`'s constructor already
+      refuses to let a spurious row carry a manufacturer name; `FindingCard.tsx` checks
+      `spurious` itself and never reads `manufacturerName` at all on that branch - proved by a
+      test that hands it a deliberately malformed finding (`spurious: true` WITH a manufacturer
+      name set) and asserts the name never renders, then mutation-checked by disabling the
+      component's own branch and confirming that exact test fails. A render that only trusted
+      the backend's invariant would be one bad row away from attributing a counterfeit.
+    - **No reassuring colour for NOT_SEARCHABLE either** - it gets the same neutral badge as
+      ordinary UI chrome, not `flagged` or `notFound`: it is a question about the input, not a
+      result about the medicine.
+    - **The backend's `meaning` sentence is rendered verbatim, never reworded** - keeping the
+      one sentence CLAUDE.md §6 requires from being able to drift between what the API says and
+      what the page prints.
+    - **`sameBatchOtherMedicines` is surfaced even on a NOT_FOUND result** - the backend returns
+      it precisely so a visitor who typed the medicine's name differently from how CDSCO printed
+      it can still find their batch; the page would have thrown this away if it only rendered
+      cross-matches alongside a FLAGGED result.
+    - **The e2e stub gained query-aware routing** (`/api/v1/batches/search` branches on `drug`/
+      `batch`, mirroring `BatchController`'s own 400 shape for a short name) and a new fixture
+      pair, both guarded by `backend.contract.test.ts` against the live backend exactly as the
+      alerts fixture already was.
+    - **The plan's own required flow** (§14: "basic end-to-end flow (search → result)") - typed
+      into the real form, submitted, landing on a real URL, checked against desktop and mobile.
+      Plus the not-found, validation-error and empty-prompt paths, all through Playwright.
+    - 11 new unit/contract tests (two new files) + 2 new live-contract checks + 4 new e2e specs
+      (×2 viewport sizes). 26 unit/contract tests, 14 e2e tests, all passing against the real
+      build and the real backend.
 - [ ] Step 3 — drug page and manufacturer page (risk score + explanation + its caveat)
 - [ ] Step 4 — auth: register, verify, login, logout, refresh (httpOnly cookies)
 - [ ] Step 5 — watchlist page (+ the notification-history endpoint)
@@ -3589,3 +3625,6 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-25 | CI's new `frontend` job runs the full Mac command order, including a production build and Playwright's e2e suite against a stub backend (`e2e/stub-backend.mjs`) - the repo's first CI job driving a real browser | `.github/workflows/lint.yml` |
 | 2026-11-25 | Step 1: design tokens computed with real WCAG contrast math (relative luminance formula), not eyeballed; worst case 6.37:1, all clear 4.5:1 | `globals.css` |
 | 2026-11-25 | "Flagged" and "not found" are different hues (amber/slate), neither green - CLAUDE.md §6 - and `Badge.tsx` has no success/safe variant at all; a test enforces the hue separation and the variant's absence via `@ts-expect-error` | `Badge.tsx`, `Badge.test.tsx` |
+| 2026-11-25 | Step 2: all three batch-search outcomes (flagged/not-found/not-searchable), a validation error, and a real spurious+non-spurious pair for one batch, checked against the live backend with real archive data before any unit test was written | `BatchResult.tsx`, PROGRESS |
+| 2026-11-25 | The spurious rule enforced twice, not once: `Finding.java`'s constructor AND `FindingCard.tsx` both refuse to render a manufacturer on a spurious row - mutation-checked (disabled the component's own check, confirmed its test fails) | `FindingCard.tsx`, `FindingCard.test.tsx` |
+| 2026-11-25 | The plan's required search → result e2e flow (§14) runs through the real `<form>`, no client JS, landing on a real bookmarkable URL; `e2e/stub-backend.mjs` gained query-aware routing to serve it | `e2e/batch-search.spec.ts` |

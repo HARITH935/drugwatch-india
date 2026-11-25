@@ -9,11 +9,22 @@ export function backendUrl(): string {
   return process.env.BACKEND_URL ?? DEFAULT_BACKEND_URL;
 }
 
+/** GlobalExceptionHandler.problem()'s error body shape - present whenever a response isn't ok. */
+export type ApiProblem = {
+  status: number;
+  error: string;
+  detail: Record<string, string>; // e.g. {"drug": "size must be between 3 and 120"}
+  at: string;
+  disclaimer: string;
+};
+
 /** The backend could not be reached, or answered with an error status. */
 export class BackendError extends Error {
   constructor(
     readonly status: number | null,
     message: string,
+    /** The parsed error body, when the backend was reachable and answered with one. */
+    readonly problem: ApiProblem | null = null,
   ) {
     super(message);
     this.name = "BackendError";
@@ -31,7 +42,14 @@ export async function backendGet<T>(path: string): Promise<T> {
     throw new BackendError(null, `backend unreachable for ${path}: ${String(error)}`);
   }
   if (!response.ok) {
-    throw new BackendError(response.status, `backend answered ${response.status} for ${path}`);
+    // Best-effort: GlobalExceptionHandler always sends JSON, but a proxy or a timeout page in
+    // front of it might not - a response body that isn't JSON must not crash the error path too.
+    const problem = await response.json().catch(() => null);
+    throw new BackendError(
+      response.status,
+      `backend answered ${response.status} for ${path}`,
+      problem,
+    );
   }
   return (await response.json()) as T;
 }
@@ -54,3 +72,36 @@ export type LatestAlerts = {
   note: string; // the backend's own caveat: more findings usually means more testing
   disclaimer: string;
 };
+
+/** Finding.java. `manufacturerName` is null exactly when `spurious` is true (enforced server-side) -
+ * render `nameOnPack`, never a manufacturer, for a spurious row. */
+export type Finding = {
+  batchNumber: string;
+  alertMonth: string;
+  productName: string;
+  failureReason: string | null;
+  failureCategories: string[];
+  spurious: boolean;
+  nameOnPack: string | null;
+  manufacturerId: string | null;
+  manufacturerName: string | null;
+  reportedBy: string | null;
+  labType: string | null;
+  sourceUrl: string; // always present (CLAUDE.md §6): the Finding constructor itself guarantees it
+};
+
+/** BatchSearchResult.java (GET /api/v1/batches/search) */
+export type BatchSearchResult = {
+  drug: string;
+  batch: string;
+  outcome: "FLAGGED" | "NOT_FOUND" | "NOT_SEARCHABLE";
+  findings: Finding[];
+  sameBatchOtherMedicines: Finding[];
+  meaning: string; // the backend's own wording for this outcome - rendered verbatim, never reworded
+  disclaimer: string;
+};
+
+export function searchBatch(drug: string, batch: string): Promise<BatchSearchResult> {
+  const query = new URLSearchParams({ drug, batch });
+  return backendGet<BatchSearchResult>(`/api/v1/batches/search?${query}`);
+}

@@ -1,0 +1,24 @@
+{
+  "drug": "Zyntophil",
+  "batch": "TB-1201",
+  "outcome": "FLAGGED",
+  "findings": [
+    {
+      "batchNumber": "TB-1201",
+      "alertMonth": "2026-03",
+      "productName": "Zyntophil Tablets 500 mg",
+      "failureReason": "Assay",
+      "failureCategories": ["Assay"],
+      "spurious": false,
+      "nameOnPack": null,
+      "manufacturerId": "m1",
+      "manufacturerName": "Marvex Labs",
+      "reportedBy": "DTL, Shimla",
+      "labType": "State",
+      "sourceUrl": "https://cdsco.example.invalid/alert.pdf"
+    }
+  ],
+  "sameBatchOtherMedicines": [],
+  "meaning": "This finding applies to one specific batch that a laboratory tested. It is not a statement about the product in general or about the company.",
+  "disclaimer": "Not medical advice. Data from CDSCO public alerts."
+}

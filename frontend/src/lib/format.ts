@@ -25,3 +25,15 @@ export function formatCount(n: number): string {
 export function batches(n: number): string {
   return `${formatCount(n)} ${n === 1 ? "batch" : "batches"}`;
 }
+
+// ApiProblem.detail's keys are the backend's own request-parameter names ("drug", "batch"),
+// which are fine in a log but not what a visitor typed into the form - this is the one place
+// that gap is bridged, so a validation message reads as the site's, not the API's.
+const FIELD_LABELS: Record<string, string> = {
+  drug: "medicine name",
+  batch: "batch number",
+};
+
+export function fieldLabel(field: string): string {
+  return FIELD_LABELS[field] ?? field;
+}

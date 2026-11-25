@@ -1,13 +1,16 @@
 import { connection } from "next/server";
 import { Suspense } from "react";
 
+import { BatchSearchForm } from "@/components/BatchSearchForm";
+import { Card } from "@/components/ui/Card";
 import { LatestAlertsSummary } from "@/components/LatestAlertsSummary";
 import { BackendError, backendGet, type LatestAlerts as LatestAlertsData } from "@/lib/backend";
 
 export default function Home() {
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 space-y-8 px-4 py-10">
-      {/* Static: prerendered at build time, shown instantly. */}
+      {/* Static: prerendered at build time, shown instantly - including the search form itself,
+          a plain GET form that needs no fetched data and no client JavaScript to work at all. */}
       <header className="space-y-2">
         <h1 className="text-3xl font-bold">DrugWatch India</h1>
         <p>
@@ -15,6 +18,10 @@ export default function Home() {
           Organisation&apos;s published &ldquo;Not of Standard Quality&rdquo; alerts.
         </p>
       </header>
+
+      <Card>
+        <BatchSearchForm />
+      </Card>
 
       {/* Dynamic: fetched per request, streamed in when ready. */}
       <Suspense fallback={<p role="status">Loading the latest alerts…</p>}>

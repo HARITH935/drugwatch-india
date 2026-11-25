@@ -1,0 +1,9 @@
+{
+  "drug": "Zyntophil",
+  "batch": "ZZ-0000",
+  "outcome": "NOT_FOUND",
+  "findings": [],
+  "sameBatchOtherMedicines": [],
+  "meaning": "This batch does not appear in the CDSCO alerts we hold. That is not a guarantee of safety.",
+  "disclaimer": "Not medical advice. Data from CDSCO public alerts."
+}

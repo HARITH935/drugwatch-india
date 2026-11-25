@@ -8,12 +8,24 @@
 // Without a backend (CI) the second is skipped, like the backend's own GoldContractTest.
 import { describe, expect, it } from "vitest";
 
+import batchFlaggedFixture from "../../e2e/fixtures/batch-flagged.json";
 import latestAlertsFixture from "../../e2e/fixtures/latest-alerts.json";
 
-import { backendUrl, type LatestAlerts } from "./backend";
+import { backendUrl, type BatchSearchResult, type LatestAlerts } from "./backend";
 
-// Guard 1: tsc fails here if the fixture and the type disagree.
+// Guard 1: tsc fails here if a fixture and its type disagree. `outcome` is cast because JSON
+// import types widen a literal union to `string` - the runtime check right after it is what
+// still catches a fixture whose value isn't actually one of the three real outcomes.
 const typedFixture: LatestAlerts = latestAlertsFixture;
+const typedBatchFixture: BatchSearchResult = {
+  ...batchFlaggedFixture,
+  outcome: batchFlaggedFixture.outcome as BatchSearchResult["outcome"],
+};
+if (!["FLAGGED", "NOT_FOUND", "NOT_SEARCHABLE"].includes(typedBatchFixture.outcome)) {
+  throw new Error(
+    `batch-flagged.json has an outcome that doesn't exist: ${typedBatchFixture.outcome}`,
+  );
+}
 
 async function backendIsUp(): Promise<boolean> {
   try {
@@ -40,5 +52,16 @@ describe.skipIf(!live)("contract with the live backend", () => {
     expect(Object.keys(real.mostReportedMedicines[0]).sort()).toEqual(
       Object.keys(typedFixture.mostReportedMedicines[0]).sort(),
     );
+  });
+
+  it("GET /api/v1/batches/search has exactly the fixture's fields, outcome included", async () => {
+    // A query guaranteed not to match anything real, rather than a hand-picked real drug name -
+    // this only needs the SHAPE of a response, and a shape-only query can't go stale the way a
+    // real drug/batch pair eventually could if that finding is reprocessed out of the archive.
+    const query = new URLSearchParams({ drug: "zzznosuchmedicinezzz", batch: "zzz" });
+    const real = await (await fetch(`${backendUrl()}/api/v1/batches/search?${query}`)).json();
+
+    expect(Object.keys(real).sort()).toEqual(Object.keys(typedBatchFixture).sort());
+    expect(real.outcome).toBe("NOT_FOUND"); // confirms the query really didn't match anything
   });
 });
