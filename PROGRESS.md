@@ -3,8 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 11 — Frontend. The public Next.js website.
-**Next:** step 4 - auth: register, verify, login, logout, refresh, with the JWTs kept in httpOnly
-cookies (decision B).
+**Next:** step 5 - the watchlist page, plus the new notification-history endpoint (decision E).
 
 ---
 
@@ -3349,7 +3348,53 @@ replies can take weeks. The draft is already written.
       set (drug/manufacturer/risk fixtures, id-aware 404s mirroring the real
       `NotFoundException` messages). 37 unit/contract tests, 24 e2e tests, all passing against
       the real build and the real backend.
-- [ ] Step 4 — auth: register, verify, login, logout, refresh (httpOnly cookies)
+- [x] **Step 4 — auth: register, verify, login, logout, refresh (httpOnly cookies)** (2026-11-25)
+    - **Read the backend contract before writing any frontend code**, per the project's own
+      rhythm: `AuthController`/`AuthService`/`SecurityConfig` confirmed stateless Bearer-only
+      auth (no cookie concept on Spring's side at all, CSRF correctly disabled because there's
+      nothing for a browser to attach automatically), a 15-minute access token
+      (`AccessTokens.LIFETIME`) and a 30-day single-use rotating refresh token
+      (`AuthService.REFRESH_LIFETIME`), and the exact anti-enumeration wording both register and
+      login use.
+    - **`session.ts` is the only place a JWT is ever read**, and only its `exp` claim, never
+      verified - Spring verifies the real signature on every proxied call regardless. Split into
+      a pure `jwt.ts` (decode + expiry, framework-free, fully unit-tested with hand-built fake
+      tokens) and a server-only `session.ts` (cookie get/set, `next/headers`-dependent, so it
+      can't be unit-tested directly - its logic stays thin on purpose, for exactly that reason).
+    - **Where `getAccessToken()` (the refresh-on-demand helper) may be called was a real Next.js
+      constraint, not a style choice**: `cookies().set()` only works inside a Server Action or
+      Route Handler, never a plain Server Component render. Checked Next's own Proxy docs first,
+      which explicitly warn Proxy (middleware) is "not intended for ... a full session management
+      or authorization solution" - so refresh-on-every-request-via-middleware, the first design
+      considered, was rejected on the framework's own advice, not discovered the hard way. The
+      helper exists now for step 5's watchlist mutations to call; no page needs it yet.
+    - **Three Server Actions** (`registerAction`, `loginAction`, `logoutAction` in
+      `auth-actions.ts`) are the only things that mutate cookies - plain `<form action={...}>`,
+      the same "no client JS we wrote ourselves" approach as the GET search forms, just POST
+      because these mutate and a password doesn't belong in a URL. `verify/page.tsx` needs no
+      action at all - it only reads, like `batches/search`.
+    - **Anti-enumeration preserved end to end, not just in Spring**: register always redirects to
+      the same "check your email" page; login shows AuthController's exact wording
+      ("Email or password is not correct") for both a wrong password and an unknown address,
+      rather than inventing separate, more-helpful text that would leak which case happened.
+    - **Verified for real against the live backend before any test was written**: a full
+      register → Mailpit → verify → login → refresh → *reuse the old refresh token* → confirmed
+      both it and the token issued from it were revoked (`AuthService.refresh`'s stolen-token
+      response, exactly as documented) → logout → confirmed the refresh token was dead, all via
+      curl against the real Postgres-backed backend. Then the real UI, in a real headless browser
+      against the real backend (not the e2e stub): login redirects home, the header flips to "Log
+      out", `access_token`/`refresh_token` are `httpOnly: true` with `document.cookie` reporting
+      `""` - the actual security property this step exists for, not just an architectural claim -
+      session survives a navigation to another page, and logout clears both cookies.
+    - 🔍 **Found, not fixed (out of scope):** the already-running backend process was still
+      answering with `SITE_URL=http://localhost:3000` in its verification email, though `.env`
+      has held `:3100` since step 0 - a stale environment on a long-lived dev process, picked up
+      correctly by the deploy script in Phase 12, but worth restarting locally.
+    - 8 new unit tests (`jwt.ts`'s pure decode/expiry logic) + 2 new live-only contract checks
+      (login/verify's `ApiProblem` shape against the real `GlobalExceptionHandler`) + 10 new e2e
+      tests (×2 viewports) against a stub extended with a fixed test account and real-shaped
+      fake JWTs. 51 unit/contract tests, 34 e2e tests, all passing; build still succeeds with a
+      dead `BACKEND_URL`.
 - [ ] Step 5 — watchlist page (+ the notification-history endpoint)
 - [ ] Step 6 — dashboards page: Superset embedded SDK, guest tokens refreshed before expiry
 - [ ] Step 7 — About & Methodology, mobile + accessibility pass, the done-when demo
@@ -3674,3 +3719,8 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-25 | `RiskScoreCard` makes CLAUDE.md §6 structurally impossible to violate: one return path renders a score, the caveat is in the same JSX, not a sibling a page could omit. Mutation-checked | `RiskScoreCard.tsx`, `.test.tsx` |
 | 2026-11-25 | 🐛 Flaky e2e test, not a product bug: "Medicine name" labels both search forms, so filling before a client-side navigation actually landed could fill the OLD page's field. Fixed by waiting for the URL itself; stable across 3 full runs | `e2e/drug-and-manufacturer.spec.ts` |
 | 2026-11-25 | A transient ~1.5s model-service slowdown showed the risk score's "temporarily unavailable" fallback live, with the rest of the manufacturer page unaffected, then a retry showed the real score - the backend's own design promise, observed actually holding | PROGRESS Phase 11 step 3 |
+| 2026-11-25 | Step 4: Next.js's own Proxy docs explicitly warn Proxy "should not be used as a full session management or authorization solution" - so refresh-on-every-request-via-middleware was rejected on the framework's advice before being built, not after. Refresh lives in a Server-Action-callable helper instead | `session.ts` |
+| 2026-11-25 | JWT claims read without verifying the signature - correct here only because Spring verifies the real one on every proxied call regardless, and this reading is never used to grant anything, only to decide whether to bother refreshing | `jwt.ts` |
+| 2026-11-25 | `sub` in the real access token is the user's numeric id, not the email (a separate `email` claim) - confirmed against a real token from the live backend, corrected a wrong assumption in a code comment before it misled anyone | `jwt.ts` |
+| 2026-11-25 | Verified live, with curl, before any frontend code touched it: a reused refresh token is rejected AND revokes the new token issued from it too (`AuthService.refresh`'s stolen-token response), exactly as `AuthService`'s own Javadoc promises | PROGRESS Phase 11 step 4 |
+| 2026-11-25 | The core security property checked in a real headless browser, not just argued: after login, `document.cookie` reports `""` - httpOnly genuinely blocks page-script access to both tokens, not only in theory | PROGRESS Phase 11 step 4 |

@@ -14,19 +14,75 @@ const ROUTES = {
   "/api/v1/drugs/search": (query) => drugSearch(query),
   "/api/v1/manufacturers/m1": () => [200, fixture("manufacturer-page.json")],
   "/api/v1/manufacturers/m1/risk": () => [200, fixture("risk-score.json")],
+  "/api/v1/auth/register": () => [202, { status: "accepted" }],
+  "/api/v1/auth/login": (_query, body) => login(body),
+  "/api/v1/auth/refresh": (_query, body) => refresh(body),
+  "/api/v1/auth/logout": () => [204, null],
+  "/api/v1/auth/verify": (_query, body) => verify(body),
 };
 
-function notFoundProblem(message) {
+function problem(status, message) {
   return [
-    404,
+    status,
     {
-      status: 404,
+      status,
       error: message,
       detail: {},
       at: new Date().toISOString(),
       disclaimer: "Not medical advice. Data from CDSCO public alerts.",
     },
   ];
+}
+
+function notFoundProblem(message) {
+  return problem(404, message);
+}
+
+// A fixed account, not a real database - enough to exercise login/logout/refresh's happy and
+// unhappy paths. The access token is shaped like AccessTokens.issue()'s real JWT (header.payload.
+// signature, exp in the payload) so session.ts's expiry check has something real to decode; the
+// "signature" is never checked by anything in this project (see jwt.ts's own comment).
+const TEST_ACCOUNT = { email: "sentinel@example.com", password: "a-secret-password-12" };
+let currentRefreshToken = "stub-refresh-token-1";
+
+function mintAccessToken(email, lifetimeSeconds) {
+  const part = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  const exp = Math.floor(Date.now() / 1000) + lifetimeSeconds;
+  return `${part({ alg: "none" })}.${part({ sub: email, exp })}.stub-signature`;
+}
+
+function tokens(email) {
+  const expiresInSeconds = 900; // AccessTokens.LIFETIME
+  currentRefreshToken = `stub-refresh-token-${Math.random().toString(36).slice(2)}`;
+  return {
+    accessToken: mintAccessToken(email, expiresInSeconds),
+    refreshToken: currentRefreshToken,
+    expiresInSeconds,
+    emailVerified: true,
+  };
+}
+
+function login(body) {
+  const email = (body?.email ?? "").trim().toLowerCase();
+  if (email !== TEST_ACCOUNT.email || body?.password !== TEST_ACCOUNT.password) {
+    // The exact wording AuthController returns for both cases - see login/page.tsx's own comment.
+    return problem(401, "Email or password is not correct");
+  }
+  return [200, tokens(email)];
+}
+
+function refresh(body) {
+  if (!body?.refreshToken || body.refreshToken !== currentRefreshToken) {
+    return problem(401, "That session has ended. Please log in again.");
+  }
+  return [200, tokens(TEST_ACCOUNT.email)];
+}
+
+function verify(body) {
+  if (body?.token !== "valid-token") {
+    return problem(401, "That verification link is not valid");
+  }
+  return [200, { status: "verified" }];
 }
 
 function drugSearch(query) {
@@ -69,7 +125,21 @@ function batchSearch(query) {
 
 const port = Number(process.env.STUB_PORT ?? 18080);
 
-createServer((request, response) => {
+function readJsonBody(request) {
+  return new Promise((resolve) => {
+    let raw = "";
+    request.on("data", (chunk) => (raw += chunk));
+    request.on("end", () => {
+      try {
+        resolve(raw ? JSON.parse(raw) : undefined);
+      } catch {
+        resolve(undefined);
+      }
+    });
+  });
+}
+
+createServer(async (request, response) => {
   const url = new URL(request.url ?? "/", "http://stub");
   if (url.pathname === "/health") {
     response.writeHead(200).end("ok"); // Playwright waits on this before starting the tests
@@ -90,7 +160,8 @@ createServer((request, response) => {
     response.end(JSON.stringify({ error: `not stubbed: ${url.pathname}` }));
     return;
   }
-  const [status, body] = route(url.searchParams);
+  const body = request.method === "POST" ? await readJsonBody(request) : undefined;
+  const [status, responseBody] = await route(url.searchParams, body);
   response.writeHead(status, { "content-type": "application/json" });
-  response.end(JSON.stringify(body));
+  response.end(status === 204 ? undefined : JSON.stringify(responseBody));
 }).listen(port, "127.0.0.1", () => console.log(`stub backend on http://127.0.0.1:${port}`));

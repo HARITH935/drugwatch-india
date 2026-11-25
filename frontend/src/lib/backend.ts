@@ -198,3 +198,61 @@ export type RiskResult = {
 export function getRiskScore(manufacturerId: string): Promise<RiskResult> {
   return backendGet<RiskResult>(`/api/v1/manufacturers/${encodeURIComponent(manufacturerId)}/risk`);
 }
+
+// --- auth (step 4) --------------------------------------------------------------------------
+// POST calls, not cached, not retried: a retried login/refresh could double-submit a single-use
+// refresh token, and AuthService.refresh() treats a repeat as theft and revokes every session.
+
+export async function backendPost<T>(path: string, body: unknown): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${backendUrl()}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch (error) {
+    throw new BackendError(null, `backend unreachable for ${path}: ${String(error)}`);
+  }
+  if (!response.ok) {
+    const problem = await response.json().catch(() => null);
+    throw new BackendError(
+      response.status,
+      `backend answered ${response.status} for ${path}`,
+      problem,
+    );
+  }
+  if (response.status === 204) return undefined as T;
+  return (await response.json()) as T;
+}
+
+/** AuthService.Tokens */
+export type AuthTokens = {
+  accessToken: string;
+  refreshToken: string;
+  expiresInSeconds: number;
+  emailVerified: boolean;
+};
+
+// Always 202/204 regardless of outcome (AuthController's anti-enumeration design) - there is
+// nothing in the response worth typing beyond "it didn't throw".
+export function registerAccount(email: string, password: string): Promise<void> {
+  return backendPost<void>("/api/v1/auth/register", { email, password });
+}
+
+export function loginAccount(email: string, password: string): Promise<AuthTokens> {
+  return backendPost<AuthTokens>("/api/v1/auth/login", { email, password });
+}
+
+export function refreshSession(refreshToken: string): Promise<AuthTokens> {
+  return backendPost<AuthTokens>("/api/v1/auth/refresh", { refreshToken });
+}
+
+export function logoutSession(refreshToken: string): Promise<void> {
+  return backendPost<void>("/api/v1/auth/logout", { refreshToken });
+}
+
+export function verifyEmailToken(token: string): Promise<void> {
+  return backendPost<void>("/api/v1/auth/verify", { token });
+}

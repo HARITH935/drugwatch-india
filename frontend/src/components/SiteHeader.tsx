@@ -1,20 +1,47 @@
 import Link from "next/link";
 
-// Watchlist/auth-state links arrive with the pages that need them (steps 4-6). This exists now
-// so every later page inherits the same header rather than each one inventing its own.
-export function SiteHeader() {
+import { Button } from "@/components/ui/Button";
+import { logoutAction } from "@/lib/auth-actions";
+import { hasSession } from "@/lib/session";
+
+// hasSession() only reads a cookie (step 4) - cheap enough to call on every page's header
+// without turning this into a network round trip. Watchlist links arrive with step 5.
+export async function SiteHeader() {
+  const loggedIn = await hasSession();
+
   return (
     <header className="border-b border-border bg-card">
-      <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-4">
+      <div className="mx-auto flex h-16 max-w-3xl items-center justify-between gap-4 px-4">
         <Link href="/" className="text-lg font-semibold text-foreground">
           DrugWatch India
         </Link>
-        <Link
-          href="/drugs/search"
-          className="text-sm text-accent-foreground underline underline-offset-2"
-        >
-          Find a medicine
-        </Link>
+        <div className="flex items-center gap-4 text-sm">
+          <Link
+            href="/drugs/search"
+            className="text-accent-foreground underline underline-offset-2"
+          >
+            Find a medicine
+          </Link>
+          {loggedIn ? (
+            <form action={logoutAction}>
+              <Button type="submit" variant="ghost" size="sm">
+                Log out
+              </Button>
+            </form>
+          ) : (
+            <>
+              <Link href="/login" className="text-accent-foreground underline underline-offset-2">
+                Log in
+              </Link>
+              <Link
+                href="/register"
+                className="text-accent-foreground underline underline-offset-2"
+              >
+                Register
+              </Link>
+            </>
+          )}
+        </div>
       </div>
     </header>
   );

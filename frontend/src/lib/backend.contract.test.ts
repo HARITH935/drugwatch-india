@@ -64,4 +64,32 @@ describe.skipIf(!live)("contract with the live backend", () => {
     expect(Object.keys(real).sort()).toEqual(Object.keys(typedBatchFixture).sort());
     expect(real.outcome).toBe("NOT_FOUND"); // confirms the query really didn't match anything
   });
+
+  // Login/verify success responses aren't checked here: a success would either need a real
+  // account's credentials (not something to commit) or would create one in Harith's local
+  // Postgres on every test run. The ApiProblem shape on the error path is free to check and
+  // exercises the same GlobalExceptionHandler every other endpoint goes through.
+  it("POST /api/v1/auth/login answers a bad password with GlobalExceptionHandler's shape", async () => {
+    const response = await fetch(`${backendUrl()}/api/v1/auth/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "no-such-account@example.com", password: "wrong-password" }),
+    });
+    const real = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(Object.keys(real).sort()).toEqual(["at", "detail", "disclaimer", "error", "status"]);
+  });
+
+  it("POST /api/v1/auth/verify answers a bad token with GlobalExceptionHandler's shape", async () => {
+    const response = await fetch(`${backendUrl()}/api/v1/auth/verify`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token: "zzznosuchtokenzzz" }),
+    });
+    const real = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(Object.keys(real).sort()).toEqual(["at", "detail", "disclaimer", "error", "status"]);
+  });
 });
