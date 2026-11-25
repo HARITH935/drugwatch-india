@@ -22,6 +22,9 @@ export async function SiteHeader() {
           >
             Find a medicine
           </Link>
+          <Link href="/dashboards" className="text-accent-foreground underline underline-offset-2">
+            Dashboards
+          </Link>
           {loggedIn ? (
             <>
               <Link

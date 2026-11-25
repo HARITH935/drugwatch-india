@@ -141,3 +141,31 @@ Prerender) in Next's build output. Verified unaffected: all 24 e2e tests, all 37
 tests, and a real run against the live backend for every page (home, batch result in all three
 outcomes, drug page, manufacturer page with both risk-score states, drug search, and real 404s
 for both id-based routes with the correct HTTP status this time).
+
+## Amendment, 2026-11-25 — Embedding needs one narrow, deliberate exception to decision B
+
+**Context.** Step 6 embeds Superset dashboards with `@superset-ui/embedded-sdk`, already named in
+the plan's own stack (§6). `embedDashboard()` runs in the browser and inserts an iframe pointing
+at `supersetDomain` directly - there is no way to embed anything without the visitor's own browser
+loading Superset's page, which is a different thing from an API call and sits outside what
+decision B's "the browser's only backend is the Next.js server" was written to cover (that
+decision is about `BACKEND_URL` - Spring's JSON API - never about a third-party resource the
+embedding model requires the browser to address directly).
+
+**Decision:** add `NEXT_PUBLIC_SUPERSET_URL` - a second, deliberately public, env var alongside
+`BACKEND_URL`, read by the browser to build the iframe's `supersetDomain`. `GuestTokenService` now
+also returns the dashboard's Superset UUID alongside its guest token (`GuestToken.dashboardId`),
+because `embedDashboard({id, ...})` needs it too and it can only come from the server that
+already resolved it from the allowlisted key. This does not weaken `embeddableKeys()`'s own
+"keys, never UUIDs" rule (`GuestTokenTest.the_published_list_carries_keys_and_never_uuids`) - that
+rule is about `GET /api/v1/dashboards` refusing to leak the UUIDs of dashboards nobody asked to
+embed; it was never a claim that an *embedded* dashboard's own UUID stays secret from the page
+rendering it, which was always going to be visible in that page's DOM and network traffic the
+moment embedding shipped at all.
+
+**Still true, unchanged:** a guest token can only be minted via the short allowlisted key - the
+one thing `BACKEND_URL`-side validation protects - never by a client supplying a raw UUID.
+`fetchGuestToken()`'s refresh calls go through a Next.js Route Handler
+(`/api/dashboards/[key]/guest-token`), the first in this project, proxying to Spring exactly as
+every Server Component already does; the only genuinely new browser-to-third-party traffic is the
+iframe itself.

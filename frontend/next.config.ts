@@ -8,7 +8,7 @@ import type { NextConfig } from "next";
 // it. The same file holds the database, JWT and Superset secrets, and this server has no business
 // holding them - the least-privilege rule ml-serving's compose test already enforces for risk-api.
 // A key already set in the real environment (CI, Phase 12's VM) wins over the file.
-const FRONTEND_KEYS = ["BACKEND_URL"] as const;
+const FRONTEND_KEYS = ["BACKEND_URL", "NEXT_PUBLIC_SUPERSET_URL"] as const;
 const rootEnv = path.resolve(process.cwd(), "..", ".env");
 if (existsSync(rootEnv)) {
   const parsed = parseEnv(readFileSync(rootEnv, "utf8"));

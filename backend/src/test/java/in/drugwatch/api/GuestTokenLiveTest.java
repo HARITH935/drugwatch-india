@@ -49,6 +49,9 @@ class GuestTokenLiveTest {
         var token = tokens.tokenFor("states");
 
         assertThat(token.dashboard()).isEqualTo("states");
+        // The embedded SDK's embedDashboard() runs in the browser and needs this id to build the
+        // iframe itself - it has to come from somewhere, and this lookup already resolved it.
+        assertThat(token.dashboardId()).isEqualTo(System.getenv("SUPERSET_DASHBOARD_STATES"));
         assertThat(token.token()).isNotBlank();
         assertThat(token.expiresInSeconds()).isEqualTo(300);
     }

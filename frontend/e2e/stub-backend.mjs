@@ -19,6 +19,7 @@ const ROUTES = {
     "/api/v1/manufacturers/m1/risk": () => [200, fixture("risk-score.json")],
     "/api/v1/watchlist": (_query, _body, request) => listWatches(request),
     "/api/v1/watchlist/notifications": (_query, _body, request) => listNotifications(request),
+    "/api/v1/dashboards": () => [200, { dashboards: Object.keys(DASHBOARD_UUIDS) }],
   },
   POST: {
     "/api/v1/auth/register": () => [202, { status: "accepted" }],
@@ -45,6 +46,24 @@ function problem(status, message) {
 
 function notFoundProblem(message) {
   return problem(404, message);
+}
+
+// Mirrors the real allowlist's keys (GuestTokenHttpTest expects "drug-classes" first, so the
+// order matters too) - the UUIDs are invented, since nothing here ever talks to a real Superset.
+const DASHBOARD_UUIDS = {
+  "drug-classes": "stub-uuid-drug-classes",
+  "manufacturer-reporting": "stub-uuid-manufacturer-reporting",
+  "spurious-reports": "stub-uuid-spurious-reports",
+  states: "stub-uuid-states",
+};
+
+function mintDashboardGuestToken(key) {
+  const uuid = DASHBOARD_UUIDS[key];
+  if (!uuid) return notFoundProblem("No such dashboard");
+  return [
+    200,
+    { dashboard: key, dashboardId: uuid, token: `stub-guest-token-${key}`, expiresInSeconds: 300 },
+  ];
 }
 
 // A fixed account, not a real database - enough to exercise login/logout/refresh's happy and
@@ -237,8 +256,13 @@ createServer(async (request, response) => {
   let result;
   const deleteWatchMatch =
     request.method === "DELETE" && /^\/api\/v1\/watchlist\/(\d+)$/.exec(url.pathname);
+  const guestTokenMatch =
+    request.method === "POST" &&
+    /^\/api\/v1\/dashboards\/([a-z0-9-]+)\/guest-token$/.exec(url.pathname);
   if (deleteWatchMatch) {
     result = removeWatch(request, Number(deleteWatchMatch[1]));
+  } else if (guestTokenMatch) {
+    result = mintDashboardGuestToken(guestTokenMatch[1]);
   } else {
     let route = ROUTES[request.method]?.[url.pathname];
     // An id this stub doesn't know about mirrors the real NotFoundException - the same message

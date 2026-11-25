@@ -43,6 +43,12 @@ VIEWER_PERMISSIONS = [
     ("can_read", "Theme"),
     ("can_language_pack", "Superset"),
     ("can_log", "Superset"),
+    # Found running a real embedded dashboard in a real browser for the first time (Phase 11 step
+    # 6): the embedded app's own bootstrap calls GET /api/v1/me/roles/ before it renders anything,
+    # and without this the whole embed fails with Superset's generic "Something went wrong with
+    # embedded authentication" - a 403 on a request this list never anticipated, because nothing
+    # before step 6 ever loaded the embed in an actual browser to find it.
+    ("can_read", "CurrentUserRestApi"),
     # reading back the filter state and permalinks created below
     ("can_read", "DashboardFilterStateRestApi"),
     ("can_read", "DashboardPermalinkRestApi"),

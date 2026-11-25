@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 11 — Frontend. The public Next.js website.
-**Next:** step 6 - the dashboards page: Superset embedded SDK, guest tokens refreshed before expiry.
+**Next:** step 7 - About & Methodology, mobile + accessibility pass, the Phase 11 done-when demo.
 
 ---
 
@@ -3463,7 +3463,57 @@ replies can take weeks. The draft is already written.
       tests (1 in `WatchlistTest`, 3 in `WatchlistHttpTest`, incl. one user's history staying
       invisible to another) + 10 new e2e tests (×2 viewports, watchlist flows). 48 frontend
       unit/contract tests, 44 e2e tests, 214 backend tests - all green on a clean run.
-- [ ] Step 6 — dashboards page: Superset embedded SDK, guest tokens refreshed before expiry
+- [x] **Step 6 — dashboards page: Superset embedded SDK, guest tokens refreshed before expiry** (2026-11-25)
+    - **The embedded SDK's own refresh mechanism is used as designed, not reinvented**: checked
+      its real dist files (`npm pack`, not assumed) before writing a line - `embedDashboard()`'s
+      `fetchGuestToken` callback is re-invoked on the SDK's own schedule (decoded from the current
+      token's `exp`, a 5 s buffer, a 10 s floor), so "refreshed before expiry" needed no timer of
+      this project's own. `DashboardEmbed.tsx`'s only job is handing it a callback that always
+      returns a fresh token - verified directly: a unit test extracts that exact callback and
+      calls it, asserting it resolves to a token string, not the response object.
+    - **A deliberate, narrow exception to decision B, recorded as an ADR 0020 amendment**: an
+      embedded dashboard is an iframe the browser loads directly, which decision B's "browser's
+      one backend" was never written to cover - there is no way to embed anything without the
+      browser knowing Superset's address. Added `NEXT_PUBLIC_SUPERSET_URL`, and
+      `GuestTokenService.GuestToken` now also returns the dashboard's Superset UUID (needed by
+      `embedDashboard({id, ...})`, which only the server that resolved it from the allowlisted key
+      can supply) - without weakening `embeddableKeys()`'s own "keys, never UUIDs" rule, which is
+      about a different question (nothing can ask Superset for a dashboard nobody listed).
+    - **The first Route Handler in this project** (`/api/dashboards/[key]/guest-token`), because
+      this is the first thing the *browser itself* has to call directly - the guest token expires
+      every 5 minutes, long after any Server Component has rendered, so there is no page render to
+      proxy it from.
+    - 🐛🔍 **A real, permanent bug found and fixed, not papered over: no try/catch around
+      `embedDashboard()` itself.** The guest-token fetch had one; the SDK call right after it did
+      not, so a rejection there was an unhandled promise rejection with no visible fallback at
+      all - silently broken, not loudly broken. Found by actually running it in a real browser
+      against the live backend, not by code review. Fixed, and a mutation-tested regression test
+      added: reverted the fix, confirmed the new test fails with exactly that unhandled
+      rejection, restored it, confirmed it passes.
+    - 🐛🔍 **A second real bug, in Phase 6 code, found only because this was the first time
+      anyone loaded a real embedded dashboard in a real browser.** After the SDK fix, Superset's
+      own embedded app still failed with "Something went wrong with embedded authentication" - a
+      403 on `GET /api/v1/me/roles/`, traced through Superset's container logs to the exact
+      missing permission: `configure_public_role.py`'s `VIEWER_PERMISSIONS` list (Phase 6) never
+      anticipated this call, because nothing before this step had ever rendered the embed outside
+      of Superset's own admin UI. Added `can_read on CurrentUserRestApi`, re-ran
+      `configure_public_role.py` then `configure_embedding.py` (`EmbeddedViewer` copies from
+      `Public`), and re-verified: a real dashboard's own content (its methodology text, matching
+      `docs/analytics-findings.md`) rendered inside the iframe, `scrollHeight` far past the empty
+      state, chart-data calls returning real 200s.
+    - 🔍 **The exact same Superset-login-under-load timeout already on record (step 5's finding)
+      surfaced a third time here**, intermittently 503-ing the guest-token endpoint during these
+      very verification runs - confirmed transient again by retrying once load settled, and the
+      calm "unavailable" fallback was seen engaging for real, not just in a unit test, during one
+      of those exact failures.
+    - 6 new frontend unit tests (`DashboardEmbed`, the SDK mocked - what it embeds, what its
+      refresh callback returns, what renders on failure) + 4 new e2e tests (×2 viewports: the tab
+      list, switching tabs, the Route Handler's proxy shape for both an allowlisted and an
+      unlisted key). The actual Superset iframe can't be exercised in CI (no Superset there) or
+      meaningfully mocked in jsdom (it's a real iframe); that part is verified only against the
+      live stack, as above. 54 frontend unit/contract tests, 52 e2e tests, 214 backend tests - all
+      green on a clean run.
+- [ ] Step 7 — About & Methodology, mobile + accessibility pass, the Phase 11 done-when demo
 - [ ] Step 7 — About & Methodology, mobile + accessibility pass, the done-when demo
 
 **Done when:** all pages work against the live backend on desktop and mobile.
@@ -3791,3 +3841,12 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-25 | `sub` in the real access token is the user's numeric id, not the email (a separate `email` claim) - confirmed against a real token from the live backend, corrected a wrong assumption in a code comment before it misled anyone | `jwt.ts` |
 | 2026-11-25 | Verified live, with curl, before any frontend code touched it: a reused refresh token is rejected AND revokes the new token issued from it too (`AuthService.refresh`'s stolen-token response), exactly as `AuthService`'s own Javadoc promises | PROGRESS Phase 11 step 4 |
 | 2026-11-25 | The core security property checked in a real headless browser, not just argued: after login, `document.cookie` reports `""` - httpOnly genuinely blocks page-script access to both tokens, not only in theory | PROGRESS Phase 11 step 4 |
+| 2026-11-25 | Step 5: `cookies().set()` in a plain Server Component render throws on this exact Next.js version - confirmed by building a throwaway page that called it directly, not assumed from the docs. The watchlist page only reads a fresh cookie; add/remove a watch go through Server Actions, which can refresh it | `session.ts`, `watchlist-actions.ts` |
+| 2026-11-25 | Notification history is one plain SQL join (`alert_notifications` to `watchlist_items`), not a new JPA relation that would exist for this one read - same reasoning `latestAlertMonth()` already used. Safe for a deleted watch: `watchlist_item_id` cascades | `WatchlistService.listNotifications` |
+| 2026-11-25 | 🐛 Found reading `WatchlistNotifier` for an unrelated reason: its email linked to `/search`, a route that was never built (the real one, decided in step 0, is `/drugs/search`) - a real notification email would have 404'd. One-line fix | `WatchlistNotifier.java` |
+| 2026-11-25 | 🐛 `GuestTokenLiveTest`'s own base64url padding always appended `"=="` then trimmed to a multiple of 4 of the ORIGINAL length - correct only when that length was already 0 mod 4, silently dropping real trailing bytes otherwise. Flaked for exactly that reason (variable-width float timestamps); fixed, stable across 5 reruns | `GuestTokenLiveTest.java` |
+| 2026-11-25 | Confirmed `GuestTokenLiveTest`/`RiskProxyLiveTest`'s intermittent local failures can never reach CI: both are gated on env vars (`SUPERSET_EMBED_PASSWORD`, risk-api's) that GitHub Actions never sets, so a Mac-only contention artifact was ruled out as a merge-gate risk rather than chased forever | `.github/workflows/lint.yml` |
+| 2026-11-25 | Step 6: read the embedded SDK's real dist files (`npm pack`, not the README alone) before writing any code - confirmed its own refresh timing logic so "guest tokens refreshed before expiry" needed no timer of this project's own | `@superset-ui/embedded-sdk` |
+| 2026-11-25 | Embedding is an iframe the browser loads directly, which decision B's "browser's one backend" rule was never written to cover - a deliberate, narrow, documented exception (`NEXT_PUBLIC_SUPERSET_URL`), not a quiet violation of it | ADR 0020 amendment |
+| 2026-11-25 | 🐛 No try/catch around `embedDashboard()` itself - found running it in a real browser, not by review. An unhandled rejection with no visible fallback, fixed and mutation-tested (reverted, confirmed the new test fails, restored) | `DashboardEmbed.tsx` |
+| 2026-11-25 | 🐛🔍 Phase 6's `configure_public_role.py` never granted `can_read on CurrentUserRestApi`, because nothing before step 6 had ever loaded a real embedded dashboard in a real browser to discover Superset's own bootstrap needs it. Found via the container's logs, fixed, re-verified with a real dashboard's real content rendering | `infra/superset/configure_public_role.py` |

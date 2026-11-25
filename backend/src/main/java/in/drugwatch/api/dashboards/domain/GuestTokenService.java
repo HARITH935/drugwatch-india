@@ -62,7 +62,13 @@ public class GuestTokenService {
             // allowlisted key is published by the endpoint below anyway.
             throw new NotFoundException("No such dashboard");
         }
-        return new GuestToken(dashboardKey, requestGuestToken(login(), uuid), TOKEN_LIFETIME_SECONDS);
+        // The UUID is returned here too, not just kept server-side: the embedded SDK's
+        // embedDashboard() runs in the browser and needs it to build the iframe's src, so there
+        // is no way to embed at all without the viewer's own page learning it. That is a
+        // different question from the one embeddableKeys()'s own "keys only" rule answers - a
+        // caller still cannot mint a token for a UUID it supplies itself, only for one this
+        // lookup already resolved from an allowlisted key.
+        return new GuestToken(dashboardKey, uuid, requestGuestToken(login(), uuid), TOKEN_LIFETIME_SECONDS);
     }
 
     /**
@@ -177,8 +183,8 @@ public class GuestTokenService {
         }
     }
 
-    /** A token, the dashboard it is for, and how long it lasts. */
-    public record GuestToken(String dashboard, String token, int expiresInSeconds) {}
+    /** A token, the dashboard it is for (its public key and Superset's own id), and how long it lasts. */
+    public record GuestToken(String dashboard, String dashboardId, String token, int expiresInSeconds) {}
 
     /** Superset could not be reached or refused. The caller gets 503, never the detail. */
     public static class DashboardUnavailableException extends RuntimeException {

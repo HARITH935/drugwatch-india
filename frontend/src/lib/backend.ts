@@ -336,3 +336,30 @@ export function getNotificationHistory(accessToken: string): Promise<Notificatio
     authHeaders(accessToken),
   );
 }
+
+// --- dashboards (step 6) ---------------------------------------------------------------------
+// Public, like the backend endpoints they wrap - the embedded charts show the same CDSCO data
+// every visitor already sees elsewhere on the site, so none of this needs a logged-in session.
+
+/** DashboardController.available()'s shape. Keys only - the Superset UUIDs stay out of this
+ * response on purpose (GuestTokenTest.the_published_list_carries_keys_and_never_uuids). */
+export type DashboardList = {
+  dashboards: string[];
+};
+
+export function getDashboardKeys(): Promise<DashboardList> {
+  return backendGet<DashboardList>("/api/v1/dashboards");
+}
+
+/** GuestTokenService.GuestToken. `dashboardId` is Superset's own UUID for this dashboard - see
+ * ADR 0020's amendment for why this one response carries it when the published list never does. */
+export type GuestToken = {
+  dashboard: string;
+  dashboardId: string;
+  token: string;
+  expiresInSeconds: number;
+};
+
+export function mintGuestToken(key: string): Promise<GuestToken> {
+  return backendPost<GuestToken>(`/api/v1/dashboards/${encodeURIComponent(key)}/guest-token`, {});
+}
