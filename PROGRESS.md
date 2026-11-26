@@ -2,9 +2,8 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 12 — Deploy & harden.
-**Next:** Phase 11 is signed off. Read `DRUGWATCH_PHASES.md` §9 Phase 12 and copy its checklist in
-before starting step 1.
+**Current phase:** Phase 12 — Deploy & harden. Free managed platforms (ADR 0021).
+**Next:** Step 0 — production images, proven on the Mac.
 
 ---
 
@@ -24,7 +23,7 @@ before starting step 1.
 | 9 | Backend | ✅ Done |
 | 10 | LLM extraction | ✅ Done (done-when NOT met, by design) |
 | 11 | Frontend | ✅ Done |
-| 12 | Deploy & harden | ⬜ Not started |
+| 12 | Deploy & harden | 🟨 In progress |
 
 Legend: ⬜ Not started · 🟨 In progress · ✅ Done
 
@@ -3585,6 +3584,57 @@ accessibility violations.
 
 ---
 
+## Phase 12 — Deploy & harden
+
+Approved 2026-11-26. Plan: `DRUGWATCH_PHASES.md` §9 Phase 12, §15 (security), §16 (monitoring).
+Goal: a live, reliable public system - **at ₹0, with no credit card**. Shape and reasons: **ADR 0021**.
+
+**Six things the plan assumed that aren't true, found before any code:**
+- **No launch with real data yet** - the CDSCO permission email has never been sent
+  (`docs/permissions.md` ⬜), and §7 forbids publishing before permission.
+- **No free tier fits the stack in one place** - ~8-9 GB at peak (web ~3.5 GB incl. MLflow
+  ~1.9 GB, Airflow ~1.5 GB, Spark 2.7 GB). Oracle/AWS/GCP free tiers need a credit card.
+- **Airflow + Spark only run on the Mac** (ADR 0012: host JDK, prefetched jar, uv caches).
+- **The risk service loads its model from MLflow at startup**, and that model exists only on the Mac.
+- **The backend and frontend have no Dockerfiles.**
+- **Earlier phases left obligations:** Superset Talisman + CSP and its `admin` password, the rate
+  limiter's forwarded headers behind a proxy, `secure` cookies.
+
+**Decisions (Harith, 2026-11-26):** free managed platforms instead of a VM - website on
+**Vercel**, Spring API on **Render**, risk service (private) and Superset on **Hugging Face
+Spaces**, Postgres on **Neon**, Redis on **Upstash**, email via **Brevo**, uptime via
+**UptimeRobot**. The pipeline stays on the Mac and publishes gold to Neon. MLflow is not deployed
+(the model is baked into the risk image). Site password-locked until CDSCO permission.
+
+**⚠️ Harith's to do (outside the code):** send the CDSCO email (replies take weeks); create free
+accounts on Vercel, Render, Hugging Face, Neon, Upstash, Brevo, UptimeRobot (tell me if any asks
+for a card).
+
+- [ ] **Step 0 — production images, proven on the Mac** - Dockerfile for the API (fits 512 MB,
+      measured with `--memory=512m`), risk image with the model baked in, Superset image for a
+      Space; the frontend's one build-time value made runtime
+- [ ] **Step 1 — Neon + Upstash, and publishing gold** - roles as local, Flyway migrates `app`,
+      a `publish_gold` command (Mac → Neon, one transaction), row counts match
+- [ ] **Step 2 — risk service on a private Space** - `/health` answers with a token, refuses without
+- [ ] **Step 3 — Superset on a Space** - metadata in Neon, Talisman + CSP, real admin password,
+      public role + embedding, dashboards imported, `public_access_test.py` against production
+- [ ] **Step 4 — Spring API on Render** - secrets in Render, forwarded headers, TLS to Neon/Upstash,
+      live curls of every endpoint
+- [ ] **Step 5 — website on Vercel + the password lock** - `proxy.ts` basic auth (env-switched),
+      secure cookies, the Playwright suite run against production
+- [ ] **Step 6 — CI/CD** - tests pass → deploy hooks; platform auto-deploy off; a failing test
+      blocks a deploy (proven)
+- [ ] **Step 7 — Brevo** - a watchlist email and an Airflow failure email delivered to a real inbox
+- [ ] **Step 8 — backups** - weekly encrypted `pg_dump` (GitHub Actions), `raw/` off-site copy,
+      a restore into an empty database
+- [ ] **Step 9 — health checks, logs, uptime monitoring** - UptimeRobot on every public service
+- [ ] **Step 10 — final docs, demo video, public launch** (password off only once permission is recorded)
+
+**Done when:** the site is live over HTTPS, auto-deploys on push, production emails are delivered
+via Brevo, and backups run.
+
+---
+
 Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when each phase starts.
 
 ---
@@ -3920,3 +3970,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-25 | Zero WCAG 2.1 A/AA violations across every real page on the first real `axe` run, both viewports - the real evidence that step 1's computed contrast ratios and the semantic HTML used throughout this phase generalise, not just an isolated claim | `e2e/accessibility.spec.ts` |
 | 2026-11-25 | 🐛 The About page duplicated the root layout's own `<Disclaimer/>` - caught by eye in a screenshot taken for this writeup, not by any automated check, since "shown twice" breaks no rule CLAUDE.md or axe tests for. Fixed; verified by counting the rendered text node, not grepping raw HTML (which double-counts via Next's hydration payload) | `about/page.tsx` |
 | 2026-11-25 | The About & Methodology link went in the footer, not the header, on purpose - step 6's own overflow regression was caused by adding one more header link, and the lesson was applied immediately rather than repeated | `layout.tsx` |
+| 2026-11-26 | Phase 11 signed off by Harith | — |
+| 2026-11-26 | Phase 12 approved: free managed platforms (Vercel, Render, Hugging Face Spaces, Neon, Upstash, Brevo, UptimeRobot) instead of a cloud VM + Caddy - ₹0 and no credit card (Oracle/AWS/GCP need one; Hostinger ~₹800/month declined). Pipeline stays on the Mac and publishes gold to Neon; MLflow not deployed | ADR 0021 |
