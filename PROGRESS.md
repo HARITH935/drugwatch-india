@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 12 — Deploy & harden. Free managed platforms (ADR 0021).
-**Next:** Step 0 — production images, proven on the Mac.
+**Next:** Step 1 — Neon + Upstash, and publishing gold.
 
 ---
 
@@ -3610,9 +3610,49 @@ Spaces**, Postgres on **Neon**, Redis on **Upstash**, email via **Brevo**, uptim
 accounts on Vercel, Render, Hugging Face, Neon, Upstash, Brevo, UptimeRobot (tell me if any asks
 for a card).
 
-- [ ] **Step 0 — production images, proven on the Mac** - Dockerfile for the API (fits 512 MB,
-      measured with `--memory=512m`), risk image with the model baked in, Superset image for a
-      Space; the frontend's one build-time value made runtime
+- [x] **Step 0 — production images for the API and risk service, proven on the Mac** (2026-11-26)
+    - **`backend/Dockerfile`** - multi-stage (JDK to compile, bare JRE to run), non-root, a
+      `/actuator/health` `HEALTHCHECK`, `-XX:MaxRAMPercentage=75.0` so the heap follows whatever
+      memory limit the container is given rather than a number hand-picked for this Mac.
+      **Proven at Render's real limit**, not assumed: run under `--memory=512m` against the real
+      local Postgres/Redis, Flyway migrated, real endpoints hit
+      (`/api/v1/drugs/search`, `/api/v1/batches/search`) with real data, all `200` - settled at
+      **333 MB of 512 MB**. The real multi-stage build (not a shortcut) also builds clean from
+      nothing.
+    - 🔍 **MLflow and MLflow-deploying a model is not a Render/Space problem - the risk service's
+      startup design was.** It calls MLflow's registry **every time it starts** (`registry.py`),
+      and ADR 0021 deploys no MLflow. Fixed by giving `registry.load()` a second path:
+      `export_bundle()` (run once on the Mac, MLflow up) writes the registered model via MLflow's
+      own on-disk format plus a small `metadata.json` (version, run_id, tags) into
+      `ml-serving/artifacts/model-bundle/` (git-ignored, **164 KB**); `load_local()` reads it back
+      with no tracking server; `MODEL_SOURCE=local` switches `load()` to that path. Local dev
+      (`docker-compose.yml`) sets nothing, so the existing MLflow-backed path is untouched.
+    - **`infra/ml-serving/Dockerfile.space`** (new, sits beside the existing local-dev one rather
+      than replacing it) COPYs the bundle in and sets `MODEL_SOURCE=local`. **Proven with MLflow
+      stopped entirely** (`docker compose stop mlflow`): the real built image still answers
+      `/health` with the correct version, run_id and tags, still passes the ONNX-vs-LightGBM
+      startup agreement check (2.65 × 10⁻⁸), at **265 MB of a 512 MB limit**.
+    - New tests (`ml-serving/tests/test_registry.py`): `model_source()`'s default and switch,
+      `export_bundle` → `load_local` round-tripping the real registered model bit-for-bit (not
+      just "loads something" - the model scores identically), and that `load()` itself (not just
+      `load_local()`) honours `MODEL_SOURCE` - mutation-tested by breaking the dispatch and
+      confirming that exact test catches it.
+    - Amendment to **ADR 0017** records the two-path design; the change is also why ADR 0021's
+      "one portable image per service" framing doesn't apply to Superset or the frontend (below).
+    - **Scope correction, caught before building anything for it:** a Superset image was listed
+      here too, but Step 3 already owns it with the context this step doesn't have yet (the Neon
+      connection, Talisman/CSP, the public and embedding roles) - building one blind now would
+      mean redoing it there. Moved.
+    - **The frontend needs no Dockerfile at all.** Vercel builds it from source per deployment, so
+      `NEXT_PUBLIC_SUPERSET_URL` is an ordinary per-environment Vercel project setting, not a
+      build-time-vs-runtime problem the way a shared Docker image would make it.
+    - 🔍 **Found, not fixed (environment, not a bug):** this Mac's link to Maven Central and
+      Docker Hub was severely throttled for roughly the first hour after a Docker Desktop restart
+      (~10 KB/s; separately, bind-mounting the 1.2 GB host `~/.m2` into a build to dodge it made
+      things worse, not better - Docker Desktop's Mac file-sharing layer is slow for many small
+      files, which is a different bottleneck from network bandwidth). Recovered on its own; the
+      backend's base images were switched from `-jammy` to `-noble` tags since this Mac already
+      had `-noble` cached from another project, which helped regardless of link speed.
 - [ ] **Step 1 — Neon + Upstash, and publishing gold** - roles as local, Flyway migrates `app`,
       a `publish_gold` command (Mac → Neon, one transaction), row counts match
 - [ ] **Step 2 — risk service on a private Space** - `/health` answers with a token, refuses without
@@ -3972,3 +4012,4 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-25 | The About & Methodology link went in the footer, not the header, on purpose - step 6's own overflow regression was caused by adding one more header link, and the lesson was applied immediately rather than repeated | `layout.tsx` |
 | 2026-11-26 | Phase 11 signed off by Harith | — |
 | 2026-11-26 | Phase 12 approved: free managed platforms (Vercel, Render, Hugging Face Spaces, Neon, Upstash, Brevo, UptimeRobot) instead of a cloud VM + Caddy - ₹0 and no credit card (Oracle/AWS/GCP need one; Hostinger ~₹800/month declined). Pipeline stays on the Mac and publishes gold to Neon; MLflow not deployed | ADR 0021 |
+| 2026-11-26 | Step 0: backend fits 512 MB (settled at 333 MB); the risk service's startup design (calls MLflow's registry every boot) was the real Phase 12 blocker, not just missing a Dockerfile - fixed with an env-switched local-bundle load path, MLflow no longer needed in production | ADR 0017 amendment, `registry.py` |

@@ -1,0 +1,56 @@
+# The risk service's PRODUCTION image (Phase 12, ADR 0021: a private Hugging Face Space).
+#
+# Differs from the sibling Dockerfile (local dev, `docker-compose.yml`) in exactly one way: the
+# Space has no MLflow to call, so the registered model is baked in at build time instead of
+# fetched at startup. Everything else - dependencies, the non-root user, the one-worker choice -
+# is identical, and kept identical on purpose: two Dockerfiles that drift apart is two services
+# to debug differently.
+#
+# Before building this image, run (on the Mac, with the real MLflow up):
+#   cd ml-serving && uv run --env-file ../.env python -m drugwatch_serving.export_model_bundle
+# That writes ml-serving/artifacts/model-bundle/ (git-ignored, same as every other model weight
+# in this repo) - the COPY below fails loudly if it does not exist.
+#
+# Build context is the REPO ROOT, same reason as the sibling Dockerfile: ../ml for the approved
+# explanation wording.
+FROM python:3.13-slim
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libgomp1 curl \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:0.9.9 /uv /usr/local/bin/uv
+
+WORKDIR /app
+
+COPY ml/pyproject.toml ml/uv.lock ./ml/
+COPY ml-serving/pyproject.toml ml-serving/uv.lock ./ml-serving/
+RUN mkdir -p ml/src/drugwatch_ml ml-serving/src/drugwatch_serving \
+ && touch ml/src/drugwatch_ml/__init__.py ml-serving/src/drugwatch_serving/__init__.py
+
+RUN cd ml-serving && uv sync --no-dev --frozen
+
+COPY ml/src ./ml/src
+COPY ml-serving/src ./ml-serving/src
+# The baked-in model (~165 KB: a LightGBM booster is small). export_model_bundle.py wrote this;
+# it is not generated here, so the image always carries exactly the version that was exported,
+# never "whatever the registry happens to have" at build time.
+COPY ml-serving/artifacts/model-bundle ./ml-serving/model-bundle
+
+WORKDIR /app/ml-serving
+
+RUN useradd --create-home --uid 10001 serving && chown -R serving /app
+USER serving
+
+ENV PATH="/app/ml-serving/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    MLFLOW_DISABLE_AGENT_HINT=1 \
+    MODEL_SOURCE=local \
+    MODEL_BUNDLE_PATH=/app/ml-serving/model-bundle
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5 \
+  CMD curl -fsS http://localhost:8000/health || exit 1
+
+CMD ["uvicorn", "drugwatch_serving.app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

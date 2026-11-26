@@ -87,3 +87,25 @@ orders them. The fix was to count only pairs the original ranked *strictly*.
   a tracked model version is not a source file. `ml-serving/artifacts/` is git-ignored.
 - MLflow has no authentication (ADR 0016), and this service has none either. Both are bound to
   `127.0.0.1`. Phase 12 must put the service behind the API rather than exposing it.
+
+## Amendment, 2026-11-26 (Phase 12, ADR 0021): no MLflow in production
+
+ADR 0021 does not deploy MLflow - the Hugging Face Space this service runs on has no registry to
+call `registry.load()`'s MLflow branch against. Rather than change what `/health`, `/predict` and
+`/explain` guarantee, `registry.py` gained a second way to arrive at the same `LoadedModel`:
+
+- **`export_bundle()`** runs once on the Mac, with the real MLflow up, and writes the model via
+  MLflow's own on-disk format (`mlflow.lightgbm.save_model`) plus a `metadata.json` carrying the
+  version, run_id and tags the registry branch gets from `ModelVersion` - into
+  `ml-serving/artifacts/model-bundle/` (git-ignored, ~165 KB).
+- **`load_local()`** reads that bundle back with `file://`, no tracking server involved.
+- **`MODEL_SOURCE=local`** (an env var, not a code path chosen by whether MLflow is reachable)
+  makes `load()` call `load_local()` instead. Local dev's `docker-compose.yml` sets nothing, so
+  the existing MLflow-backed path is unchanged there.
+- A new `infra/ml-serving/Dockerfile.space` COPYs the bundle in and sets `MODEL_SOURCE=local`;
+  the local-dev Dockerfile is untouched. Verified end to end on the Mac: `docker compose stop
+  mlflow`, then the Space image still answers `/health` with the correct version, run_id and
+  tags, and `/predict` still passes the ONNX-vs-LightGBM startup agreement check.
+- **Re-running `export_model_bundle` is manual**, on purpose: a new `production` alias should not
+  silently reach a running Space without someone deciding to rebuild and redeploy it - the same
+  reason the model is resolved by alias rather than "latest" in the first place.
