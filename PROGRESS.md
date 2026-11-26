@@ -2,9 +2,9 @@
 
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
-**Current phase:** Phase 11 — Frontend. The public Next.js website.
-**Next:** Phase 11's 7 steps are all complete and its done-when is demonstrated - awaiting sign-off
-to start Phase 12 (Deploy & harden).
+**Current phase:** Phase 12 — Deploy & harden.
+**Next:** Phase 11 is signed off. Read `DRUGWATCH_PHASES.md` §9 Phase 12 and copy its checklist in
+before starting step 1.
 
 ---
 
@@ -23,7 +23,7 @@ to start Phase 12 (Deploy & harden).
 | 8 | Model serving | ✅ Done |
 | 9 | Backend | ✅ Done |
 | 10 | LLM extraction | ✅ Done (done-when NOT met, by design) |
-| 11 | Frontend | 🟨 In progress |
+| 11 | Frontend | ✅ Done |
 | 12 | Deploy & harden | ⬜ Not started |
 
 Legend: ⬜ Not started · 🟨 In progress · ✅ Done
@@ -3579,8 +3579,9 @@ replies can take weeks. The draft is already written.
 
 **Done when:** all pages work against the live backend on desktop and mobile. **Demonstrated**
 2026-11-25 - every page above, both viewports, real backend data, zero overflow, zero
-accessibility violations. Phase 11 steps are complete; awaiting Harith's sign-off to close the
-phase, per this project's own rule that a phase closes only when its owner says so.
+accessibility violations.
+
+✅ **Phase 11 signed off by Harith, 2026-11-26.**
 
 ---
 
