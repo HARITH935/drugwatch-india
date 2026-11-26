@@ -29,7 +29,11 @@ fi
 set -a && . ./.env && set +a
 
 : "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}"
-: "${NEON_DATABASE_URL:?set NEON_DATABASE_URL in .env - the connection string Neon gave you}"
+: "${NEON_DATABASE_URL_DIRECT:?set NEON_DATABASE_URL_DIRECT in .env - the Neon connection string with -pooler removed from the host}"
+
+# The non-pooled connection, not NEON_DATABASE_URL: Neon's pooler runs PgBouncer in transaction
+# mode, which can break the multi-statement session pg_restore needs for --single-transaction.
+NEON_DATABASE_URL="$NEON_DATABASE_URL_DIRECT"
 
 echo "dumping gold from the local database..."
 docker compose exec -T -e PGPASSWORD="$POSTGRES_PASSWORD" postgres \

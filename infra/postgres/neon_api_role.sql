@@ -58,6 +58,14 @@ GRANT SELECT ON ALL TABLES IN SCHEMA gold TO drugwatch_api;
 ALTER DEFAULT PRIVILEGES IN SCHEMA gold GRANT SELECT ON TABLES TO drugwatch_api;
 
 -- --------------------------------------------------------------------------- its own tables: own
+-- Unlike the local superuser, Neon's connecting role is not automatically a member of a role it
+-- just created, so it cannot hand that role ownership of a schema until it can "become" it too.
+DO $$
+BEGIN
+    EXECUTE format('GRANT drugwatch_api TO %I', current_user);
+END
+$$;
+
 -- Same as local: created here so ownership is unambiguous, then Flyway (running from Render)
 -- creates its tables inside a schema it already owns.
 CREATE SCHEMA IF NOT EXISTS app AUTHORIZATION drugwatch_api;

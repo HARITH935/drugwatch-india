@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 12 — Deploy & harden. Free managed platforms (ADR 0021).
-**Next:** Step 1 — Neon + Upstash, and publishing gold.
+**Next:** Step 1b — Upstash (Neon's half of step 1 is done: roles created, gold published, row counts verified).
 
 ---
 
@@ -3653,28 +3653,42 @@ for a card).
       files, which is a different bottleneck from network bandwidth). Recovered on its own; the
       backend's base images were switched from `-jammy` to `-noble` tags since this Mac already
       had `-noble` cached from another project, which helped regardless of link speed.
-- [ ] **Step 1 — Neon + Upstash, and publishing gold** - roles as local, Flyway migrates `app`,
-      a `publish_gold` command (Mac → Neon, one transaction), row counts match
-    - **Blocked on Harith:** needs a Neon project and an Upstash Redis database created, and their
-      connection strings pasted in so they can go into the local (git-ignored) `.env`.
-    - **Done already, not needing those credentials yet:**
-      - `infra/postgres/publish_gold.sh` - dumps `gold` from the local Postgres container and
-        restores it into Neon inside one transaction (`pg_restore --single-transaction --clean
-        --if-exists`), via the local `postgres` container's own `pg_dump`/`pg_restore` (this Mac
-        has no Postgres client tools, but that container's version already matches Neon's and has
-        outbound internet). Ends by checking every real gold table's row count (queried from
-        `pg_tables`, not a hand-picked list) matches between local and Neon.
-      - `infra/postgres/neon_api_role.sql` and `infra/postgres/neon_superset_reader.sql` - the
-        same two least-privilege roles as `api_role.sql`/`superset_reader.sql`, adapted for Neon:
-        `GRANT CONNECT` targets `current_database()` instead of a hardcoded `drugwatch` (Neon
-        names its database whatever was chosen when the project was made), and the
-        `staging`/`ops`/`dbt_staging`/`dbt_intermediate` revokes are dropped - `publish_gold.sh`
-        only ever copies `--schema=gold`, so those schemas never exist on Neon to revoke from.
-      - `.env.example` gained `NEON_DATABASE_URL` and `UPSTASH_REDIS_URL` placeholders.
-      - 🔍 **Found, not yet fixed (Step 4's problem, flagged here while it was fresh):** the
-        backend currently takes `REDIS_HOST`/`REDIS_PORT` (`application.yaml`), with no TLS or
-        password support - Upstash requires both (`rediss://` + an access key). Spring's Redis
-        config will need that added before Step 4 can actually point at Upstash.
+- [x] **Step 1a — Neon: roles + gold published** (2026-11-26)
+    - **Verified for real against Harith's actual Neon project** (`dry-thunder-88401092`,
+      `neondb`, region us-east-2): `infra/postgres/publish_gold.sh` dumped `gold` from the local
+      Postgres container and restored it into Neon inside one transaction. All 17 gold tables'
+      row counts match exactly, local vs Neon (`dim_date` 7305, `dim_drug` 5651,
+      `mart_ml_features` 85924, down to `mart_data_freshness` 1 - every table, not a sample).
+      `drugwatch_api` and `superset_reader` created on Neon via `neon_api_role.sql` /
+      `neon_superset_reader.sql`: verified `drugwatch_api` reads all 17 gold tables, writes 0, and
+      owns its own `app` schema; `superset_reader` reads all 17, same as local.
+    - **Three real Neon-specific problems found and fixed, not assumed away:**
+      1. Neon's connection string contains unescaped `&`/`?` (`...?sslmode=require&channel_binding=
+         require`), which breaks `set -a && . ./.env` - fixed by quoting the value in `.env`.
+      2. Neon's pooled connection (`-pooler` in the hostname) runs PgBouncer in transaction mode,
+         which doesn't suit `pg_restore --single-transaction` or role-creation DDL - added
+         `NEON_DATABASE_URL_DIRECT` (same string, `-pooler` removed) and pointed
+         `publish_gold.sh` and the role scripts at that one instead.
+      3. `gold.dim_drug` has a trigram index (`gin (product_name public.gin_trgm_ops)`); Neon
+         doesn't have the `pg_trgm` extension installed by default the way local Postgres does -
+         `CREATE EXTENSION IF NOT EXISTS pg_trgm;` once, then the restore succeeded.
+      4. Neon's connecting role isn't automatically a member of a role it just created (unlike the
+         local superuser), so `CREATE SCHEMA app AUTHORIZATION drugwatch_api` failed with "must be
+         able to SET ROLE" - fixed by `GRANT drugwatch_api TO <connecting role>` first.
+      5. (Caught by `bash -n` before it ever touched Neon) an apostrophe inside `${VAR:?message}`
+         breaks bash's brace-matching even inside double quotes - reworded the message.
+    - Production-only passwords generated for both Neon roles (`NEON_API_DB_PASSWORD`,
+      `NEON_SUPERSET_READER_PASSWORD` in `.env`) - deliberately different values from the local
+      roles' passwords, so a leaked local `.env` can't also reach production.
+    - `.env.example` updated: `NEON_DATABASE_URL`, `NEON_DATABASE_URL_DIRECT`,
+      `NEON_API_DB_PASSWORD`, `NEON_SUPERSET_READER_PASSWORD`.
+- [ ] **Step 1b — Upstash + wiring Neon into Flyway/the app** - Upstash account still needed;
+      Flyway hasn't been pointed at Neon yet (that's Step 4, when the backend actually runs
+      against it); this step's own "roles as local" and "row counts match" criteria are now met.
+    - 🔍 **Found, not yet fixed (Step 4's problem, flagged here while it was fresh):** the
+      backend currently takes `REDIS_HOST`/`REDIS_PORT` (`application.yaml`), with no TLS or
+      password support - Upstash requires both (`rediss://` + an access key). Spring's Redis
+      config will need that added before Step 4 can actually point at Upstash.
 - [ ] **Step 2 — risk service on a private Space** - `/health` answers with a token, refuses without
 - [ ] **Step 3 — Superset on a Space** - metadata in Neon, Talisman + CSP, real admin password,
       public role + embedding, dashboards imported, `public_access_test.py` against production
@@ -4033,3 +4047,4 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-26 | Phase 11 signed off by Harith | — |
 | 2026-11-26 | Phase 12 approved: free managed platforms (Vercel, Render, Hugging Face Spaces, Neon, Upstash, Brevo, UptimeRobot) instead of a cloud VM + Caddy - ₹0 and no credit card (Oracle/AWS/GCP need one; Hostinger ~₹800/month declined). Pipeline stays on the Mac and publishes gold to Neon; MLflow not deployed | ADR 0021 |
 | 2026-11-26 | Step 0: backend fits 512 MB (settled at 333 MB); the risk service's startup design (calls MLflow's registry every boot) was the real Phase 12 blocker, not just missing a Dockerfile - fixed with an env-switched local-bundle load path, MLflow no longer needed in production | ADR 0017 amendment, `registry.py` |
+| 2026-11-26 | Step 1a: gold published to Harith's real Neon project, all 17 tables' row counts verified; `drugwatch_api`/`superset_reader` created there. Hit and fixed 4 real Neon differences from local Postgres: unquoted `&`/`?` breaking `. ./.env`, the pooled connection unsuited to `pg_restore`/DDL (added `NEON_DATABASE_URL_DIRECT`), `pg_trgm` not preinstalled, and Neon's connecting role needing an explicit `GRANT ... TO` before it can own a schema | `publish_gold.sh`, `neon_api_role.sql`, `neon_superset_reader.sql` |
