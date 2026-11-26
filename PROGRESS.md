@@ -3704,6 +3704,33 @@ for a card).
       support - Upstash requires both (`rediss://` + an access key). Spring's Redis config will
       need that added before Step 4 can actually point at Upstash.
 - [ ] **Step 2 — risk service on a private Space** - `/health` answers with a token, refuses without
+    - **Done: the token check itself, proven against the real built image.** A private Hugging
+      Face Space is still reachable over the public internet by anything that calls its URL -
+      "private" only gates the browser UI, not server-to-server calls - so `app.py` gained a
+      `require_token` dependency applied to the whole app (`FastAPI(..., dependencies=[Depends(...)])`),
+      checked against every route uniformly including `/health`, rather than relying on the
+      platform alone. `RISK_API_TOKEN` unset (true locally - `docker-compose.yml` sets nothing)
+      means open, exactly as before this step; set (true once the Space is up) means every
+      request needs `Authorization: Bearer <token>`.
+      - New tests in `test_app.py`: unset → 200 with no header; set → 401 with no header, 401
+        with the wrong token, 200 with the right one. Mutation-tested: broke the comparison,
+        watched the two refusal tests fail for exactly that reason, restored it.
+      - **Verified against the real `infra/ml-serving/Dockerfile.space` image**, not just the
+        unit tests: built it, ran it with `RISK_API_TOKEN` set and MLflow stopped, and got 401 /
+        401 / 200 from real `curl`s - the last one answering with the actual model's version,
+        run_id and scores, at 345 MB of the 512 MB limit.
+      - 🔍 **Found, not fixed (environment, not the code):** the *first* build of that image
+        looked successful but silently kept the pre-change `app.py` - BuildKit's cache logs
+        showed the `COPY ml-serving/src` layer as freshly re-run ("DONE", not "CACHED"), yet
+        `grep` inside the running container found none of the new code. A plain `docker build
+        --no-cache` produced a correct image; the mismatch was never explained, so it's recorded
+        here as a reason to treat "the log said DONE" as insufficient proof after this - the
+        deployed file itself has to be checked.
+    - **Still needed - Harith's turn:** create a Hugging Face account and a new Space (type
+      **Docker**, visibility **Private**), so there's a `git` remote to push `ml-serving/`,
+      `ml/` and `infra/ml-serving/Dockerfile.space` (as that Space's `Dockerfile`) to, and a place
+      to set the real `RISK_API_TOKEN` secret (HF Spaces don't build from a registry image the
+      way Render does - they build from a Dockerfile pushed to the Space's own git repo).
 - [ ] **Step 3 — Superset on a Space** - metadata in Neon, Talisman + CSP, real admin password,
       public role + embedding, dashboards imported, `public_access_test.py` against production
 - [ ] **Step 4 — Spring API on Render** - secrets in Render, forwarded headers, TLS to Neon/Upstash,
@@ -4063,3 +4090,4 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-26 | Step 0: backend fits 512 MB (settled at 333 MB); the risk service's startup design (calls MLflow's registry every boot) was the real Phase 12 blocker, not just missing a Dockerfile - fixed with an env-switched local-bundle load path, MLflow no longer needed in production | ADR 0017 amendment, `registry.py` |
 | 2026-11-26 | Step 1a: gold published to Harith's real Neon project, all 17 tables' row counts verified; `drugwatch_api`/`superset_reader` created there. Hit and fixed 4 real Neon differences from local Postgres: unquoted `&`/`?` breaking `. ./.env`, the pooled connection unsuited to `pg_restore`/DDL (added `NEON_DATABASE_URL_DIRECT`), `pg_trgm` not preinstalled, and Neon's connecting role needing an explicit `GRANT ... TO` before it can own a schema | `publish_gold.sh`, `neon_api_role.sql`, `neon_superset_reader.sql` |
 | 2026-11-26 | Step 1b: Upstash verified live (AUTH/PING/SET/GET round trip) via a raw Python socket/ssl probe, after the local container's `redis-cli` turned out to have a TLS-verification quirk unrelated to Upstash itself (`openssl s_client` verified the same cert fine). Phase 12 step 1 done | `UPSTASH_REDIS_URL` in `.env` |
+| 2026-11-26 | Step 2: a private HF Space is still reachable by server-to-server calls, so the risk service checks its own bearer token (`RISK_API_TOKEN`) on every route rather than trusting Space visibility alone - unset locally, so no local-dev behaviour changed. Verified 401/401/200 against the real built image, not just unit tests | `app.py`, `test_app.py` |

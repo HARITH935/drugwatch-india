@@ -88,6 +88,35 @@ def feature_row(client) -> dict[str, float | None]:
 
 
 @pytest.mark.integration
+def test_no_token_required_when_risk_api_token_is_unset(client, monkeypatch):
+    """Local dev (docker-compose.yml) sets nothing, so the existing test suite and every
+    local curl must keep working exactly as before this step."""
+    monkeypatch.delenv("RISK_API_TOKEN", raising=False)
+    assert client.get("/health").status_code == 200
+
+
+@pytest.mark.integration
+def test_health_refuses_without_the_token_once_one_is_set(client, monkeypatch):
+    monkeypatch.setenv("RISK_API_TOKEN", "the-real-secret")
+    response = client.get("/health")
+    assert response.status_code == 401
+
+
+@pytest.mark.integration
+def test_health_refuses_the_wrong_token(client, monkeypatch):
+    monkeypatch.setenv("RISK_API_TOKEN", "the-real-secret")
+    response = client.get("/health", headers={"Authorization": "Bearer wrong"})
+    assert response.status_code == 401
+
+
+@pytest.mark.integration
+def test_health_answers_with_the_right_token(client, monkeypatch):
+    monkeypatch.setenv("RISK_API_TOKEN", "the-real-secret")
+    response = client.get("/health", headers={"Authorization": "Bearer the-real-secret"})
+    assert response.status_code == 200
+
+
+@pytest.mark.integration
 def test_health_names_the_version_and_its_limitations(client):
     """A disputed score has to be traceable to a version, and the caveat is part of what is
     served - so `/health` returns more than {"status": "ok"}."""

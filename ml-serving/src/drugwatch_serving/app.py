@@ -20,10 +20,11 @@ question from the one asked.
 """
 
 import contextlib
+import os
 from typing import Annotated, Any
 
 import numpy as np
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from drugwatch_serving import onnx_export, registry
@@ -82,6 +83,23 @@ def matrix_from(rows: list[dict[str, float | None]], feature_names: tuple[str, .
     return matrix
 
 
+def require_token(authorization: Annotated[str | None, Header()] = None) -> None:
+    """Phase 12 (ADR 0021): the Hugging Face Space this service runs on is reachable over the
+    public internet even set to "private" visibility - that setting only gates the browser UI,
+    not calls from another server. So the one caller meant to reach this service (Phase 9's
+    Spring Boot API) proves it with a shared bearer token, checked here rather than left to the
+    platform.
+
+    Unset locally - `docker-compose.yml` sets nothing - so local dev and the existing test suite
+    are unaffected; this only bites once `RISK_API_TOKEN` is set, which happens on the Space.
+    """
+    expected = os.environ.get("RISK_API_TOKEN")
+    if not expected:
+        return
+    if authorization != f"Bearer {expected}":
+        raise HTTPException(status_code=401, detail="missing or invalid bearer token")
+
+
 @contextlib.asynccontextmanager
 async def lifespan(_: FastAPI):
     """Load the model, export it to ONNX, and prove the two paths agree before serving anything."""
@@ -136,6 +154,7 @@ app = FastAPI(
     ),
     version="1.0.0",
     lifespan=lifespan,
+    dependencies=[Depends(require_token)],
 )
 
 
