@@ -3655,6 +3655,26 @@ for a card).
       had `-noble` cached from another project, which helped regardless of link speed.
 - [ ] **Step 1 — Neon + Upstash, and publishing gold** - roles as local, Flyway migrates `app`,
       a `publish_gold` command (Mac → Neon, one transaction), row counts match
+    - **Blocked on Harith:** needs a Neon project and an Upstash Redis database created, and their
+      connection strings pasted in so they can go into the local (git-ignored) `.env`.
+    - **Done already, not needing those credentials yet:**
+      - `infra/postgres/publish_gold.sh` - dumps `gold` from the local Postgres container and
+        restores it into Neon inside one transaction (`pg_restore --single-transaction --clean
+        --if-exists`), via the local `postgres` container's own `pg_dump`/`pg_restore` (this Mac
+        has no Postgres client tools, but that container's version already matches Neon's and has
+        outbound internet). Ends by checking every real gold table's row count (queried from
+        `pg_tables`, not a hand-picked list) matches between local and Neon.
+      - `infra/postgres/neon_api_role.sql` and `infra/postgres/neon_superset_reader.sql` - the
+        same two least-privilege roles as `api_role.sql`/`superset_reader.sql`, adapted for Neon:
+        `GRANT CONNECT` targets `current_database()` instead of a hardcoded `drugwatch` (Neon
+        names its database whatever was chosen when the project was made), and the
+        `staging`/`ops`/`dbt_staging`/`dbt_intermediate` revokes are dropped - `publish_gold.sh`
+        only ever copies `--schema=gold`, so those schemas never exist on Neon to revoke from.
+      - `.env.example` gained `NEON_DATABASE_URL` and `UPSTASH_REDIS_URL` placeholders.
+      - 🔍 **Found, not yet fixed (Step 4's problem, flagged here while it was fresh):** the
+        backend currently takes `REDIS_HOST`/`REDIS_PORT` (`application.yaml`), with no TLS or
+        password support - Upstash requires both (`rediss://` + an access key). Spring's Redis
+        config will need that added before Step 4 can actually point at Upstash.
 - [ ] **Step 2 — risk service on a private Space** - `/health` answers with a token, refuses without
 - [ ] **Step 3 — Superset on a Space** - metadata in Neon, Talisman + CSP, real admin password,
       public role + embedding, dashboards imported, `public_access_test.py` against production
