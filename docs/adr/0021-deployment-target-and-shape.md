@@ -30,8 +30,8 @@ the shape, all checked rather than assumed:
 |---|---|---|
 | Next.js website | **Vercel** (Hobby) | Builds from `frontend/`; HTTPS on `*.vercel.app` |
 | Spring Boot API | **Render** free web service, from a Dockerfile | 512 MB; sleeps after 15 min idle (cold start ~30-60 s) - kept awake by the uptime monitor's pings, inside the 750 free hours/month for one service |
-| Risk service (FastAPI + ONNX) | **Hugging Face Space** (Docker, free CPU), **private** | The registered model is **baked into the image** at build time, so MLflow is not deployed. Private: only the API, holding a read token, can call it (§15: FastAPI not public) |
-| Superset | **Hugging Face Space** (Docker, free CPU), public | Must be reachable for the embedded iframe (§15 already allows this). Metadata in Neon |
+| Risk service (FastAPI + ONNX) | **Render** free web service, from a Dockerfile, same account as the API | The registered model is **baked into the image** at build time, so MLflow is not deployed. Not on any allowlist a browser could reach - only the API, holding `RISK_API_TOKEN`, can call it (§15: FastAPI not public). See amendment below for why this moved off Hugging Face |
+| Superset | **Render** free web service, from a Dockerfile, same account | Must be reachable for the embedded iframe (§15 already allows this). Metadata in Neon. **Unverified here:** the 512 MB limit - step 3's own job to measure, same way step 0 measured the other two |
 | PostgreSQL (gold, `app`, Superset metadata) | **Neon** free (0.5 GB) | TLS required; the same least-privilege roles as local (`drugwatch_api`, `superset_reader`) |
 | Redis (cache, rate limits) | **Upstash** free | TLS required |
 | Email | **Brevo** free | From a verified single sender (no own domain, so deliverability is weaker - accepted) |
@@ -72,10 +72,34 @@ A restore into an empty database is tested, not assumed.
 
 | Option | Why not |
 |---|---|
+| Hugging Face Spaces for the risk service and Superset (original plan, reversed below) | HF restricted free accounts to Static Spaces and a small Gradio/ZeroGPU allowance around mid-2026 - Docker Spaces now need a paid plan. Found, not predicted: this was accepted and working when step 0 planned around it |
 | Oracle Cloud Always Free (24 GB ARM) | Requires a credit card |
 | Hostinger KVM 2 (8 GB, UPI) | ~₹800/month; Harith chose ₹0 |
 | Azure for Students | Credit runs out in ~1.5-3 months, then the site goes down |
 | DigitalOcean (Student Pack) | Card or PayPal, and PayPal's address check asks for a card |
-| Everything on Render | 512 MB per service and 750 hours/month shared - Superset alone needs more |
+| Everything on Render (original reasoning, now reversed below) | 512 MB per service and 750 hours/month shared - Superset alone was assumed to need more, untested at the time |
 | Render's free Postgres | Expires after 30 days |
 | Airflow + Spark in the cloud | No free tier has ~4 GB for a monthly job; GitHub Actions' US IP ranges also risk being refused by CDSCO |
+
+## Amendment, 2026-11-26 (Phase 12 step 2): Hugging Face Spaces reversed, both moved to Render
+
+Mid-step, creating the risk service's Space hit a wall that did not exist when this ADR was
+written: Hugging Face now shows **"Docker (paid)"** on `huggingface.co/new-space` for most free
+accounts - a platform policy change, not a misconfiguration. Free accounts are limited to Static
+Spaces and a small Gradio/ZeroGPU allowance. Checked, not assumed: Render's own docs confirm a
+`Dockerfile Path` field exists precisely so one repo can back several independent services, each
+pointing at a different Dockerfile - `backend/Dockerfile` and
+`infra/ml-serving/Dockerfile.space` can sit in the same account Render's step 4 already needs.
+
+- **Risk service → Render**, as a second free web service in the same account as the Spring Boot
+  API. Nothing about the image or the step 2 token check changes - `RISK_API_TOKEN` does the same
+  job a private Space's own gate would have, and was built for exactly this reason (ADR 0017's
+  amendment: "a private Space is still reachable by any server-to-server call").
+- **Superset → Render**, as a third. This reverses this ADR's own "Everything on Render" rejection
+  above, whose stated reason - Superset needs more than 512 MB - was never actually measured.
+  Step 3 must measure it the same way step 0 measured the backend and risk service, before
+  assuming Render fits; if it does not, Superset specifically needs a different home and this ADR
+  gets amended again.
+- **Three free services now share the 750-hour/month pool** instead of one. Each spins down
+  after 15 minutes without traffic and consumes no hours while asleep, so this is accepted rather
+  than measured in advance - revisit if real usage proves it wrong.
