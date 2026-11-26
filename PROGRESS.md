@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 12 — Deploy & harden. Free managed platforms (ADR 0021).
-**Next:** Step 1b — Upstash (Neon's half of step 1 is done: roles created, gold published, row counts verified).
+**Next:** Step 2 — risk service on a private Hugging Face Space (step 1, Neon + Upstash, is done).
 
 ---
 
@@ -3682,13 +3682,27 @@ for a card).
       roles' passwords, so a leaked local `.env` can't also reach production.
     - `.env.example` updated: `NEON_DATABASE_URL`, `NEON_DATABASE_URL_DIRECT`,
       `NEON_API_DB_PASSWORD`, `NEON_SUPERSET_READER_PASSWORD`.
-- [ ] **Step 1b — Upstash + wiring Neon into Flyway/the app** - Upstash account still needed;
-      Flyway hasn't been pointed at Neon yet (that's Step 4, when the backend actually runs
-      against it); this step's own "roles as local" and "row counts match" criteria are now met.
-    - 🔍 **Found, not yet fixed (Step 4's problem, flagged here while it was fresh):** the
-      backend currently takes `REDIS_HOST`/`REDIS_PORT` (`application.yaml`), with no TLS or
-      password support - Upstash requires both (`rediss://` + an access key). Spring's Redis
-      config will need that added before Step 4 can actually point at Upstash.
+- [x] **Step 1b — Upstash: verified live** (2026-11-26)
+    - Harith created a free Upstash Redis database (`neat-gull-204988.upstash.io`) and pasted its
+      `redis-cli --tls -u redis://...` connection command; saved as `UPSTASH_REDIS_URL` in `.env`
+      using the equivalent `rediss://` form (the app-client convention: the extra `s` means TLS,
+      same thing `--tls` does for the CLI).
+    - **The local `redis` container's own `redis-cli` couldn't verify Upstash's TLS certificate**
+      (`SSL_connect failed: certificate verify failed`) even after installing `ca-certificates`
+      and pointing `--cacert` straight at the system bundle - while `openssl s_client` against the
+      same host, same port, same CA file verified the cert fine (`Verify return code: 0 (ok)`,
+      Let's Encrypt). That split pointed at a quirk in this image's particular `redis-cli` TLS
+      build, not a real problem with Upstash or the connection string - so verification moved to
+      a different, trusted path: a 20-line script using only Python's standard `socket`/`ssl`
+      (same trust store `openssl` already proved correct, and the same kind of store Java/Node
+      use in production) did a real `AUTH default <password>` → `PING` → `SET` → `GET` round trip
+      over RESP, and got `+PONG` / `+OK` / the exact value back.
+    - **Phase 12 step 1 is now fully done:** both platforms are live, both roles are granted on
+      Neon with gold's row counts verified, and Redis is reachable and read/write-verified.
+    - 🔍 **Found, not yet fixed (Step 4's problem, flagged here while it was fresh):** the backend
+      currently takes `REDIS_HOST`/`REDIS_PORT` (`application.yaml`), with no TLS or password
+      support - Upstash requires both (`rediss://` + an access key). Spring's Redis config will
+      need that added before Step 4 can actually point at Upstash.
 - [ ] **Step 2 — risk service on a private Space** - `/health` answers with a token, refuses without
 - [ ] **Step 3 — Superset on a Space** - metadata in Neon, Talisman + CSP, real admin password,
       public role + embedding, dashboards imported, `public_access_test.py` against production
@@ -4048,3 +4062,4 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-26 | Phase 12 approved: free managed platforms (Vercel, Render, Hugging Face Spaces, Neon, Upstash, Brevo, UptimeRobot) instead of a cloud VM + Caddy - ₹0 and no credit card (Oracle/AWS/GCP need one; Hostinger ~₹800/month declined). Pipeline stays on the Mac and publishes gold to Neon; MLflow not deployed | ADR 0021 |
 | 2026-11-26 | Step 0: backend fits 512 MB (settled at 333 MB); the risk service's startup design (calls MLflow's registry every boot) was the real Phase 12 blocker, not just missing a Dockerfile - fixed with an env-switched local-bundle load path, MLflow no longer needed in production | ADR 0017 amendment, `registry.py` |
 | 2026-11-26 | Step 1a: gold published to Harith's real Neon project, all 17 tables' row counts verified; `drugwatch_api`/`superset_reader` created there. Hit and fixed 4 real Neon differences from local Postgres: unquoted `&`/`?` breaking `. ./.env`, the pooled connection unsuited to `pg_restore`/DDL (added `NEON_DATABASE_URL_DIRECT`), `pg_trgm` not preinstalled, and Neon's connecting role needing an explicit `GRANT ... TO` before it can own a schema | `publish_gold.sh`, `neon_api_role.sql`, `neon_superset_reader.sql` |
+| 2026-11-26 | Step 1b: Upstash verified live (AUTH/PING/SET/GET round trip) via a raw Python socket/ssl probe, after the local container's `redis-cli` turned out to have a TLS-verification quirk unrelated to Upstash itself (`openssl s_client` verified the same cert fine). Phase 12 step 1 done | `UPSTASH_REDIS_URL` in `.env` |
