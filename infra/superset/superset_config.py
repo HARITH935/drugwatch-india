@@ -145,9 +145,21 @@ if IS_PRODUCTION:
     # frame-ancestors is what actually matters for embedding (step 5): it names the one site
     # allowed to put this in an iframe, read from SITE_URL since that already means "the public
     # frontend" everywhere else in this repo (CLAUDE.md §10).
+    # Rate-limit counters belong in Redis, not in each worker's memory - Superset warns about
+    # this on every production boot, and an in-memory counter resets whenever Render restarts or
+    # wakes the service.
+    if _upstash_url:
+        RATELIMIT_STORAGE_URI = _upstash_url
     TALISMAN_CONFIG = {
         "force_https": True,
         "session_cookie_secure": True,
+        # Off deliberately. Talisman defaults this to SAMEORIGIN, which would refuse the embedded
+        # dashboards the frontend is built around (step 5), and X-Frame-Options has no syntax for
+        # "this one other origin" - its ALLOW-FROM was dropped by every modern browser. CSP's
+        # frame-ancestors below says the same thing precisely, and the CSP spec tells browsers to
+        # ignore X-Frame-Options when frame-ancestors is present; sending both just invites a
+        # browser that disagrees to block the iframe.
+        "frame_options": None,
         "content_security_policy": {
             "default-src": "'self'",
             "img-src": ["'self'", "data:", "blob:"],
