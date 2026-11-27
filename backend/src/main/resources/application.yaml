@@ -6,7 +6,9 @@ spring:
 
   datasource:
     # Host 5433 is how Postgres is published to this Mac; inside Docker it is postgres:5432.
-    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/${POSTGRES_DB:drugwatch}
+    # Production (Phase 12) sets API_DB_URL to a complete JDBC URL instead, because Neon needs
+    # `?sslmode=require` and its own host - which host/port/database alone cannot express.
+    url: ${API_DB_URL:jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/${POSTGRES_DB:drugwatch}}
     username: ${API_DB_USER:drugwatch_api}
     # No default, on purpose: the application must refuse to start rather than fall back to a
     # guessable password (plan §15, and the same rule as every other service here).
@@ -28,6 +30,17 @@ spring:
 
   data:
     redis:
+      # Production (Phase 12) sets the environment variable SPRING_DATA_REDIS_URL to Upstash's
+      # `rediss://default:<password>@host:port`, which Spring's relaxed binding maps onto
+      # `spring.data.redis.url` and prefers over the host/port below. One URL rather than more
+      # settings, because host and port alone cannot say "use TLS" or carry a password, and
+      # Upstash requires both.
+      #
+      # Deliberately NOT declared here as `url: ${REDIS_URL:...}`. There is no way to write "unset"
+      # as a placeholder default: an empty string is an invalid URL, and `${REDIS_URL:#{null}}`
+      # is not evaluated as SpEL on this binding path - it reached Lettuce as the literal string
+      # and failed every test with `Invalid Redis URL '#{null}'`. Leaving the key out entirely is
+      # what actually leaves it unset.
       host: ${REDIS_HOST:localhost}
       # Host 6380, because OpsPilot's Redis already uses 6379 (CLAUDE.md §10). Inside Docker it
       # is redis:6379.
@@ -55,7 +68,13 @@ spring:
     create-schemas: false
 
 server:
-  port: 8080
+  port: ${PORT:8080}
+  # Production (Phase 12) sets this to `framework`. Render terminates TLS at its edge and speaks
+  # plain HTTP to the container, so without it the API believes every request is http:// - which
+  # makes the links it builds (an email verification link, a redirect) point at http, and marks
+  # session cookies as not-secure. `none` locally, where there is no proxy and trusting a
+  # client-supplied X-Forwarded-For would let anyone spoof their own rate-limit identity.
+  forward-headers-strategy: ${FORWARD_HEADERS_STRATEGY:none}
   # Do not tell the internet which server this is; it is free information for an attacker.
   error:
     whitelabel:
@@ -113,6 +132,10 @@ drugwatch:
   risk:
     # The Phase 8 service. Inside Docker it is risk-api:8000; from this Mac, the published port.
     base-url: ${RISK_API_URL:http://localhost:8000}
+    # The shared bearer token the risk service checks on every route (Phase 12 step 2). Empty
+    # locally, where docker-compose sets none and the service asks for none. In production a wrong
+    # value is logged as a credentials refusal, not as "no score today" - see RiskClient.
+    token: ${RISK_API_TOKEN:}
   # Where the links in emails point. Not a secret, but wrong by default is worse than absent:
   # a verification link to the wrong host is a link that cannot be used.
   site-url: ${SITE_URL:http://localhost:3100}
