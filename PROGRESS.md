@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 12 — Deploy & harden. Free managed platforms (ADR 0021).
-**Next:** Step 4 — the Spring API on Render (steps 1-3 done; 2 and 3 both landed on Render rather than Hugging Face Spaces - ADR 0021's amendments).
+**Next:** Step 5 — the website on Vercel, plus the password lock (steps 1-4 done; everything bar the frontend now runs on Render + Neon + Upstash, all in Singapore).
 
 ---
 
@@ -3834,8 +3834,55 @@ for a card).
       create a dataset).
     - Embedded-dashboard UUIDs captured in `.env` as `RENDER_SUPERSET_DASHBOARD_*` for step 4's
       API allowlist. They come from the committed bundle, so they survive re-imports.
-- [ ] **Step 4 — Spring API on Render** - secrets in Render, forwarded headers, TLS to Neon/Upstash,
-      live curls of every endpoint
+- [x] **Step 4 — Spring API on Render, live and verified** (2026-11-27) at
+      `https://drugwatch-api-latest.onrender.com` (Render named it after the image tag).
+    - **Deployed as a prebuilt image, not built on Render** - `ghcr.io/harith935/drugwatch-api`,
+      published by CI. Render's builders get **HTTP 429 from Maven Central**, so compiling there
+      is impossible: not a Dockerfile problem, and no retry fixes it. CI publishes behind
+      `needs: backend`, which is the gate ADR 0021 wanted anyway ("a failing test can never
+      deploy"), tagged `:latest` for Render plus the commit SHA for traceability and rollback.
+      Confirmed `:latest` and the HEAD SHA tag resolve to one digest.
+    - **Production config:** `API_DB_URL` (a full JDBC URL, since Neon needs `?sslmode=require`),
+      `SPRING_DATA_REDIS_URL` for Upstash's TLS-and-password `rediss://`,
+      `FORWARD_HEADERS_STRATEGY=framework` because Render terminates TLS at its edge, and
+      `server.port: ${PORT:8080}` - Render injects `PORT=10000`, which the logs confirm Tomcat
+      bound to. Production-only JWT secret, separate from local's.
+      - 🐛 `spring.data.redis.url: ${REDIS_URL:#{null}}` **failed all 216 tests**: there is no way
+        to write "unset" as a placeholder default, and `#{null}` is not evaluated as SpEL on that
+        binding path - it reached Lettuce as the literal string (`Invalid Redis URL '#{null}'`).
+        Leaving the key out of the YAML entirely is what leaves it unset; production sets the
+        environment variable, which Spring's relaxed binding maps on and prefers over host/port.
+    - 🐛 **Three faults that only production could show**, all found by running the real image
+      against the deployed Neon, Upstash, risk service and Superset:
+      1. **Render's edge gzips JSON** for any client advertising gzip, and Java's `HttpClient`
+         does not decompress - Spring failed with "Error while extracting response for type
+         [RiskExplanation]". Both outbound clients now ask for `identity`.
+      2. **Superset refused the guest-token POST**: `400: The referrer header is missing` -
+         Flask-WTF's CSRF check wants a `Referer` on HTTPS. A browser sends one; a
+         server-to-server call does not; and it could not appear locally because Talisman, and so
+         HTTPS, is off there.
+      3. **Timeouts were tuned for a sibling container** (ADR 0017: p95 10 ms). Measured from
+         inside the API container against the deployed services, TLS alone completes in up to
+         0.99s (risk) and 1.25s (Superset), so a 1s connect timeout sat exactly on the edge and
+         failed intermittently. Now 3s/3s and 4s/6s, ~3x the worst measured.
+      - **Two of those three would have been invisible**: `RiskClient` reports every failure as
+        "no score today", so a reader would simply never see a score and nothing in the log would
+        say why. A 401/403 is now logged as a credentials refusal naming `RISK_API_TOKEN`,
+        distinct from an outage - and a mutation-tested unit test asserts the header is sent.
+    - **Verified against the live URL:** health UP; `alerts/latest`, `drugs/search`, `drugs/{id}`,
+      `manufacturers/{id}`, `batches/search`, `dashboards`, `/v3/api-docs` all 200; Flyway
+      validated `app` at v2 on Neon (PostgreSQL 18.7) over TLS; **risk score `available=true`,
+      `score=0.809092`** with a real SHAP explanation and its accuracy caveat; **a real guest-token
+      JWT minted** from production Superset; registration 202; and **rate limiting proven with
+      real traffic** - 70 requests against a 60/min limit produced 10 × `429`.
+      - `/api/v1/prices/compare` answers 401, which is correct: Phase 9 settled that it **will not
+        be built** (no price data exists downstream of `raw/`), so it is an unmapped path hitting
+        deny-by-default.
+    - 🔍 **Known consequence of the free tier, not a bug:** Render spins a service down after 15
+      minutes idle, and waking takes **55s (Superset) to 113s (the risk service)** - measured. No
+      sane timeout holds a page open that long, so the first visit after an idle spell shows the
+      page without its score or dashboards rather than hanging. ADR 0021 already names the fix
+      (the uptime monitor's pings keep them awake); that is step 9.
 - [ ] **Step 5 — website on Vercel + the password lock** - `proxy.ts` basic auth (env-switched),
       secure cookies, the Playwright suite run against production
 - [ ] **Step 6 — CI/CD** - tests pass → deploy hooks; platform auto-deploy off; a failing test
@@ -4195,4 +4242,6 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-26 | Plan reversed: Hugging Face now requires a paid plan to create a Docker Space on a free account (confirmed by trying, not from docs - a platform change since ADR 0021 was approved). Risk service and Superset both move to Render instead (two more free web services, one account, Render's `Dockerfile Path` field). Harith confirmed before the change | ADR 0021 amendment |
 | 2026-11-27 | Step 2 done: risk service live on Render (`drugwatch-india.onrender.com`), 401/401/200 and a real `/predict` score verified over HTTPS. First deploy failed - the model bundle was git-ignored and Render clones from git, unlike the Mac which already had it on disk | `.gitignore`, `ml-serving/artifacts/model-bundle/` |
 | 2026-11-27 | 🐛 Found by a symptom, not a review: Superset's first-run migrations took ~11.5 s **each** (156 in 30 min) because Neon sat in Ohio while Render sits in Singapore - ~220 ms per statement across the Pacific, plus two dropped connections. The migration was the messenger; the real cost was every future live query. Neon moves to Singapore and region becomes an explicit ADR decision. Measured after: 416 ms → 72 ms per statement | ADR 0021 2nd amendment |
+| 2026-11-27 | Step 4: Render's builders get HTTP 429 from Maven Central, so the API is built by CI and Render runs the prebuilt image - which is also ADR 0021's own "tests pass -> deploy" gate, arriving a step early | `.github/workflows/lint.yml` |
+| 2026-11-27 | Production found three faults local dev structurally cannot: Render gzips JSON (Java does not decompress), Superset's CSRF needs a `Referer` that only a browser sends, and timeouts tuned for a sibling container (10 ms) against the internet (~1s TLS). Two of them would have been invisible behind "no score today" | `RiskClient.java`, `GuestTokenService.java` |
 | 2026-11-27 | A silent failure is worse than a loud one: two Superset init runs hung at 0% CPU with no error (Linux probes a quiet socket only after 2 hours). Adding `pool_pre_ping` + TCP keepalives did not fix the cause, it **made the cause sayable** - the next run named a DNS failure inside the container, from a `docker run` missing `--network drugwatch_default`. Fix the silence first, then the bug | `superset_config.py` |
