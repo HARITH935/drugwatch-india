@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 12 — Deploy & harden. Free managed platforms (ADR 0021).
-**Next:** Step 2 — risk service on a private Hugging Face Space (step 1, Neon + Upstash, is done).
+**Next:** Step 3 — Superset on Render (steps 1 and 2 are done; step 2 ended up on Render too, not a Hugging Face Space - see its entry and ADR 0021's amendment).
 
 ---
 
@@ -3703,7 +3703,7 @@ for a card).
       currently takes `REDIS_HOST`/`REDIS_PORT` (`application.yaml`), with no TLS or password
       support - Upstash requires both (`rediss://` + an access key). Spring's Redis config will
       need that added before Step 4 can actually point at Upstash.
-- [ ] **Step 2 — risk service on a private Space** - `/health` answers with a token, refuses without
+- [x] **Step 2 — risk service on Render, live and verified** (2026-11-27)
     - **Done: the token check itself, proven against the real built image.** A private Hugging
       Face Space is still reachable over the public internet by anything that calls its URL -
       "private" only gates the browser UI, not server-to-server calls - so `app.py` gained a
@@ -3732,10 +3732,25 @@ for a card).
       second and third free web service, same account as step 4's Spring Boot API; Render's
       `Dockerfile Path` field supports a monorepo's separate Dockerfiles). Confirmed with
       Harith before changing course.
-    - **Still needed - Harith's turn:** a Render account (shared with step 4), and a new Web
-      Service in it pointing at this GitHub repo with **Dockerfile Path**
-      `infra/ml-serving/Dockerfile.space`, plus the real `RISK_API_TOKEN` secret set in that
-      service's environment variables.
+    - **Deployed and verified live, not just locally.** Harith created the Render account and a
+      free Web Service (Docker, `Dockerfile Path: infra/ml-serving/Dockerfile.space`, Root
+      Directory left blank so the build context is the repo root), with the real
+      `RISK_API_TOKEN` set as an environment variable. Live at
+      `https://drugwatch-india.onrender.com`.
+      - 🔍 **Found and fixed:** the first deploy failed - `COPY ml-serving/artifacts/model-bundle:
+        not found`. Render builds from a plain `git clone`, and that bundle was git-ignored along
+        with every other derived model artifact (the comment next to the old rule was about the
+        ONNX export specifically, which local dev rebuilds from MLflow at startup - this bundle
+        has nowhere else to come from on Render). Fixed with a narrow `.gitignore` exception for
+        just `ml-serving/artifacts/model-bundle/` (~165 KB), committed, redeployed, succeeded.
+      - **Verified against the real live URL**, same as the Dockerfile.space checks above but
+        for real over HTTPS: `/health` → 401 (no header), 401 (wrong token), 200 (right token,
+        real version/run_id). `/predict` with a real feature row → `200`, a real score
+        (`0.676819`), the real limitations text.
+      - Both things this ADR amendment put on Render share the name "drugwatch-india" right now
+        (the repo name, Render's own default) - worth renaming to something like
+        `drugwatch-risk-api` before step 4 creates the backend's service, so the two don't look
+        alike on the Render dashboard.
 - [ ] **Step 3 — Superset on Render** (was "on a Space" - ADR 0021's 2026-11-26 amendment) -
       metadata in Neon, Talisman + CSP, real admin password, public role + embedding, dashboards
       imported, `public_access_test.py` against production, **and Render's 512 MB measured for
@@ -4100,3 +4115,4 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-26 | Step 1b: Upstash verified live (AUTH/PING/SET/GET round trip) via a raw Python socket/ssl probe, after the local container's `redis-cli` turned out to have a TLS-verification quirk unrelated to Upstash itself (`openssl s_client` verified the same cert fine). Phase 12 step 1 done | `UPSTASH_REDIS_URL` in `.env` |
 | 2026-11-26 | Step 2: a private HF Space is still reachable by server-to-server calls, so the risk service checks its own bearer token (`RISK_API_TOKEN`) on every route rather than trusting Space visibility alone - unset locally, so no local-dev behaviour changed. Verified 401/401/200 against the real built image, not just unit tests | `app.py`, `test_app.py` |
 | 2026-11-26 | Plan reversed: Hugging Face now requires a paid plan to create a Docker Space on a free account (confirmed by trying, not from docs - a platform change since ADR 0021 was approved). Risk service and Superset both move to Render instead (two more free web services, one account, Render's `Dockerfile Path` field). Harith confirmed before the change | ADR 0021 amendment |
+| 2026-11-27 | Step 2 done: risk service live on Render (`drugwatch-india.onrender.com`), 401/401/200 and a real `/predict` score verified over HTTPS. First deploy failed - the model bundle was git-ignored and Render clones from git, unlike the Mac which already had it on disk | `.gitignore`, `ml-serving/artifacts/model-bundle/` |
