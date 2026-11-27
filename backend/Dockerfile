@@ -12,19 +12,31 @@
 # building fine on this Mac. Same shape as infra/ml-serving/Dockerfile.space, which needs the
 # repo root anyway (it reaches into ../ml) and deploys to Render unchanged.
 
-FROM eclipse-temurin:21-jdk-noble AS build
+# Maven comes with the image rather than being downloaded by ./mvnw, and the tag pins **the same
+# 3.10.0** the wrapper pins - so this Mac, CI and this image still all build with one Maven
+# version (CLAUDE.md §10), just obtained differently.
+#
+# The wrapper is used everywhere else and stays in the repo; only the image build skips it,
+# because inside Render's builder its download died instantly and repeatedly:
+#   wget: Failed to fetch https://.../apache-maven-3.10.0-bin.tar.gz
+# 0.193s is too fast to be a timeout, and the same from-scratch build succeeds on this Mac, so it
+# is something about wget in that sandbox rather than Maven Central being unreachable - note that
+# apt-get works in the runtime stage of this very build, and Maven's own downloads go through
+# Java's HTTP stack and the JDK truststore, not wget's. Not downloading a build tool at image
+# build time is the better shape anyway: one fewer network dependency between a commit and a
+# deploy.
+FROM maven:3.10.0-eclipse-temurin-21-noble AS build
 WORKDIR /app
 
-# The wrapper and pom.xml first, before any source code: Docker only reruns a step when the
-# files it COPYs change, so editing a .java file later skips re-downloading every dependency.
-COPY backend/.mvn/ .mvn/
-COPY backend/mvnw backend/pom.xml ./
-RUN ./mvnw dependency:go-offline -B
+# pom.xml first, before any source code: Docker only reruns a step when the files it COPYs
+# change, so editing a .java file later skips re-downloading every dependency.
+COPY backend/pom.xml ./
+RUN mvn dependency:go-offline -B
 
 COPY backend/src ./src
 # -DskipTests: CI already ran the full suite (incl. Testcontainers) before this image is built;
 # repeating it here would need Docker-in-Docker for no new information.
-RUN ./mvnw clean package -DskipTests -B
+RUN mvn clean package -DskipTests -B
 
 # noble (Ubuntu 24.04), not jammy: this Mac already has the noble tag cached from another
 # project, so the build needs no network for the base image at all on a slow link - and the two
