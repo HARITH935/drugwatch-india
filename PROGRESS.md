@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 12 — Deploy & harden. Free managed platforms (ADR 0021).
-**Next:** Step 3 — Superset on Render (steps 1 and 2 are done; step 2 ended up on Render too, not a Hugging Face Space - see its entry and ADR 0021's amendment).
+**Next:** Step 4 — the Spring API on Render (steps 1-3 done; 2 and 3 both landed on Render rather than Hugging Face Spaces - ADR 0021's amendments).
 
 ---
 
@@ -3753,9 +3753,8 @@ for a card).
         (the repo name, Render's own default) - worth renaming to something like
         `drugwatch-risk-api` before step 4 creates the backend's service, so the two don't look
         alike on the Render dashboard.
-- [ ] **Step 3 — Superset on Render** (was "on a Space" - ADR 0021's 2026-11-26 amendment) -
-      metadata in Neon, Talisman + CSP, real admin password, public role + embedding, dashboards
-      imported, `public_access_test.py` against production
+- [x] **Step 3 — Superset on Render, live and verified** (2026-11-27; was "on a Space" - ADR
+      0021's 2026-11-26 amendment)
     - [x] **512 MB settled, not assumed** (2026-11-27). Ran the image under a real
       `--memory=512m` cap and had **`verify_charts.py` exercise all 18 charts across all four
       dashboards** - real SQL against gold, real result processing, every chart returning rows.
@@ -3791,11 +3790,50 @@ for a card).
         not). On the right network it ran straight through. The keepalive settings stay: they are
         what made a two-hour silence into a one-line answer, and production needs them anyway
         against a database that scales to zero.
-    - **Still needed - Harith's turn:** a third Render Web Service for Superset (Docker,
-      **Dockerfile Path** `infra/superset/Dockerfile.render`, Free, **Singapore**), with the
-      production secrets from `.env` set as environment variables. Then, against that live URL:
-      `register_gold_database.sh`, `configure_public_role.py`, `configure_embedding.py`, the
-      dashboard import, and `public_access_test.py`.
+    - [x] **Live on Render** at `https://drugwatch-india-1.onrender.com` (Docker, Free,
+      Singapore, Dockerfile Path `infra/superset/Dockerfile.render`). Talisman verified against
+      the real deploy: `/` redirects to a *path* rather than looping on https (so ProxyFix is
+      working), `/login/` is 200, HSTS + CSP + nosniff all present.
+      - 🐛 **`x-frame-options: SAMEORIGIN` was being sent**, Talisman's default, which would have
+        refused the embedded dashboards step 5 is built around - and X-Frame-Options has no
+        syntax for "this one other origin" since browsers dropped ALLOW-FROM. Turned off;
+        `frame-ancestors` says it precisely and the CSP spec tells browsers to prefer it.
+        Also pointed `flask_limiter` at Upstash, which Superset had been warning about on every
+        boot (an in-memory counter resets whenever Render wakes the service).
+    - [x] **Provisioned from code, not clicks** - `infra/superset/provision_render.sh`. The four
+      existing scripts (`register_gold_database.sh`, `import_assets.sh`,
+      `configure_public_role.py`, `configure_embedding.py`) all reach Superset through
+      `docker compose exec`, because each needs its CLI or Flask app context - and **Render's
+      free instances have no shell access**. They do not need *that* Superset though: all of this
+      state lives in the metadata database. So the script runs the same production image locally
+      against the same Neon metadata, and drives the existing scripts unchanged.
+      - 🐛 **Its first run reported four happy sections and had imported nothing.** A
+        `grep -v ... || true` meant to quieten Superset's logging had swallowed the error and the
+        exit status with it. Fixed, then the real faults appeared one at a time:
+        1. `{'_schema': ['Must provide a password for the database']}` - the committed bundle
+           masks the password as `XXXXXXXXXX`, and Superset 6.1 rejects that **even when the
+           connection already exists**, which `import_assets.sh`'s comment assumes it does not.
+           Fixed by writing the real URI into the *staged* copy, never the committed one - which
+           also removed the local hostname the bundle would otherwise have written over Neon's.
+        2. `SSL SYSCALL error: EOF detected` mid-import - the same scales-to-zero connection drop
+           as before. The import runs with `overwrite=True`, so it is now retried up to 4 times.
+        3. **Every one of the 20 charts failed** with `database "drugwatch" does not exist`.
+           Every exported dataset carries `catalog: drugwatch`, and Superset uses the catalog as
+           the Postgres database name, overriding the connection URI - so Neon's default
+           `neondb` could never work. Fixed by naming production's database `drugwatch` too
+           (created it, republished gold, re-granted both roles), so **exported dashboards import
+           unchanged** instead of needing all 10 dataset files rewritten on every export.
+      - The script now reads the metadata database at the end and **refuses to report success**
+        unless dashboards actually exist and the stored gold URI really names Neon - precisely
+        because its first run had lied.
+    - [x] **Verified against the live service, not the provisioning container:**
+      `verify_charts.py` → **all 20 charts returned data** (Render Superset → Neon Singapore gold,
+      as `superset_reader`); `public_access_test.py` → **"public access is exactly what was
+      intended"**, 9 permitted actions working and 8 forbidden ones refused (create a chart,
+      rename or delete a dashboard, SQL Lab, list database connections, read roles, list users,
+      create a dataset).
+    - Embedded-dashboard UUIDs captured in `.env` as `RENDER_SUPERSET_DASHBOARD_*` for step 4's
+      API allowlist. They come from the committed bundle, so they survive re-imports.
 - [ ] **Step 4 — Spring API on Render** - secrets in Render, forwarded headers, TLS to Neon/Upstash,
       live curls of every endpoint
 - [ ] **Step 5 — website on Vercel + the password lock** - `proxy.ts` basic auth (env-switched),
