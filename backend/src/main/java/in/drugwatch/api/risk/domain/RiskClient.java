@@ -47,12 +47,33 @@ public class RiskClient {
         // client turned the 422 into "no score today", which is exactly what it shows when the
         // service is down. In production this would have been a permanently missing score with no
         // error anywhere. The live test against the real service is what caught it.
+        // 1s/2s until Phase 12, which was right while the risk service was a sibling container
+        // one Docker network away (ADR 0017: measured p95 10 ms). It now lives on another host
+        // across the internet, and measured from inside this container: DNS 0.21-0.38s, TCP
+        // 0.27-0.45s, **TLS completing at up to 0.99s** - so a 1s connect timeout sat exactly on
+        // the edge and failed intermittently with "HTTP connect timed out", reported to readers
+        // as a permanently missing score. Warm request bodies come back in 0.28-0.50s.
+        //
+        // 3s each, so roughly 3x the worst measured, and a worst case around 6s rather than the
+        // 30s ADR 0017 warned about. A **cold** service is a different thing entirely - Render
+        // free spins down and takes ~113s to wake, which no sane timeout covers - so that is
+        // handled by keeping it awake (step 9), not by waiting here.
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
-                .connectTimeout(Duration.ofSeconds(1))
+                .connectTimeout(Duration.ofSeconds(3))
                 .build());
-        factory.setReadTimeout(Duration.ofSeconds(2));
-        RestClient.Builder builder = RestClient.builder().baseUrl(baseUrl).requestFactory(factory);
+        factory.setReadTimeout(Duration.ofSeconds(3));
+        RestClient.Builder builder = RestClient.builder()
+                .baseUrl(baseUrl)
+                .requestFactory(factory)
+                // Ask for an uncompressed body. Render's edge gzips JSON when the client
+                // advertises gzip, and Java's HttpClient does **not** decompress it - so Spring
+                // received gzipped bytes and failed with "Error while extracting response for
+                // type [RiskExplanation] and content type [application/json]". Another silent
+                // outage in the making, since this client reports every failure as "no score
+                // today": a reader would simply never see one, with nothing in the log saying
+                // why. The body is a few hundred bytes, so compressing it buys nothing here.
+                .defaultHeader("Accept-Encoding", "identity");
         // Phase 12 (ADR 0021): the risk service runs on Render, reachable by anything that knows
         // its URL, so it checks a shared bearer token on every route. Empty locally, where
         // docker-compose sets no token and the service asks for none - so local dev is unchanged.

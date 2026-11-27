@@ -43,14 +43,35 @@ public class GuestTokenService {
 
     GuestTokenService(SupersetProperties superset) {
         this.superset = superset;
+        // Phase 12 moved Superset onto another host across the internet, so these are no longer
+        // local-network timings. Measured from inside the API container against the deployed
+        // Superset, warm: TLS completes in 0.75-1.25s and a login takes 2.0-2.7s in total - so
+        // the previous 2s connect sat close to the edge. 4s/6s is roughly 3x and 2x the worst
+        // measured.
+        //
+        // A **cold** Superset is not covered on purpose: Render free spins it down and a login
+        // then takes ~55s (measured), which is far too long to hold a page open for. Keeping it
+        // awake is step 9's job; until then a first visit after an idle spell shows the page
+        // without its dashboards rather than hanging.
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
-                .connectTimeout(Duration.ofSeconds(2))
+                .connectTimeout(Duration.ofSeconds(4))
                 .build());
-        factory.setReadTimeout(Duration.ofSeconds(5));
+        factory.setReadTimeout(Duration.ofSeconds(6));
         this.client = RestClient.builder()
                 .baseUrl(superset.baseUrl())
                 .requestFactory(factory)
+                // Superset refused the guest-token POST in production with
+                //   400 Bad Request: The referrer header is missing.
+                // That is Flask-WTF's CSRF check, which on an HTTPS request requires a Referer
+                // whose host matches the request's. A browser sends one; a server-to-server call
+                // does not, and it never came up locally because Talisman - and so HTTPS - is
+                // off there. Superset's own base URL is the honest value: this request really
+                // does originate from a client acting on that site's behalf.
+                .defaultHeader("Referer", superset.baseUrl())
+                // Same reasoning as RiskClient: Java's HttpClient does not decompress, and
+                // Render's edge gzips JSON for any client that advertises support.
+                .defaultHeader("Accept-Encoding", "identity")
                 .build();
     }
 
