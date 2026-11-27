@@ -42,6 +42,29 @@ else:
     SQLALCHEMY_DATABASE_URI = f"postgresql+psycopg2://{_user}:{_password}@postgres:5432/superset"
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+# Keep the metadata connection honest. A managed Postgres that scales to zero (Neon's free plan
+# does) will close a connection that has gone quiet, and `superset init` has stretches where it
+# builds its permission list in Python between queries - long enough to be dropped mid-run.
+#
+# When that close arrives cleanly, psycopg2 raises "SSL SYSCALL error: EOF detected". When it does
+# not, the client sits in a socket read **forever**, because Linux waits two hours before probing
+# a silent connection. Both were observed here: one run died with that error, another hung at 0%
+# CPU with no error at all, having written 90 of its permission rows.
+#
+# So: ask the kernel to probe after 30s of quiet and give up inside a minute, hand out no pooled
+# connection without checking it first, and retire connections before any upstream idle timeout
+# can. Set for local dev too - a laptop that sleeps drops connections the same way.
+SQLALCHEMY_ENGINE_OPTIONS = {
+    "pool_pre_ping": True,
+    "pool_recycle": 280,
+    "connect_args": {
+        "keepalives": 1,
+        "keepalives_idle": 30,
+        "keepalives_interval": 10,
+        "keepalives_count": 3,
+    },
+}
+
 # --- caching ------------------------------------------------------------------------------------
 # Redis is already running for the API (plan §6). Superset will not start in production mode with
 # the default in-memory caches, and they would be useless here anyway: every worker would hold its

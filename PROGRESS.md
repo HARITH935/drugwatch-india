@@ -3755,9 +3755,47 @@ for a card).
         alike on the Render dashboard.
 - [ ] **Step 3 — Superset on Render** (was "on a Space" - ADR 0021's 2026-11-26 amendment) -
       metadata in Neon, Talisman + CSP, real admin password, public role + embedding, dashboards
-      imported, `public_access_test.py` against production, **and Render's 512 MB measured for
-      real** (this ADR's own "Everything on Render" rejection assumed Superset needs more,
-      untested - step 0's measuring approach applies here too)
+      imported, `public_access_test.py` against production
+    - [x] **512 MB settled, not assumed** (2026-11-27). Ran the image under a real
+      `--memory=512m` cap and had **`verify_charts.py` exercise all 18 charts across all four
+      dashboards** - real SQL against gold, real result processing, every chart returning rows.
+      Peak **224 MB of 512**. That reverses ADR 0021's own "Superset alone needs more" rejection,
+      which had never been measured.
+    - [x] **Production config** (`superset_config.py`): one flag, `SUPERSET_DEPLOY_ENV=production`,
+      turns on Talisman (HSTS, secure cookies, a CSP whose `frame-ancestors` names `SITE_URL`) and
+      `ENABLE_PROXY_FIX` with one trusted proxy layer, since Render terminates TLS at its edge and
+      speaks plain HTTP to the container - without that, Talisman sees every request as insecure
+      and redirect-loops. Metadata database and Redis cache each accept a full URL now, so
+      production reaches Neon and Upstash while local dev keeps its host/port settings.
+      `Dockerfile.render` COPYs the config in; local dev mounts it, Render has no volume mounts.
+      - 🐛 **The first version of that flag broke local dev**, caught by testing immediately
+        rather than at deploy time: it read `SUPERSET_ENV`, which **the official apache/superset
+        image already sets to "production"** (confirmed by inspecting the running container).
+        So `force_https` turned on locally and the plain-HTTP login page started 302-ing to
+        `https://127.0.0.1:8088`. Renamed to `SUPERSET_DEPLOY_ENV`; local dev verified back to
+        200 with no CSP header, and `verify_charts.py` re-run clean.
+    - [x] **Metadata initialized on Neon Singapore**: all migrations applied (head
+      `4b2a8c9d3e1f`, 53 tables), admin created, roles built (Admin/Alpha/Gamma/Public/sql_lab),
+      226 permission-views. Run from the Mac with the real production image rather than on Render,
+      because **one-off jobs are a paid Render feature** - the same "drive production from the
+      Mac's scripts" shape step 1 already uses.
+      - 🐛 **Four failed runs before this, and the cause was neither Superset nor Neon.** Two died
+        with `SSL SYSCALL error: EOF detected`; two hung at **0% CPU with no error at all**, each
+        time having written exactly 90 permission rows. The hangs were the dangerous ones - a
+        silent wait, because Linux leaves a quiet socket alone for two hours before probing it.
+        Fixing that first made the real fault legible: `SQLALCHEMY_ENGINE_OPTIONS` with
+        `pool_pre_ping`, `pool_recycle` and TCP keepalives turned the next hang into
+        **`could not translate host name "...neon.tech": Name or service not known`** - **DNS
+        failing inside the container**, because that `docker run` had been started without
+        `--network drugwatch_default` (the risk-service checks in step 2 had it; this one did
+        not). On the right network it ran straight through. The keepalive settings stay: they are
+        what made a two-hour silence into a one-line answer, and production needs them anyway
+        against a database that scales to zero.
+    - **Still needed - Harith's turn:** a third Render Web Service for Superset (Docker,
+      **Dockerfile Path** `infra/superset/Dockerfile.render`, Free, **Singapore**), with the
+      production secrets from `.env` set as environment variables. Then, against that live URL:
+      `register_gold_database.sh`, `configure_public_role.py`, `configure_embedding.py`, the
+      dashboard import, and `public_access_test.py`.
 - [ ] **Step 4 — Spring API on Render** - secrets in Render, forwarded headers, TLS to Neon/Upstash,
       live curls of every endpoint
 - [ ] **Step 5 — website on Vercel + the password lock** - `proxy.ts` basic auth (env-switched),
@@ -4118,4 +4156,5 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-26 | Step 2: a private HF Space is still reachable by server-to-server calls, so the risk service checks its own bearer token (`RISK_API_TOKEN`) on every route rather than trusting Space visibility alone - unset locally, so no local-dev behaviour changed. Verified 401/401/200 against the real built image, not just unit tests | `app.py`, `test_app.py` |
 | 2026-11-26 | Plan reversed: Hugging Face now requires a paid plan to create a Docker Space on a free account (confirmed by trying, not from docs - a platform change since ADR 0021 was approved). Risk service and Superset both move to Render instead (two more free web services, one account, Render's `Dockerfile Path` field). Harith confirmed before the change | ADR 0021 amendment |
 | 2026-11-27 | Step 2 done: risk service live on Render (`drugwatch-india.onrender.com`), 401/401/200 and a real `/predict` score verified over HTTPS. First deploy failed - the model bundle was git-ignored and Render clones from git, unlike the Mac which already had it on disk | `.gitignore`, `ml-serving/artifacts/model-bundle/` |
-| 2026-11-27 | 🐛 Found by a symptom, not a review: Superset's first-run migrations took ~11.5 s **each** (156 in 30 min) because Neon sat in Ohio while Render sits in Singapore - ~220 ms per statement across the Pacific, plus two dropped connections. The migration was the messenger; the real cost was every future live query. Neon moves to Singapore and region becomes an explicit ADR decision | ADR 0021 2nd amendment |
+| 2026-11-27 | 🐛 Found by a symptom, not a review: Superset's first-run migrations took ~11.5 s **each** (156 in 30 min) because Neon sat in Ohio while Render sits in Singapore - ~220 ms per statement across the Pacific, plus two dropped connections. The migration was the messenger; the real cost was every future live query. Neon moves to Singapore and region becomes an explicit ADR decision. Measured after: 416 ms → 72 ms per statement | ADR 0021 2nd amendment |
+| 2026-11-27 | A silent failure is worse than a loud one: two Superset init runs hung at 0% CPU with no error (Linux probes a quiet socket only after 2 hours). Adding `pool_pre_ping` + TCP keepalives did not fix the cause, it **made the cause sayable** - the next run named a DNS failure inside the container, from a `docker run` missing `--network drugwatch_default`. Fix the silence first, then the bug | `superset_config.py` |
