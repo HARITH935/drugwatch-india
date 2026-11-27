@@ -3,17 +3,25 @@
 # Two stages: the first has the JDK and Maven and compiles the jar; the second starts from a
 # plain JRE (no compiler, no Maven, no source code) and only copies the finished jar in. Render
 # only knows how to run a container image - it has no JDK or Maven of its own, unlike this Mac.
+#
+# **Build context is the REPO ROOT**, hence the `backend/` prefixes below - so build it with
+#   docker build -f backend/Dockerfile .
+# and not from inside backend/. Render's Docker builds always use the repository root as the
+# context: setting its "Root Directory" to `backend` changes where it runs commands but **not**
+# the build context, so paths relative to backend/ failed there with `"/src": not found` while
+# building fine on this Mac. Same shape as infra/ml-serving/Dockerfile.space, which needs the
+# repo root anyway (it reaches into ../ml) and deploys to Render unchanged.
 
 FROM eclipse-temurin:21-jdk-noble AS build
 WORKDIR /app
 
 # The wrapper and pom.xml first, before any source code: Docker only reruns a step when the
 # files it COPYs change, so editing a .java file later skips re-downloading every dependency.
-COPY .mvn/ .mvn/
-COPY mvnw pom.xml ./
+COPY backend/.mvn/ .mvn/
+COPY backend/mvnw backend/pom.xml ./
 RUN ./mvnw dependency:go-offline -B
 
-COPY src ./src
+COPY backend/src ./src
 # -DskipTests: CI already ran the full suite (incl. Testcontainers) before this image is built;
 # repeating it here would need Docker-in-Docker for no new information.
 RUN ./mvnw clean package -DskipTests -B
