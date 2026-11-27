@@ -1,0 +1,24 @@
+# Superset's production image (Phase 12, ADR 0021's amendment: deployed to Render).
+#
+# Differs from the sibling Dockerfile (local dev, docker-compose.yml) in exactly one way: local
+# dev mounts superset_config.py as a read-only volume, so editing it needs no rebuild - Render has
+# no volume mounts, so this COPYs the same file in at build time instead. Everything else - the
+# Postgres driver, the non-root user - is identical on purpose, and SUPERSET_DEPLOY_ENV=production
+# is the one flag that file reads to turn on Talisman, ProxyFix and the CSP.
+
+FROM apache/superset:6.1.0
+
+USER root
+
+RUN uv pip install --python /app/.venv/bin/python --no-cache psycopg2-binary==2.9.13
+
+COPY infra/superset/superset_config.py /app/pythonpath/superset_config.py
+ENV SUPERSET_CONFIG_PATH=/app/pythonpath/superset_config.py \
+    SUPERSET_DEPLOY_ENV=production
+
+USER superset
+
+EXPOSE 8088
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=5 \
+  CMD curl -fsS http://localhost:8088/health || exit 1

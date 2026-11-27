@@ -32,7 +32,7 @@ the shape, all checked rather than assumed:
 | Spring Boot API | **Render** free web service, from a Dockerfile | 512 MB; sleeps after 15 min idle (cold start ~30-60 s) - kept awake by the uptime monitor's pings, inside the 750 free hours/month for one service |
 | Risk service (FastAPI + ONNX) | **Render** free web service, from a Dockerfile, same account as the API | The registered model is **baked into the image** at build time, so MLflow is not deployed. Not on any allowlist a browser could reach - only the API, holding `RISK_API_TOKEN`, can call it (§15: FastAPI not public). See amendment below for why this moved off Hugging Face |
 | Superset | **Render** free web service, from a Dockerfile, same account | Must be reachable for the embedded iframe (§15 already allows this). Metadata in Neon. **Unverified here:** the 512 MB limit - step 3's own job to measure, same way step 0 measured the other two |
-| PostgreSQL (gold, `app`, Superset metadata) | **Neon** free (0.5 GB) | TLS required; the same least-privilege roles as local (`drugwatch_api`, `superset_reader`) |
+| PostgreSQL (gold, `app`, Superset metadata) | **Neon** free (0.5 GB), **Singapore** | TLS required; the same least-privilege roles as local (`drugwatch_api`, `superset_reader`). Region matters - see the 2026-11-27 amendment |
 | Redis (cache, rate limits) | **Upstash** free | TLS required |
 | Email | **Brevo** free | From a verified single sender (no own domain, so deliverability is weaker - accepted) |
 | Uptime | **UptimeRobot** free | Off-platform, so it notices when a platform is down |
@@ -103,3 +103,39 @@ pointing at a different Dockerfile - `backend/Dockerfile` and
 - **Three free services now share the 750-hour/month pool** instead of one. Each spins down
   after 15 minutes without traffic and consumes no hours while asleep, so this is accepted rather
   than measured in advance - revisit if real usage proves it wrong.
+
+## Amendment, 2026-11-27 (Phase 12 step 3): every managed service sits in Singapore
+
+This ADR named the platforms but never said **where**, and the defaults did not agree: step 1 took
+Neon's suggested `us-east-2` (Ohio) while step 2's Render service landed in Singapore. Nothing
+noticed until Superset's first-run migrations crawled - **156 migrations in 30 minutes, ~11.5 s
+each**, against a database that answers a local query in milliseconds. The cause was not Superset:
+it was ~220 ms of Pacific round trip per statement, and the same connection dropped twice mid-run
+with `SSL SYSCALL error: EOF detected`.
+
+A slow one-off migration is a nuisance. The same latency on **every request the live site makes**
+is the actual problem: the batch checker runs several queries per lookup, so a page would spend
+most of a second waiting on the network before doing any work.
+
+**Decision: all managed services live in Singapore (`ap-southeast-1`)** - Render already did, so
+Neon moves. Neon's free plan allows one project, so this means a new project rather than a region
+switch, and redoing step 1 against it. That is cheap precisely because step 1 was written as
+scripts rather than dashboard clicks: `publish_gold.sh` (with its own row-count check),
+`neon_api_role.sql`, `neon_superset_reader.sql`, one `CREATE EXTENSION pg_trgm` and one
+`CREATE DATABASE superset`.
+
+Singapore rather than a US region because the audience is in India: Render serves the pages and
+Neon answers the queries, so putting both near the readers beats putting both near nothing in
+particular. **Region is now part of this ADR, not a per-service default** - anything added later
+goes to Singapore too, or says in writing why not.
+
+**Measured, from this Mac, five `select 1` statements in one open session** (so connection setup
+is excluded - this is the per-statement cost a migration or a request actually pays):
+
+| Neon region | Per statement |
+|---|---|
+| `us-east-2` (Ohio) | 348, 404, 421, 442, 462 ms - mean **416 ms** |
+| `ap-southeast-1` (Singapore) | 53, 56, 71, 87, 94 ms - mean **72 ms** |
+
+**5.8x**, and that is still measured over an Indian consumer link. The pairing production actually
+uses - Render Singapore to Neon Singapore, one region - pays neither leg of that.

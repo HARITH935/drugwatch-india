@@ -11,27 +11,53 @@ with SELECT on `gold` and nothing else (infra/postgres/superset_reader.sql).
 
 import os
 
+# Phase 12 (ADR 0021's amendment): true once this is deployed to Render, false on every local
+# docker-compose run (nothing sets it there). Everything below that differs between local dev and
+# production reads this one flag, rather than each setting guessing from its own env var - one
+# place to see what changes when this goes from a laptop to the public internet.
+#
+# NOT the built-in SUPERSET_ENV: the official apache/superset image already sets that to
+# "production" by default (confirmed by inspecting the running local container, not assumed), so
+# reusing that name turned Talisman's force_https on for local dev too, which breaks the plain-HTTP
+# login page with a redirect loop - caught immediately by testing right after this was written.
+IS_PRODUCTION = os.environ.get("SUPERSET_DEPLOY_ENV") == "production"
+
 # --- identity ----------------------------------------------------------------------------------
 # Signs session cookies and encrypts stored database passwords. No default on purpose: Superset
 # ships with a well-known development key, and anyone holding it can forge a session.
 SECRET_KEY = os.environ["SUPERSET_SECRET_KEY"]
 
 # --- Superset's own metadata database ------------------------------------------------------------
-# `postgres:5432` is the in-network address; the Mac reaches the same server on localhost:5433.
-_user = os.environ.get("POSTGRES_USER", "drugwatch")
-_password = os.environ["POSTGRES_PASSWORD"]
-SQLALCHEMY_DATABASE_URI = f"postgresql+psycopg2://{_user}:{_password}@postgres:5432/superset"
+# Locally this is `postgres:5432/superset`, the in-network address (the Mac reaches the same
+# server on localhost:5433). Production has no such network - its metadata lives in its own
+# database on Neon instead, given here as one full connection string rather than host/port, since
+# that is the form Neon hands out.
+_metadata_url = os.environ.get("SUPERSET_DATABASE_URL")
+if _metadata_url:
+    # Neon gives a plain `postgresql://` URL; SQLAlchemy needs the driver named in the scheme.
+    SQLALCHEMY_DATABASE_URI = _metadata_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+else:
+    _user = os.environ.get("POSTGRES_USER", "drugwatch")
+    _password = os.environ["POSTGRES_PASSWORD"]
+    SQLALCHEMY_DATABASE_URI = f"postgresql+psycopg2://{_user}:{_password}@postgres:5432/superset"
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 
 # --- caching ------------------------------------------------------------------------------------
 # Redis is already running for the API (plan §6). Superset will not start in production mode with
 # the default in-memory caches, and they would be useless here anyway: every worker would hold its
 # own copy and a restart would drop the lot.
-_redis = {
-    "CACHE_TYPE": "RedisCache",
-    "CACHE_REDIS_HOST": os.environ.get("REDIS_HOST", "redis"),
-    "CACHE_REDIS_PORT": int(os.environ.get("REDIS_PORT", "6379")),
-}
+# Production's Redis is Upstash, which needs TLS and a password - given as one `rediss://` URL,
+# the one thing flask-caching's RedisCache accepts in place of separate host/port settings. Shared
+# with the backend's rate limiter (CLAUDE.md §10): different key prefixes below keep them apart.
+_upstash_url = os.environ.get("UPSTASH_REDIS_URL")
+if _upstash_url:
+    _redis = {"CACHE_TYPE": "RedisCache", "CACHE_REDIS_URL": _upstash_url}
+else:
+    _redis = {
+        "CACHE_TYPE": "RedisCache",
+        "CACHE_REDIS_HOST": os.environ.get("REDIS_HOST", "redis"),
+        "CACHE_REDIS_PORT": int(os.environ.get("REDIS_PORT", "6379")),
+    }
 CACHE_CONFIG = {**_redis, "CACHE_DEFAULT_TIMEOUT": 300, "CACHE_KEY_PREFIX": "superset_"}
 DATA_CACHE_CONFIG = {**_redis, "CACHE_DEFAULT_TIMEOUT": 3600, "CACHE_KEY_PREFIX": "superset_data_"}
 FILTER_STATE_CACHE_CONFIG = {
@@ -78,13 +104,38 @@ GUEST_TOKEN_JWT_EXP_SECONDS = 300
 # this is unset, which would mean one leaked value forged both session cookies and guest tokens.
 GUEST_TOKEN_JWT_SECRET = os.environ["SUPERSET_GUEST_TOKEN_SECRET"]
 
-# --- local HTTP ----------------------------------------------------------------------------------
-# Talisman sets HTTPS-only security headers (HSTS, secure cookies) and the Content Security Policy.
-# On http://localhost it would make the login cookie unusable, so it is off here - and Superset
-# logs a warning about the missing CSP on every start, which is left visible on purpose.
-# **Phase 12 must set TALISMAN_ENABLED = True with a CSP before this is exposed to the internet.**
-# The warning is not silenced (CONTENT_SECURITY_POLICY_WARNING) precisely so it keeps nagging.
-TALISMAN_ENABLED = False
+# --- local HTTP vs production HTTPS ---------------------------------------------------------------
+# Talisman sets HTTPS-only security headers (HSTS, secure cookies) and the Content Security Policy
+# - a browser-enforced allowlist of where scripts, styles and frames are allowed to load from. On
+# http://localhost it would make the login cookie unusable, so it stays off there - and Superset
+# logs a warning about the missing CSP on every start, left visible on purpose
+# (CONTENT_SECURITY_POLICY_WARNING is not silenced).
+TALISMAN_ENABLED = IS_PRODUCTION
+if IS_PRODUCTION:
+    # Render terminates HTTPS at its edge and talks to this container over plain HTTP, so without
+    # ProxyFix, Talisman would see every request as insecure and redirect-loop trying to "upgrade"
+    # a connection that is already secure. 1 proxy layer: Render sits in front exactly once.
+    ENABLE_PROXY_FIX = True
+    PROXY_FIX_CONFIG = {"x_for": 1, "x_proto": 1, "x_host": 1, "x_port": 1, "x_prefix": 1}
+    # 'unsafe-inline'/'unsafe-eval': Superset's own open-source frontend bundle relies on both and
+    # ships no nonce to allow them more narrowly - the same allowance Superset's own docs show.
+    # frame-ancestors is what actually matters for embedding (step 5): it names the one site
+    # allowed to put this in an iframe, read from SITE_URL since that already means "the public
+    # frontend" everywhere else in this repo (CLAUDE.md §10).
+    TALISMAN_CONFIG = {
+        "force_https": True,
+        "session_cookie_secure": True,
+        "content_security_policy": {
+            "default-src": "'self'",
+            "img-src": ["'self'", "data:", "blob:"],
+            "style-src": ["'self'", "'unsafe-inline'"],
+            "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+            "font-src": ["'self'", "data:"],
+            "connect-src": "'self'",
+            "object-src": "'none'",
+            "frame-ancestors": ["'self'", os.environ.get("SITE_URL", "http://localhost:3100")],
+        },
+    }
 WTF_CSRF_ENABLED = True
 # Long enough that a dashboard left open overnight does not fail its next request with a CSRF error.
 WTF_CSRF_TIME_LIMIT = 60 * 60 * 24

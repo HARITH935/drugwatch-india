@@ -3653,7 +3653,9 @@ for a card).
       files, which is a different bottleneck from network bandwidth). Recovered on its own; the
       backend's base images were switched from `-jammy` to `-noble` tags since this Mac already
       had `-noble` cached from another project, which helped regardless of link speed.
-- [x] **Step 1a — Neon: roles + gold published** (2026-11-26)
+- [x] **Step 1a — Neon: roles + gold published** (2026-11-26; **redone 2026-11-27** against a new
+      Singapore project - see ADR 0021's 2nd amendment. Everything below still describes what was
+      done and found; only the project behind it changed, and the scripts made that cheap)
     - **Verified for real against Harith's actual Neon project** (`dry-thunder-88401092`,
       `neondb`, region us-east-2): `infra/postgres/publish_gold.sh` dumped `gold` from the local
       Postgres container and restored it into Neon inside one transaction. All 17 gold tables'
@@ -4116,3 +4118,4 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-26 | Step 2: a private HF Space is still reachable by server-to-server calls, so the risk service checks its own bearer token (`RISK_API_TOKEN`) on every route rather than trusting Space visibility alone - unset locally, so no local-dev behaviour changed. Verified 401/401/200 against the real built image, not just unit tests | `app.py`, `test_app.py` |
 | 2026-11-26 | Plan reversed: Hugging Face now requires a paid plan to create a Docker Space on a free account (confirmed by trying, not from docs - a platform change since ADR 0021 was approved). Risk service and Superset both move to Render instead (two more free web services, one account, Render's `Dockerfile Path` field). Harith confirmed before the change | ADR 0021 amendment |
 | 2026-11-27 | Step 2 done: risk service live on Render (`drugwatch-india.onrender.com`), 401/401/200 and a real `/predict` score verified over HTTPS. First deploy failed - the model bundle was git-ignored and Render clones from git, unlike the Mac which already had it on disk | `.gitignore`, `ml-serving/artifacts/model-bundle/` |
+| 2026-11-27 | 🐛 Found by a symptom, not a review: Superset's first-run migrations took ~11.5 s **each** (156 in 30 min) because Neon sat in Ohio while Render sits in Singapore - ~220 ms per statement across the Pacific, plus two dropped connections. The migration was the messenger; the real cost was every future live query. Neon moves to Singapore and region becomes an explicit ADR decision | ADR 0021 2nd amendment |
