@@ -8,7 +8,17 @@ import type { NextConfig } from "next";
 // it. The same file holds the database, JWT and Superset secrets, and this server has no business
 // holding them - the least-privilege rule ml-serving's compose test already enforces for risk-api.
 // A key already set in the real environment (CI, Phase 12's VM) wins over the file.
-const FRONTEND_KEYS = ["BACKEND_URL", "NEXT_PUBLIC_SUPERSET_URL"] as const;
+// SITE_USERNAME/SITE_PASSWORD drive the pre-launch lock in src/proxy.ts. They are read at BUILD
+// time, not request time: the proxy runs on the edge runtime, where Next inlines the `process.env`
+// keys a module references. So changing or removing the password needs a redeploy, which is the
+// honest shape for "launch = unset it" anyway - it is a deliberate act, not a toggle someone can
+// flip by accident.
+const FRONTEND_KEYS = [
+  "BACKEND_URL",
+  "NEXT_PUBLIC_SUPERSET_URL",
+  "SITE_USERNAME",
+  "SITE_PASSWORD",
+] as const;
 const rootEnv = path.resolve(process.cwd(), "..", ".env");
 if (existsSync(rootEnv)) {
   const parsed = parseEnv(readFileSync(rootEnv, "utf8"));
