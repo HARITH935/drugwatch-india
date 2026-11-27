@@ -46,4 +46,12 @@ data/
 !**/tests/fixtures/**
 
 # Phase 8: the ONNX export is rebuilt from the MLflow registry, never committed.
-ml-serving/artifacts/
+ml-serving/artifacts/*
+
+# Phase 12 (ADR 0017's amendment): Render builds infra/ml-serving/Dockerfile.space from a plain
+# `git clone` of this repo, with no MLflow to fetch the model from - unlike the ONNX export above,
+# there is nowhere else for this one to come from, so the ~165 KB bundle export_model_bundle.py
+# writes IS committed, on purpose. Re-run that script and commit again whenever `publish`
+# registers a new `production` alias - the same deliberate, manual step ADR 0017 already asks for.
+!ml-serving/artifacts/model-bundle/
+!ml-serving/artifacts/model-bundle/**

@@ -1,0 +1,15 @@
+{
+  "name": "manufacturer-risk",
+  "version": "1",
+  "run_id": "50f98b964c1b40abae0883987675200f",
+  "tags": {
+    "test_roc_auc": "0.7062",
+    "test_pr_auc": "0.3846",
+    "test_precision_at_20_per_month": "0.7375",
+    "test_expected_calibration_error": "0.0242",
+    "test_brier_score": "0.1192",
+    "shap_additivity_error": "0.0000",
+    "limitations": "Reporting history, not quality. Statistically tied with logistic regression on the 2025-04..2026-03 test window (+0.011 PR-AUC, 95% CI -0.004..+0.026). Much weaker on companies absent from training (PR-AUC 0.269 vs 0.438). Under-predicts: trained at a 12.8% base rate, tested at 16.0%.",
+    "test_window": "2025-04..2026-03"
+  }
+}
