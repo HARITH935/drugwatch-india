@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 12 — Deploy & harden. Free managed platforms (ADR 0021).
-**Next:** Step 6 — CI/CD (steps 1-5 done: the whole system is live behind a pre-launch password at https://drugwatch-india.vercel.app).
+**Next:** Step 7 — Brevo (steps 1-6 done: the whole system is live, auto-deploying only after CI passes, behind a pre-launch password at https://drugwatch-india.vercel.app).
 
 ---
 
@@ -3932,8 +3932,7 @@ for a card).
         hands a 401 back untouched. A security test that cannot fail is worse than no test.
     - The full 116-test stub suite still passes locally **through the lock** (`SITE_PASSWORD` set),
       so the gate blocks strangers without breaking the site for a visitor who is let in.
-- [ ] **Step 6 — CI/CD** - tests pass → deploy hooks; platform auto-deploy off; a failing test
-      blocks a deploy (proven)
+- [x] **Step 6 — CI/CD, done and proven on all 4 platforms** (2026-11-28)
     - [x] **The `deploy` job, and "tests pass -> deploy hooks"**: a new job in
       `.github/workflows/lint.yml`, `needs: [repo-checks, python, dbt, backend, frontend,
       publish-api-image]` - the whole suite. It calls all four platforms' deploy hooks (3 Render
@@ -3953,11 +3952,34 @@ for a card).
       confirmed the following run (`46104631974`) went green with both jobs back to `success`.
       Real deploys fired both times this actually ran clean: the job's own log reported
       `4 service(s) asked to deploy; 0 still unconfigured` on the first green run.
-    - [ ] **Platform auto-deploy off** - still Harith's turn, on all 4 services (Render ×3,
-      Vercel). Without this, a push deploys twice: once from the platform's own git-push trigger
-      (which does not wait for tests) and once from this job (which does) - so this is not
-      optional polish, it is the other half of "a failing test can never deploy". Until it is
-      off, a red `frontend` job still lets Render/Vercel's own trigger ship the broken commit.
+    - [x] **Platform auto-deploy off, all 4 services - the Vercel half took real debugging.**
+      Render's 3 services: `Auto-Deploy` -> `Off` in Settings, one click each (the 4th,
+      `drugwatch-api:latest`, is an "Existing Image" service with no git source to auto-deploy
+      *from* in the first place - nothing to turn off). Vercel needed an actual fix, not a
+      toggle:
+      1. Tried **"Ignored Build Step"** set to `exit 0` first - Vercel's own documented field
+         for skipping a build. **Proved by a live test that this also silently swallows
+         Deploy-Hook-triggered builds**, not just git-push ones: a real POST to the hook
+         returned `201 PENDING`, and no deployment - not even a canceled one - ever appeared.
+         Matches a real, open Vercel community report (hooks are "tied to the git integration",
+         so this field gates both).
+      2. Tried authenticating a GitHub Actions step with a Vercel personal access token
+         (`vcp_...`) to run `vercel deploy --prebuilt --prod` instead - the first-party-recommended
+         CI path from Vercel's own guide. **Two independently created tokens both failed every
+         API call with `404 "User not found"`**, including a bare `GET /v2/user`. Traced to a
+         confirmed, unresolved Vercel Hobby-plan bug (community thread `47823`) - not anything
+         misconfigured here, and the one reported workaround (a full-account-scoped token) is
+         reported not to help on Hobby specifically. Abandoned rather than keep spending
+         Harith's time on a broken platform feature.
+      3. **What actually worked**: `frontend/vercel.json`'s `"git": {"deploymentEnabled": false}`
+         - the documented, project-level switch Vercel's own CI guide uses for this exact
+         purpose - needs no token at all, and the existing Deploy Hook keeps working through it.
+      - **Verified on the real platform, not inferred from docs**: pushed the commit that
+        introduced `deploymentEnabled: false` and confirmed *that push itself* created no
+        deployment (Vercel's newest entry stayed 46 minutes old). Then watched CI's `deploy` job
+        POST to the hook (`HTTP 201`) and confirmed a *real* deployment reached **"Ready"** for
+        that exact commit a few minutes later - proving the hook survives the setting that broke
+        it under "Ignored Build Step".
 - [ ] **Step 7 — Brevo** - a watchlist email and an Airflow failure email delivered to a real inbox
 - [ ] **Step 8 — backups** - weekly encrypted `pg_dump` (GitHub Actions), `raw/` off-site copy,
       a restore into an empty database
@@ -4313,6 +4335,7 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-26 | Plan reversed: Hugging Face now requires a paid plan to create a Docker Space on a free account (confirmed by trying, not from docs - a platform change since ADR 0021 was approved). Risk service and Superset both move to Render instead (two more free web services, one account, Render's `Dockerfile Path` field). Harith confirmed before the change | ADR 0021 amendment |
 | 2026-11-27 | Step 2 done: risk service live on Render (`drugwatch-india.onrender.com`), 401/401/200 and a real `/predict` score verified over HTTPS. First deploy failed - the model bundle was git-ignored and Render clones from git, unlike the Mac which already had it on disk | `.gitignore`, `ml-serving/artifacts/model-bundle/` |
 | 2026-11-27 | 🐛 Found by a symptom, not a review: Superset's first-run migrations took ~11.5 s **each** (156 in 30 min) because Neon sat in Ohio while Render sits in Singapore - ~220 ms per statement across the Pacific, plus two dropped connections. The migration was the messenger; the real cost was every future live query. Neon moves to Singapore and region becomes an explicit ADR decision. Measured after: 416 ms → 72 ms per statement | ADR 0021 2nd amendment |
+| 2026-11-28 | Step 6's Vercel half: "Ignored Build Step" set to skip-everything also silently swallowed Deploy-Hook-triggered builds (a real hook POST returned 201 PENDING, then nothing - not even canceled). A Vercel personal access token then failed every API call with 404, a confirmed open Hobby-plan bug. `vercel.json`'s `git.deploymentEnabled: false` is what actually works, needing no token | `frontend/vercel.json` |
 | 2026-11-28 | Step 6: proved on `main`, not assumed - a deliberately failing test (run 46103481208) left publish-api-image and deploy both `skipped`, and the next commit's green run (46104631974) sent real deploy-hook POSTs to all 4 platforms. Hooks live as GitHub secrets, never in the repo | `.github/workflows/lint.yml` |
 | 2026-11-28 | Step 5: "run the Playwright suite against production" was the wrong criterion - every spec asserts the stub's invented fixtures by name, so against real data it failed 88/116 over 8.3 hours while proving nothing. Split: the stub suite stays a contract test, and a separate production spec asserts only what must be true of the real thing (16 checks, 24s) | `production.spec.ts`, `playwright.config.ts` |
 | 2026-11-28 | A security test that cannot fail is worse than no test: the "a stranger is refused" check reported 200 because Playwright silently retries a Basic challenge with the configured credentials. Node's `fetch` hands the 401 back untouched | `production.spec.ts` |
