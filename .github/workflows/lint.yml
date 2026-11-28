@@ -175,7 +175,10 @@ jobs:
   # can happen, unless the full suite passed first. Pull requests build nothing - only a push to
   # main publishes - so a fork cannot push an image into the registry.
   publish-api-image:
-    needs: backend
+    # Every test job, not just `backend`. An image tagged :latest is what Render pulls, so it must
+    # never exist for a commit whose frontend, Python or dbt checks failed - "a failing test can
+    # never deploy" (ADR 0021) is only true if the artifact itself is gated too.
+    needs: [repo-checks, python, dbt, backend, frontend]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -210,3 +213,70 @@ jobs:
             ${{ steps.image.outputs.name }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+
+  # --- Phase 12 step 6: deploy, and only ever after everything above passed ---
+  #
+  # ADR 0021: "Platform auto-deploy on git push is turned off, so a failing test can never
+  # deploy." Render and Vercel both deploy on push by default, which would mean a red build
+  # shipping anyway - so that is switched off in each platform's settings and this job is the only
+  # thing that starts a deployment, by calling each service's deploy hook.
+  #
+  # `needs` is the whole test suite. A failure anywhere - any Python folder, dbt, the backend, the
+  # frontend, repo hygiene - leaves this job skipped and production untouched.
+  #
+  # Each hook is a secret URL that starts a deployment for one service. A missing one is reported
+  # rather than ignored, and a hook that answers anything but 2xx fails the job: a revoked or
+  # mistyped URL would otherwise 404 quietly and leave production a commit behind with a green
+  # tick next to it.
+  deploy:
+    needs: [repo-checks, python, dbt, backend, frontend, publish-api-image]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Start a deployment for each service
+        env:
+          RISK_HOOK: ${{ secrets.RENDER_RISK_DEPLOY_HOOK }}
+          SUPERSET_HOOK: ${{ secrets.RENDER_SUPERSET_DEPLOY_HOOK }}
+          API_HOOK: ${{ secrets.RENDER_API_DEPLOY_HOOK }}
+          FRONTEND_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          set -u
+          configured=0
+          failed=0
+
+          call() {
+            name="$1"
+            url="$2"
+            if [ -z "$url" ]; then
+              echo "~ $name: NOT CONFIGURED (no deploy hook secret) - nothing deployed"
+              return 0
+            fi
+            configured=$((configured + 1))
+            # -X POST: both Render's and Vercel's hooks start a deployment on POST.
+            status=$(curl -sS -o /tmp/hook-body -w '%{http_code}' -X POST "$url" || echo 000)
+            if [ "${status#2}" = "$status" ]; then
+              echo "x $name: deploy hook answered HTTP $status"
+              # The body can carry the reason, and never contains the secret URL.
+              head -c 300 /tmp/hook-body || true
+              echo
+              failed=$((failed + 1))
+            else
+              echo "+ $name: deployment started (HTTP $status)"
+            fi
+          }
+
+          call "risk service (Render)" "${RISK_HOOK:-}"
+          call "superset (Render)"     "${SUPERSET_HOOK:-}"
+          call "api (Render)"          "${API_HOOK:-}"
+          call "frontend (Vercel)"     "${FRONTEND_HOOK:-}"
+
+          echo
+          if [ "$configured" -eq 0 ]; then
+            echo "No deploy hooks are configured, so this job deployed nothing at all." >&2
+            echo "Add them as repository secrets, or this green tick means a deploy that did not happen." >&2
+            exit 1
+          fi
+          [ "$failed" -eq 0 ] || exit 1
+          echo "$configured service(s) asked to deploy; $((4 - configured)) still unconfigured."
