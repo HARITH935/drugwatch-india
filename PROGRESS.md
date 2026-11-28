@@ -3,7 +3,7 @@
 Live checklist. Update after every step. Full plan: [DRUGWATCH_PHASES.md](DRUGWATCH_PHASES.md).
 
 **Current phase:** Phase 12 — Deploy & harden. Free managed platforms (ADR 0021).
-**Next:** Step 5 — the website on Vercel, plus the password lock (steps 1-4 done; everything bar the frontend now runs on Render + Neon + Upstash, all in Singapore).
+**Next:** Step 6 — CI/CD (steps 1-5 done: the whole system is live behind a pre-launch password at https://drugwatch-india.vercel.app).
 
 ---
 
@@ -3883,8 +3883,55 @@ for a card).
       sane timeout holds a page open that long, so the first visit after an idle spell shows the
       page without its score or dashboards rather than hanging. ADR 0021 already names the fix
       (the uptime monitor's pings keep them awake); that is step 9.
-- [ ] **Step 5 — website on Vercel + the password lock** - `proxy.ts` basic auth (env-switched),
-      secure cookies, the Playwright suite run against production
+- [x] **Step 5 — website on Vercel + the password lock, live and verified** (2026-11-28) at
+      `https://drugwatch-india.vercel.app` (Root Directory `frontend`, which Vercel honours -
+      unlike Render's Docker builds).
+    - **The lock** lives in `frontend/src/proxy.ts` (Next 16 renamed middleware to proxy) and is
+      off unless `SITE_PASSWORD` is set - which is what local dev and CI get, and also what launch
+      looks like: clear the variable, redeploy. HTTP Basic rather than a login page, so it holds no
+      cookie or session and cannot interact with the site's real httpOnly session (ADR 0020) or
+      leave a half-logged-in state when lifted. Constant-time comparison, hand-written because
+      `crypto.timingSafeEqual` is Node-only and this runs on the edge runtime.
+      - Read at **build** time (Next inlines `process.env` for the edge runtime), so changing or
+        clearing the password needs a redeploy. That is the honest shape for "launch = unset it":
+        a deliberate act, not a toggle to flip by accident.
+      - 🐛 **Mutation-testing found my own test suite too weak.** Both ways a lock fails are
+        silent - letting everyone in looks like a working site, letting nobody in looks like a
+        broken deploy - so both were mutated. The first caught one and **missed** the other:
+        deleting the length check still passed everything, because out-of-range `charCodeAt`
+        returns `NaN`, which coerces to 0 in the XOR. The check does earn its place (`"pw"` vs
+        `"pw\0"` would otherwise compare equal), so there is now a test for exactly that, and the
+        mutation fails it.
+    - **Secure cookies, proven on the live site** rather than inferred from the code: logging in
+      through the real form sets `access_token` and `refresh_token` with
+      **`secure=true httpOnly=true sameSite=Lax`**. The verification token is stored only as a
+      hash (good), so this needed a test account verified directly in Neon - **deleted afterwards,
+      production left with 0 users**.
+    - 🐛 **"The Playwright suite run against production" was the wrong criterion, and discovering
+      how was expensive.** Pointed at the deployment, the suite failed **88 of 116 tests over 8.3
+      hours** - single tests taking 16 minutes. Two causes, and neither was production being
+      broken:
+      1. Every spec asserts `stub-backend.mjs`'s invented fixtures **by name** - "Zyntophil",
+         batch "TB-1201", "Marvex Labs" - which cannot exist in real CDSCO data. It is a contract
+         test against a known backend, which is the right thing for it to be and the wrong tool
+         for checking a deployment.
+      2. Render's free services sleep after 15 minutes, so nearly every test paid a 60-160s cold
+         start or timed out waiting.
+      - I should have read the specs before starting that run. Fixed properly rather than papered
+        over: `playwright.config.ts` takes `E2E_BASE_URL` and then runs **only**
+        `e2e/production.spec.ts`, whose assertions name no particular finding - the lock refuses
+        strangers on the home page *and* sub-pages, pages render through the whole live chain
+        (Vercel → Render API → Neon), the disclaimer is present, "not found" never reads as
+        "guaranteed safe" (CLAUDE.md §6), axe finds no WCAG 2.1 A/AA violations on the deployed
+        build, and nothing scrolls sideways at 360px. **16 checks, all passing, in 24 seconds**
+        against production - versus 8.3 hours proving nothing.
+      - 🔍 Writing that test taught one more thing worth keeping: Playwright answers a Basic
+        challenge by silently retrying with the configured `httpCredentials`, so the "a stranger
+        is refused" check reported **200** through the injected `request` fixture, through an empty
+        `Authorization` header, and through `request.newContext()`. It uses Node's `fetch`, which
+        hands a 401 back untouched. A security test that cannot fail is worse than no test.
+    - The full 116-test stub suite still passes locally **through the lock** (`SITE_PASSWORD` set),
+      so the gate blocks strangers without breaking the site for a visitor who is let in.
 - [ ] **Step 6 — CI/CD** - tests pass → deploy hooks; platform auto-deploy off; a failing test
       blocks a deploy (proven)
 - [ ] **Step 7 — Brevo** - a watchlist email and an Airflow failure email delivered to a real inbox
@@ -4242,6 +4289,8 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-26 | Plan reversed: Hugging Face now requires a paid plan to create a Docker Space on a free account (confirmed by trying, not from docs - a platform change since ADR 0021 was approved). Risk service and Superset both move to Render instead (two more free web services, one account, Render's `Dockerfile Path` field). Harith confirmed before the change | ADR 0021 amendment |
 | 2026-11-27 | Step 2 done: risk service live on Render (`drugwatch-india.onrender.com`), 401/401/200 and a real `/predict` score verified over HTTPS. First deploy failed - the model bundle was git-ignored and Render clones from git, unlike the Mac which already had it on disk | `.gitignore`, `ml-serving/artifacts/model-bundle/` |
 | 2026-11-27 | 🐛 Found by a symptom, not a review: Superset's first-run migrations took ~11.5 s **each** (156 in 30 min) because Neon sat in Ohio while Render sits in Singapore - ~220 ms per statement across the Pacific, plus two dropped connections. The migration was the messenger; the real cost was every future live query. Neon moves to Singapore and region becomes an explicit ADR decision. Measured after: 416 ms → 72 ms per statement | ADR 0021 2nd amendment |
+| 2026-11-28 | Step 5: "run the Playwright suite against production" was the wrong criterion - every spec asserts the stub's invented fixtures by name, so against real data it failed 88/116 over 8.3 hours while proving nothing. Split: the stub suite stays a contract test, and a separate production spec asserts only what must be true of the real thing (16 checks, 24s) | `production.spec.ts`, `playwright.config.ts` |
+| 2026-11-28 | A security test that cannot fail is worse than no test: the "a stranger is refused" check reported 200 because Playwright silently retries a Basic challenge with the configured credentials. Node's `fetch` hands the 401 back untouched | `production.spec.ts` |
 | 2026-11-27 | Step 4: Render's builders get HTTP 429 from Maven Central, so the API is built by CI and Render runs the prebuilt image - which is also ADR 0021's own "tests pass -> deploy" gate, arriving a step early | `.github/workflows/lint.yml` |
 | 2026-11-27 | Production found three faults local dev structurally cannot: Render gzips JSON (Java does not decompress), Superset's CSRF needs a `Referer` that only a browser sends, and timeouts tuned for a sibling container (10 ms) against the internet (~1s TLS). Two of them would have been invisible behind "no score today" | `RiskClient.java`, `GuestTokenService.java` |
 | 2026-11-27 | A silent failure is worse than a loud one: two Superset init runs hung at 0% CPU with no error (Linux probes a quiet socket only after 2 hours). Adding `pool_pre_ping` + TCP keepalives did not fix the cause, it **made the cause sayable** - the next run named a DNS failure inside the container, from a `docker run` missing `--network drugwatch_default`. Fix the silence first, then the bug | `superset_config.py` |

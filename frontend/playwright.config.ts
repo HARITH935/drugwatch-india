@@ -14,6 +14,12 @@ const SITE_PASSWORD = process.env.SITE_PASSWORD;
 
 export default defineConfig({
   testDir: "./e2e",
+  // Against a deployment, run **only** production.spec.ts. Every other spec asserts
+  // stub-backend.mjs's invented fixtures by name ("Zyntophil", batch "TB-1201", "Marvex Labs"),
+  // which cannot exist in real CDSCO data - pointed at production they failed 88 of 116 tests
+  // while proving nothing about it. They are a contract test against a known backend, which is
+  // the right thing for them to be and the wrong tool for checking a deployment.
+  testMatch: EXTERNAL_BASE_URL ? /production\.spec\.ts/ : undefined,
   forbidOnly: !!process.env.CI, // a stray test.only() must fail CI, not silently skip everything else
   retries: process.env.CI ? 1 : 0,
   reporter: "list",
