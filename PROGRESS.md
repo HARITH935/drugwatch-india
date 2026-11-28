@@ -3934,6 +3934,30 @@ for a card).
       so the gate blocks strangers without breaking the site for a visitor who is let in.
 - [ ] **Step 6 — CI/CD** - tests pass → deploy hooks; platform auto-deploy off; a failing test
       blocks a deploy (proven)
+    - [x] **The `deploy` job, and "tests pass -> deploy hooks"**: a new job in
+      `.github/workflows/lint.yml`, `needs: [repo-checks, python, dbt, backend, frontend,
+      publish-api-image]` - the whole suite. It calls all four platforms' deploy hooks (3 Render
+      services + Vercel), stored as repo secrets (`RENDER_API_DEPLOY_HOOK`,
+      `RENDER_SUPERSET_DEPLOY_HOOK`, `RENDER_RISK_DEPLOY_HOOK`, `VERCEL_DEPLOY_HOOK`) rather than
+      anywhere in the repo. `publish-api-image`'s own gate widened from `needs: backend` to the
+      full suite too - a `:latest` image is what Render pulls, so it must not exist for a commit
+      whose frontend or Python checks failed, only its backend ones.
+      - Two refusals to be quiet, both written in: a hook that answers anything but 2xx fails the
+        job (a revoked or mistyped URL would otherwise 404 silently and leave production a commit
+        behind with a green tick next to it), and if *no* hooks are configured at all the job
+        fails outright rather than reporting success for a deploy that never happened.
+    - [x] **"A failing test blocks a deploy" - proven on `main`, not assumed.** Pushed a commit
+      with a deliberately failing frontend test (`expect(1).toBe(2)`), watched real CI
+      (run `46103481208`): `frontend` → `failure`, **`publish-api-image` → `skipped`,
+      `deploy` → `skipped`** - not run, not failed-but-ran. Reverted in the next commit and
+      confirmed the following run (`46104631974`) went green with both jobs back to `success`.
+      Real deploys fired both times this actually ran clean: the job's own log reported
+      `4 service(s) asked to deploy; 0 still unconfigured` on the first green run.
+    - [ ] **Platform auto-deploy off** - still Harith's turn, on all 4 services (Render ×3,
+      Vercel). Without this, a push deploys twice: once from the platform's own git-push trigger
+      (which does not wait for tests) and once from this job (which does) - so this is not
+      optional polish, it is the other half of "a failing test can never deploy". Until it is
+      off, a red `frontend` job still lets Render/Vercel's own trigger ship the broken commit.
 - [ ] **Step 7 — Brevo** - a watchlist email and an Airflow failure email delivered to a real inbox
 - [ ] **Step 8 — backups** - weekly encrypted `pg_dump` (GitHub Actions), `raw/` off-site copy,
       a restore into an empty database
@@ -4289,6 +4313,7 @@ Checklists for later phases are copied in from `DRUGWATCH_PHASES.md` §9 when ea
 | 2026-11-26 | Plan reversed: Hugging Face now requires a paid plan to create a Docker Space on a free account (confirmed by trying, not from docs - a platform change since ADR 0021 was approved). Risk service and Superset both move to Render instead (two more free web services, one account, Render's `Dockerfile Path` field). Harith confirmed before the change | ADR 0021 amendment |
 | 2026-11-27 | Step 2 done: risk service live on Render (`drugwatch-india.onrender.com`), 401/401/200 and a real `/predict` score verified over HTTPS. First deploy failed - the model bundle was git-ignored and Render clones from git, unlike the Mac which already had it on disk | `.gitignore`, `ml-serving/artifacts/model-bundle/` |
 | 2026-11-27 | 🐛 Found by a symptom, not a review: Superset's first-run migrations took ~11.5 s **each** (156 in 30 min) because Neon sat in Ohio while Render sits in Singapore - ~220 ms per statement across the Pacific, plus two dropped connections. The migration was the messenger; the real cost was every future live query. Neon moves to Singapore and region becomes an explicit ADR decision. Measured after: 416 ms → 72 ms per statement | ADR 0021 2nd amendment |
+| 2026-11-28 | Step 6: proved on `main`, not assumed - a deliberately failing test (run 46103481208) left publish-api-image and deploy both `skipped`, and the next commit's green run (46104631974) sent real deploy-hook POSTs to all 4 platforms. Hooks live as GitHub secrets, never in the repo | `.github/workflows/lint.yml` |
 | 2026-11-28 | Step 5: "run the Playwright suite against production" was the wrong criterion - every spec asserts the stub's invented fixtures by name, so against real data it failed 88/116 over 8.3 hours while proving nothing. Split: the stub suite stays a contract test, and a separate production spec asserts only what must be true of the real thing (16 checks, 24s) | `production.spec.ts`, `playwright.config.ts` |
 | 2026-11-28 | A security test that cannot fail is worse than no test: the "a stranger is refused" check reported 200 because Playwright silently retries a Basic challenge with the configured credentials. Node's `fetch` hands the 401 back untouched | `production.spec.ts` |
 | 2026-11-27 | Step 4: Render's builders get HTTP 429 from Maven Central, so the API is built by CI and Render runs the prebuilt image - which is also ADR 0021's own "tests pass -> deploy" gate, arriving a step early | `.github/workflows/lint.yml` |
