@@ -74,7 +74,10 @@ test.describe("the deployed site", () => {
     // name no particular product, so they survive the data being refreshed each month.
     await page.goto("/drugs/search?q=telmisartan");
 
-    const firstResult = page.getByRole("link").filter({ hasText: /telmisartan/i }).first();
+    const firstResult = page
+      .getByRole("link")
+      .filter({ hasText: /telmisartan/i })
+      .first();
     await expect(firstResult).toBeVisible();
     await firstResult.click();
 
@@ -89,7 +92,9 @@ test.describe("the deployed site", () => {
     await page.goto("/batches/search?drug=telmisartan&batch=NOT-A-REAL-BATCH-9999");
 
     await expect(page.getByText(/not found|no match|not in/i).first()).toBeVisible();
-    await expect(page.getByText(/does not mean|not a guarantee|guaranteed safe/i).first()).toBeVisible();
+    await expect(
+      page.getByText(/does not mean|not a guarantee|guaranteed safe/i).first(),
+    ).toBeVisible();
   });
 
   test("the home page has no WCAG 2.1 A/AA violations in production", async ({ page }) => {

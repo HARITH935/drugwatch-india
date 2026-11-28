@@ -19,7 +19,9 @@ async function freshIsAuthorised(env: Record<string, string | undefined>) {
     else process.env[key] = value;
   }
   // A fresh module registry, so the constants above are evaluated against this environment.
-  const { resetModules } = await import("vitest").then((m) => ({ resetModules: m.vi.resetModules }));
+  const { resetModules } = await import("vitest").then((m) => ({
+    resetModules: m.vi.resetModules,
+  }));
   resetModules();
   const loaded = await import("./proxy");
   process.env = previous;
