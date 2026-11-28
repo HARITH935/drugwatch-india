@@ -102,3 +102,11 @@ describe("the pre-launch password lock", () => {
     expect(isAuthorised(`Basic ${btoa("no-colon-here")}`)).toBe(false);
   });
 });
+
+// Phase 12 step 6: deliberately failing, to prove on main that a red test blocks
+// publish-api-image and deploy. Reverted in the very next commit.
+describe("the deploy gate", () => {
+  it("must never deploy on a failing test", () => {
+    expect(1).toBe(2);
+  });
+});
